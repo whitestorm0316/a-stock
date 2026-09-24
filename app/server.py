@@ -24,7 +24,7 @@ import time
 import gzip
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -134,6 +134,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._scan(b)
             if p == "/api/backtest":
                 return self._backtest(b)
+            if p == "/api/trades":
+                return self._trades(b)
             if p == "/api/tune":
                 return self._tune(b)
             if p == "/api/export":
@@ -200,6 +202,137 @@ class Handler(BaseHTTPRequestHandler):
                         nav=curve(base["nav"])) if base else None),
             hold=hold,
         )
+        # 交易摘要（供回测页直接展示，无需再拉一次明细）
+        try:
+            tr = ENGINE.trades(mask, hold, include_fin=False)
+            if tr:
+                s = tr["summary"]
+                out["trade_brief"] = dict(
+                    n_trade=s["n_trade"], n_stock=s["n_stock"],
+                    win=s["win"], mean=s["mean"], median=s["median"],
+                    best=s["best"], worst=s["worst"],
+                    pf=s["pf"], payoff=s["payoff"],
+                    avg_excess=s["avg_excess"], excess_win=s["excess_win"],
+                    date_start=s["date_start"], date_end=s["date_end"],
+                    hist=tr["hist"],
+                )
+        except Exception:
+            out["trade_brief"] = None
+        return self._json(out)
+
+    def _trades(self, b):
+        """逐笔交易明细：分页 / 排序 / 盈亏筛选 / 年份筛选 / 个股筛选。
+
+        请求体：
+          params      : 策略参数（同 /api/backtest）
+          pool        : 股票池
+          sort        : 排序字段（默认 exit_date）
+          order       : "asc" | "desc"（默认 desc）
+          page        : 页码（1 起）
+          page_size   : 每页条数（默认 50，上限 500）
+          win         : null | true | false    只看盈利/亏损
+          year        : null | int             只看某年
+          code        : null | "600519.SH"     只看某只股票
+          min_ret/max_ret : 净收益率区间（小数，如 -0.1 = −10%）
+          with_rows   : bool  是否返回 rows（默认 true；只想看汇总可设 false）
+        """
+        t0 = time.time()
+        pool, err = self._pool(b)
+        if err:
+            return self._json({"error": err}, 200)
+        p = dict(DEFAULT_PARAMS)
+        p.update(b.get("params") or {})
+        hold = int(p.get("hold") or 20)
+        cost = float(b.get("cost", 0.003))
+        mask, conds = ENGINE.build_mask(p, pool)
+        if mask.sum() < 50:
+            return self._json({"error": f"信号数过少（{int(mask.sum())}），无法列出交易。"
+                                       f"请放宽条件。"}, 200)
+        tr = ENGINE.trades(mask, hold, cost=cost)
+        if tr is None:
+            return self._json({"error": "该参数下没有任何完成的交易。"}, 200)
+
+        rows = tr["rows"]
+        # ---- 过滤
+        win_f = b.get("win")
+        if win_f is not None:
+            want = bool(win_f)
+            rows = [r for r in rows if r["win"] == want]
+        yr = b.get("year")
+        if yr:
+            y = int(yr)
+            rows = [r for r in rows
+                    if r["entry_date"] and r["entry_date"][:4] == str(y)]
+        cd = b.get("code")
+        if cd:
+            c = str(cd).strip().upper()
+            rows = [r for r in rows if r["code"] == c]
+        mn, mx = b.get("min_ret"), b.get("max_ret")
+        if mn is not None:
+            rows = [r for r in rows if r["net"] >= float(mn) * 100]
+        if mx is not None:
+            rows = [r for r in rows if r["net"] <= float(mx) * 100]
+
+        n_filt = len(rows)
+        # ---- 排序
+        sk = b.get("sort") or "exit_date"
+        valid_keys = {"exit_date", "entry_date", "signal_date", "code", "name",
+                      "net", "ret", "excess", "bench", "buy", "sell", "hold",
+                      "fin_rev", "fin_rev_yoy", "fin_np", "fin_np_yoy"}
+        if sk not in valid_keys:
+            sk = "exit_date"
+        rev = (b.get("order") or "desc").lower() != "asc"
+
+        def keyf(r):
+            v = r.get(sk)
+            if v is None:
+                # None 恒排末尾
+                return (1, 0.0, "")
+            if isinstance(v, bool):
+                return (0, 1.0 if v else 0.0, "")
+            if isinstance(v, (int, float)):
+                return (0, float(v), "")
+            return (0, 0.0, str(v))
+        rows = sorted(rows, key=lambda r: (keyf(r)[0], keyf(r)[1], keyf(r)[2]),
+                      reverse=rev)
+
+        # ---- 分页
+        ps = max(1, min(int(b.get("page_size") or 50), 500))
+        pg = max(1, int(b.get("page") or 1))
+        tot_pg = max(1, (n_filt + ps - 1) // ps)
+        pg = min(pg, tot_pg)
+        a0 = (pg - 1) * ps
+        page_rows = rows[a0:a0 + ps]
+
+        # ---- 过滤后的汇总（与全局汇总分开）
+        if n_filt:
+            import numpy as _np
+            nr = _np.array([r["net"] for r in rows], float) / 100.0
+            w = nr > 0
+            tl = float(-nr[~w].sum()) if (~w).any() else 0.0
+            fsum = dict(
+                n=n_filt,
+                win=float(w.mean()),
+                mean=float(nr.mean()),
+                median=float(_np.median(nr)),
+                sum=float(nr.sum()),
+                pf=(float(nr[w].sum() / tl) if tl > 0 else None),
+                best=float(nr.max()), worst=float(nr.min()),
+            )
+        else:
+            fsum = dict(n=0)
+
+        out = dict(
+            ms=int((time.time() - t0) * 1000),
+            conditions=conds, hold=hold, cost=cost,
+            n_trade=tr["n_trade"], n_filtered=n_filt,
+            page=pg, page_size=ps, n_page=tot_pg,
+            sort=sk, order=("desc" if rev else "asc"),
+            summary=tr["summary"], filtered_summary=fsum,
+            yearly=tr["yearly"], hist=tr["hist"],
+            best=tr["best"], worst=tr["worst"],
+            rows=(page_rows if b.get("with_rows", True) else []),
+        )
         return self._json(out)
 
     def _tune(self, b):
@@ -221,7 +354,10 @@ class Handler(BaseHTTPRequestHandler):
             "confirm": [[], ["histup3"], ["ma5"], ["volup"], ["ma5", "histup3"]],
             "ret20": [[None, None], [1, 3], [2, 6], [1, 1], [1, 5]],
         }
-        sel = {k: v for k, v in AX.items() if axes.get(k, True) and k in AX}
+        # ⚠️ 默认必须是 False：前端只发「已勾选」的键（axes={key:true}），
+        #    若用 axes.get(k, True)，未勾选的维度会被当成 True 一起寻优 →
+        #    用户取消勾选完全无效（实测：只勾 mkt_state 仍跑了 240 个组合）。
+        sel = {k: v for k, v in AX.items() if axes.get(k, False) and k in AX}
         if not sel:
             return self._json({"error": "请至少选择一个待寻优的维度"}, 200)
 
@@ -297,6 +433,10 @@ class Handler(BaseHTTPRequestHandler):
                                n_combo=len(rows), rows=rows[:120]))
 
     def _export(self, b):
+        # 两种导出：candidates（今日候选股） / trades（回测逐笔明细）
+        kind = (b.get("kind") or "candidates").lower()
+        if kind == "trades":
+            return self._export_trades(b)
         pool, err = self._pool(b)
         if err:
             return self._json({"error": err}, 200)
@@ -308,22 +448,96 @@ class Handler(BaseHTTPRequestHandler):
         w.writerow(["日期", "代码", "名称", "行业", "交易所", "收盘价",
                     "距MA60%", "距MA20%", "ret20%", "ret60%",
                     "距MA60分位", "ret40分位", "ret60分位", "市值分组(0=最小)",
-                    "HV20%", "量比", "打分", "次日可买"])
+                    "HV20%", "量比",
+                    "营收(元)", "营收同比%", "归母净利(元)", "归母同比%",
+                    "财报期", "财报季度",
+                    "打分", "次日可买"])
         for it in res.get("items", []):
             w.writerow([res.get("asof") or res.get("date"), it["code"], it["name"],
                         it["ind"], it["ex"],
                         it["close"], it["dist60"], it["dist20"], it["ret20"],
                         it["ret60"], it["d_px60"], it["d_ret40"], it["d_ret60"],
-                        it["size_grp"], it["hv20"], it["rvol"], it["score"],
+                        it["size_grp"], it["hv20"], it["rvol"],
+                        it.get("fin_rev"), it.get("fin_rev_yoy"),
+                        it.get("fin_np"), it.get("fin_np_yoy"),
+                        it.get("fin_end"), it.get("fin_q"),
+                        it["score"],
                         "是" if it["can_buy"] else "否"])
         data = "\ufeff" + buf.getvalue()
-        fn = f"超跌反转候选股_{res.get('asof') or res.get('date')}.csv"
+        body = data.encode("utf-8")
+
+        # ⚠️ Content-Disposition 含非 ASCII 文件名时，http.server 会用 latin-1
+        #    编码 header → 抛 UnicodeEncodeError → 响应头未发出即断连（表现为 0 字节）。
+        #    必须按 RFC 5987 做百分号编码，并同时给一个纯 ASCII 的 filename 兜底。
+        asof = res.get("asof") or res.get("date") or "latest"
+        ascii_fn = f"candidates_{asof}.csv"
+        utf8_fn = quote(f"超跌反转候选股_{asof}.csv", safe="")
         self.send_response(200)
         self.send_header("Content-Type", "text/csv; charset=utf-8")
         self.send_header("Content-Disposition",
-                         f"attachment; filename*=UTF-8''{fn}")
-        body = data.encode("utf-8")
+                         f"attachment; filename=\"{ascii_fn}\"; "
+                         f"filename*=UTF-8''{utf8_fn}")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _export_trades(self, b):
+        """导出回测逐笔交易明细 CSV（含筛选条件）。"""
+        pool, err = self._pool(b)
+        if err:
+            return self._json({"error": err}, 200)
+        p = dict(DEFAULT_PARAMS)
+        p.update(b.get("params") or {})
+        hold = int(p.get("hold") or 20)
+        mask, _ = ENGINE.build_mask(p, pool)
+        tr = ENGINE.trades(mask, hold, cost=float(b.get("cost", 0.003)))
+        if tr is None:
+            return self._json({"error": "该参数下没有完成的交易"}, 200)
+        rows = tr["rows"]
+        win_f = b.get("win")
+        if win_f is not None:
+            rows = [r for r in rows if r["win"] == bool(win_f)]
+        yr = b.get("year")
+        if yr:
+            rows = [r for r in rows
+                    if r["entry_date"] and r["entry_date"][:4] == str(int(yr))]
+
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["序号", "代码", "名称", "行业", "交易所", "信号日", "买入日",
+                    "卖出日", "持有天数", "买入价", "卖出价",
+                    "净收益%", "毛收益%", "同期基准%", "超额%", "盈亏",
+                    "市值分组(0=最小)", "距MA60分位", "ret60分位",
+                    "营收(元)", "营收同比%", "归母净利(元)", "归母同比%",
+                    "财报期", "财报季度"])
+        for r in rows:
+            w.writerow([r["seq"], r["code"], r["name"], r["ind"], r["ex"],
+                        r["signal_date"], r["entry_date"], r["exit_date"],
+                        r["hold"], r["buy"], r["sell"],
+                        r["net"], r["ret"], r["bench"], r["excess"],
+                        "盈" if r["win"] else "亏",
+                        r["size_grp"], r["d_px60"], r["d_ret60"],
+                        r["fin_rev"], r["fin_rev_yoy"],
+                        r["fin_np"], r["fin_np_yoy"],
+                        r["fin_end"], r["fin_q"]])
+        data = "\ufeff" + buf.getvalue()
+        body = data.encode("utf-8")
+        # RFC 5987（同 _export，避免 latin-1 编码 header 崩溃）
+        tag = f"H{hold}"
+        if yr:
+            tag += f"_{int(yr)}"
+        if win_f is not None:
+            tag += "_win" if win_f else "_loss"
+        ascii_fn = f"trades_{tag}.csv"
+        utf8_fn = quote(f"超跌反转交易明细_{tag}.csv", safe="")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition",
+                         f"attachment; filename=\"{ascii_fn}\"; "
+                         f"filename*=UTF-8''{utf8_fn}")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
@@ -374,6 +588,22 @@ PRESETS = [
          params=dict(ret20_min=2, ret20_max=6, size_max=2,
                      mkt_state="bear", mkt_hv="any", deep_any=False,
                      confirm=[], hold=20)),
+    # ---- 财务增强（动态 as-of，回测无前视偏差）
+    dict(id="K3G", name="K3 + 营收同比>0（剔除负增长）",
+         desc="在 K3 基础上只买营收仍在增长的公司。信号 56,185；CAGR 25.8% / MDD −40.4% / Sharpe 0.88",
+         params=dict(DEFAULT_PARAMS, rev_yoy_min=0.0)),
+    dict(id="K3G20", name="K3 + 营收同比>20%（成长股）",
+         desc="营收高增长 + 超跌。信号 25,941；CAGR 26.4% / MDD −42.1% / Sharpe 0.89",
+         params=dict(DEFAULT_PARAMS, rev_yoy_min=0.2)),
+    dict(id="K3P", name="K3 + 归母净利润同比>0（盈利改善）",
+         desc="只买利润仍在增长的公司。信号 38,680；CAGR 28.4% / MDD −39.8% / Sharpe 0.96",
+         params=dict(DEFAULT_PARAMS, np_yoy_min=0.0)),
+    dict(id="K3BIG", name="K3 + 营收>10亿（剔除微盘）",
+         desc="加营收门槛过滤掉空壳/微盘股。信号 18,485；CAGR 21.0% / MDD −43.2% / Sharpe 0.76",
+         params=dict(DEFAULT_PARAMS, rev_min=1e9)),
+    dict(id="K3Q", name="K3 + 营收>10亿 + 归母同比>0（稳健）",
+         desc="基本面双确认：有规模 + 利润改善。信号 7,406；CAGR 21.2% / MDD −46.4% / Sharpe 0.75",
+         params=dict(DEFAULT_PARAMS, rev_min=1e9, np_yoy_min=0.0)),
 ]
 
 

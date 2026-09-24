@@ -75,7 +75,6 @@ class Engine:
     def _build(self):
         df, C = self.df, self.C
         n = C["n"]
-
         # ---- 收益口径
         self.oret, self.oret_sig = L.oret_from(df, C)
         self.mk_d = L.market_oret(self.oret, C)
@@ -156,6 +155,123 @@ class Engine:
         # ---- 交易日字符串
         self.day_str = np.array([str(x)[:10] for x in self.ud])
         self.years = pd.DatetimeIndex(self.ud).year.values
+
+        # ---- 财务数据（as-of 动态对齐，无前视偏差）
+        self._build_financials()
+
+    # ------------------------------------------------------------ 财务 as-of
+    def _build_financials(self):
+        """把财务面板对齐到每个「股票×交易日」单元格。
+
+        ⚠️ 核心纪律：交易日 T 只能使用 `publish_date <= T` 的最新一期财报，
+           否则就是前视偏差（用未来才知道的财报选过去的股票）。
+
+        做法：
+          1. 对每只股票，按 publish_date 升序排列财报期；
+          2. 对每个交易日 T，用 searchsorted 找「披露日 <= T」的最后一期；
+          3. 把该期的营收/归母净利润/同比增长率写到该单元格。
+
+        产出（与面板行一一对应的 numpy 数组）：
+          self.fin_rev     营业总收入（累计 YTD，元，NaN=当时无数据）
+          self.fin_np      归母净利润（累计 YTD，元）
+          self.fin_rev_yoy 营收同比增长率（小数，如 0.25 = +25%）
+          self.fin_np_yoy  归母净利润同比增长率
+          self.fin_pe      营收口径的估值代理（总市值/营收TTM，越小越便宜）
+          self.fin_asof_q  该单元格生效的报告期编号（0=无）
+          self.fin_asof_d  该单元格生效的报告期末的「日序号」（面板 D 口径）
+        """
+        n = self.C["n"]
+        fp = os.path.join(ROOT, "data", "processed", "fin_panel.parquet")
+        Z = lambda: (np.full(n, np.nan, np.float64), np.zeros(n, np.int16),
+                     np.full(n, -1, np.int32))
+        if not os.path.exists(fp):
+            self.fin_rev, self.fin_np = np.full(n, np.nan), np.full(n, np.nan)
+            self.fin_rev_yoy, self.fin_np_yoy = np.full(n, np.nan), np.full(n, np.nan)
+            self.fin_asof_q = np.zeros(n, np.int16)
+            self.fin_asof_d = np.full(n, -1, np.int32)
+            self.fin_avail = False
+            self.fin_n_stocks = 0
+            self.fin_n_periods = 0
+            self.fin_date_start = self.fin_date_end = None
+            self.fin_pub_start = self.fin_pub_end = None
+            self.fin_actual_pct = 0.0
+            print("[engine] ⚠️ 未找到 fin_panel.parquet，财务筛选不可用", flush=True)
+            return
+
+        F = pd.read_parquet(fp)
+        F["report_end"] = pd.to_datetime(F["report_end"])
+        F["publish_date"] = pd.to_datetime(F["publish_date"])
+        F = F.dropna(subset=["publish_date", "report_end"])
+
+        # 交易日（面板 ud 为 datetime64）→ 用于 searchsorted 的 int64 日
+        day_int = pd.DatetimeIndex(self.ud).values.astype("datetime64[D]").astype(np.int64)
+
+        # 同比：同一财年、同一 q 的上一年值
+        F = F.sort_values(["thscode", "report_end"]).reset_index(drop=True)
+        F["prev_rev"] = F.groupby(["thscode", "q"])["operating_income"].shift(1)
+        F["prev_np"] = F.groupby(["thscode", "q"])["parent_holder_net_profit"].shift(1)
+        # 只在「上一年」时计算同比（避免跨年错配）
+        F["prev_y"] = F.groupby(["thscode", "q"])["report_end"].shift(1)
+        ok = F["prev_y"].notna() & (
+            (F["report_end"].dt.year - F["prev_y"].dt.year) == 1)
+        F["rev_yoy"] = np.where(
+            ok & (F["prev_rev"].abs() > 1.0),
+            (F["operating_income"] - F["prev_rev"]) / F["prev_rev"].abs(), np.nan)
+        F["np_yoy"] = np.where(
+            ok & (F["prev_np"].abs() > 1.0),
+            (F["parent_holder_net_profit"] - F["prev_np"]) / F["prev_np"].abs(), np.nan)
+
+        # 面板的股票顺序 → code
+        code = self.code
+        rev = np.full(n, np.nan); npr = np.full(n, np.nan)
+        ryy = np.full(n, np.nan); nyy = np.full(n, np.nan)
+        aq = np.zeros(n, np.int16); ad = np.full(n, -1, np.int32)
+
+        pub_d = F["publish_date"].values.astype("datetime64[D]").astype(np.int64)
+        re_d = F["report_end"].values.astype("datetime64[D]").astype(np.int64)
+        Fg = F.groupby("thscode", sort=False).indices
+        for s_i, (st, en) in enumerate(zip(self.C["starts"], self.C["ends"])):
+            c = code[st]                            # 该股票 thscode
+            gidx = Fg.get(c)
+            if gidx is None:
+                continue
+            en = int(en)
+            rows = np.arange(st, en)
+            pdv = pub_d[gidx]                       # 该股各期披露日（升序）
+            tday = day_int[self.D[rows]]            # 各交易日的日序号
+            # searchsorted: 找 publish_date <= T 的最后一期
+            pos = np.searchsorted(pdv, tday, side="right") - 1
+            hit = pos >= 0
+            if not hit.any():
+                continue
+            sel = gidx[pos[hit]]                    # 命中的财报行号
+            rev[rows[hit]] = F["operating_income"].values[sel]
+            npr[rows[hit]] = F["parent_holder_net_profit"].values[sel]
+            ryy[rows[hit]] = F["rev_yoy"].values[sel]
+            nyy[rows[hit]] = F["np_yoy"].values[sel]
+            aq[rows[hit]] = F["q"].values[sel].astype(np.int16)
+            # 报告期末 → 日序号（用于展示「财报期」）
+            ad[rows[hit]] = np.searchsorted(day_int, re_d[sel], side="right") - 1
+
+        self.fin_rev = rev
+        self.fin_np = npr
+        self.fin_rev_yoy = ryy
+        self.fin_np_yoy = nyy
+        self.fin_asof_q = aq
+        self.fin_asof_d = ad
+        self.fin_avail = True
+        # 财务面板的真实规模（供 /api/meta 展示）
+        self.fin_n_stocks = int(F["thscode"].nunique())
+        self.fin_n_periods = int(len(F))
+        self.fin_date_start = str(F["report_end"].min().date())
+        self.fin_date_end = str(F["report_end"].max().date())
+        self.fin_pub_start = str(F["publish_date"].min().date())
+        self.fin_pub_end = str(F["publish_date"].max().date())
+        self.fin_actual_pct = float((F["src"] == "actual").mean())
+
+        cov = float(np.isfinite(rev).mean())
+        print(f"[engine] 财务对齐完成：覆盖率 {cov:.1%}，"
+              f"有效期数 {int(np.isfinite(rev).sum()):,}", flush=True)
 
     # ================================================================ 条件
     def build_mask(self, p, pool=None):
@@ -265,6 +381,63 @@ class Engine:
 
         for k, v in parts.items():
             m &= np.asarray(v, bool)
+
+        # ---- 财务条件（动态 as-of，无前视偏差）
+        # rev_min/rev_max        : 营业总收入（元）下限/上限
+        # rev_yoy_min/rev_yoy_max: 营收同比增长率（小数，0.2 = +20%）
+        # np_min/np_max          : 归母净利润（元）
+        # np_yoy_min/np_yoy_max  : 归母净利润同比增长率
+        # fin_period             : "latest" | "q1" | "q2" | "q3" | "q4"
+        if self.fin_avail:
+            def gv(k):
+                v = p.get(k)
+                return None if v in (None, "") else float(v)
+
+            fp_sel = p.get("fin_period", "latest")
+            if fp_sel and fp_sel != "latest":
+                want = {"q1": 1, "q2": 2, "q3": 3, "q4": 4}.get(str(fp_sel).lower())
+                if want:
+                    parts[f"财报期Q{want}"] = self.fin_asof_q == want
+
+            rmin, rmax = gv("rev_min"), gv("rev_max")
+            if rmin is not None or rmax is not None:
+                ok = np.isfinite(self.fin_rev)
+                if rmin is not None:
+                    ok = ok & (self.fin_rev >= rmin)
+                if rmax is not None:
+                    ok = ok & (self.fin_rev <= rmax)
+                parts["营收区间"] = ok
+
+            nmin, nmax = gv("np_min"), gv("np_max")
+            if nmin is not None or nmax is not None:
+                ok = np.isfinite(self.fin_np)
+                if nmin is not None:
+                    ok = ok & (self.fin_np >= nmin)
+                if nmax is not None:
+                    ok = ok & (self.fin_np <= nmax)
+                parts["归母净利区间"] = ok
+
+            rymin, rymax = gv("rev_yoy_min"), gv("rev_yoy_max")
+            if rymin is not None or rymax is not None:
+                ok = np.isfinite(self.fin_rev_yoy)
+                if rymin is not None:
+                    ok = ok & (self.fin_rev_yoy >= rymin)
+                if rymax is not None:
+                    ok = ok & (self.fin_rev_yoy <= rymax)
+                parts["营收同比"] = ok
+
+            nymin, nymax = gv("np_yoy_min"), gv("np_yoy_max")
+            if nymin is not None or nymax is not None:
+                ok = np.isfinite(self.fin_np_yoy)
+                if nymin is not None:
+                    ok = ok & (self.fin_np_yoy >= nymin)
+                if nymax is not None:
+                    ok = ok & (self.fin_np_yoy <= nymax)
+                parts["归母同比"] = ok
+
+            # 财务条件在这里才与主掩码做与运算（必须在 parts 更新之后）
+            for k, v in parts.items():
+                m &= np.asarray(v, bool)
 
         # 股票池
         if pool is not None:
@@ -380,6 +553,202 @@ class Engine:
             nav=nav_impl, nav_gross=nav_gross, net=net, cnt=cnt,
         )
 
+    # ================================================================ 交易明细
+    def trades(self, mask, hold=20, cost=RT_COST, include_fin=True):
+        """从掩码提取**逐笔交易明细**（与 stats() 完全同源，口径一致）。
+
+        交易口径（固定持有期，可复现）：
+          信号日 T  →  T+1 开盘买入  →  持有 H 个交易日  →  T+1+H 开盘卖出
+
+        实现要点
+        --------
+        1. 直接复用 `L.simulate_hold`，保证与 `stats()` 的 `n_trade`/胜率/PF 逐位一致；
+        2. `simulate_hold` 返回的 `pos` 是**面板行号**（信号日所在行），
+           因此：信号日 = day_idx[pos]，入场日 = 信号日 + 1，出场日 = 信号日 + 1 + H；
+        3. 买卖价从 `shift_block(buy_open/sell_open, k)` 取，与 simulate_hold 同源；
+        4. 基准（同口径市场收益）用 `CHAIN[H][入场日]`，即「T+1 开盘 → T+1+H 开盘」
+           的市场链式收益，与个股 trade_ret 完全可比。
+
+        返回
+        ----
+        dict(
+          rows     : list[dict]  逐笔明细（未排序，按出场日升序）
+          summary  : dict        全局汇总（含分年、盈亏分布、最佳/最差）
+          yearly   : list[dict]  逐年交易统计
+          hist     : dict        收益分布直方图（分箱）
+          n_trade  : int
+        )
+
+        ⚠️⚠️ 单位约定 —— 本接口**故意混用两套**，改动前务必看清：
+          · rows[*] / best[*] / worst[*] ：已 **×100**，值是百分数
+              （`net=8.53` 读作 **+8.53%**）。前端用 `PCTN()` 直接加 % 号。
+          · summary / yearly / hist.edges ：也是百分数（`mean=0.0452` 是**比率**，
+              `best=5.3076` 是 **530.76%**）。
+              → 即 summary 里 best/worst 是**比率**，而 best[] 里 net 是**百分数**，
+                即使名字相同也不同单位。前端 summary/yearly 用 `PCT()`（×100），
+                best[]/worst[]/rows[] 用 `PCTN()`（不乘）。
+          · 历史教训：曾把 `rows[*].net`（8.53）用 `PCT()` 渲染成 **853.00%**。
+            核实方法：`rows[0].buy/sell` 手算 `sell/buy-1`，与 `net/100` 对照。
+        """
+        mask = np.asarray(mask, bool)
+        if mask.sum() == 0:
+            return None
+        r, ed, pos = L.simulate_hold(mask, self.buy_open, self.sell_open, self.C, hold)
+        if len(r) == 0:
+            return None
+
+        # ---- 买卖价（与 simulate_hold 内部完全同源）
+        bi_all = L.shift_block(self.buy_open, self.C, 1)
+        si_all = L.shift_block(self.sell_open, self.C, 1 + hold)
+        bi = bi_all[pos]
+        si = si_all[pos]
+
+        sig_d = self.D[pos]                       # 信号日序号
+        ent_d = sig_d + 1                         # 入场日序号（T+1）
+        ext_d = sig_d + 1 + hold                  # 出场日序号（T+1+H）
+
+        # ---- 基准：同口径市场链式收益（T+1 开盘 → T+1+H 开盘）
+        exc = np.full(len(r), np.nan)
+        ch = self.CHAIN.get(hold)
+        if ch is not None:
+            valid = ent_d < self.nd
+            mk = np.full(len(r), np.nan)
+            mk[valid] = ch[ent_d[valid]]
+            ok = np.isfinite(mk)
+            exc[ok] = r[ok] - mk[ok]
+        mkt = np.full(len(r), np.nan)
+        if ch is not None:
+            valid = ent_d < self.nd
+            mkt[valid] = ch[ent_d[valid]]
+
+        net = r - cost                            # 扣完成本的单笔收益
+        pnl = net > 0
+        years = self.years[np.clip(ent_d, 0, self.nd - 1)]
+
+        # ---- 逐笔明细
+        rows = []
+        fin_ok = bool(getattr(self, "fin_avail", False)) and include_fin
+        for i in range(len(r)):
+            p_i = pos[i]
+            s_i = sig_d[i]
+            # 信号日的财务 as-of 快照（回测时点「当时已知」的财报）
+            fr = fy = nr = ny = None
+            fq = 0
+            fend = None
+            if fin_ok:
+                fq = int(self.fin_asof_q[p_i])
+                if np.isfinite(self.fin_rev[p_i]):
+                    fr = int(round(float(self.fin_rev[p_i])))
+                if np.isfinite(self.fin_rev_yoy[p_i]):
+                    fy = round(float(self.fin_rev_yoy[p_i]) * 100, 2)
+                if np.isfinite(self.fin_np[p_i]):
+                    nr = int(round(float(self.fin_np[p_i])))
+                if np.isfinite(self.fin_np_yoy[p_i]):
+                    ny = round(float(self.fin_np_yoy[p_i]) * 100, 2)
+                if self.fin_asof_d[p_i] >= 0:
+                    fend = str(self.day_str[self.fin_asof_d[p_i]])
+            rows.append(dict(
+                seq=i + 1,
+                code=str(self.code[p_i]), name=str(self.stk_name[p_i]),
+                ind=str(self.ind_name[p_i]), ex=str(self.exchange[p_i]),
+                signal_date=str(self.day_str[s_i]),
+                entry_date=str(self.day_str[ent_d[i]]) if ent_d[i] < self.nd else None,
+                exit_date=str(self.day_str[ext_d[i]]) if ext_d[i] < self.nd else None,
+                buy=round(float(bi[i]), 3) if np.isfinite(bi[i]) else None,
+                sell=round(float(si[i]), 3) if np.isfinite(si[i]) else None,
+                hold=hold,
+                ret=round(float(r[i]) * 100, 2),
+                net=round(float(net[i]) * 100, 2),
+                bench=(round(float(mkt[i]) * 100, 2) if np.isfinite(mkt[i]) else None),
+                excess=(round(float(exc[i]) * 100, 2) if np.isfinite(exc[i]) else None),
+                win=bool(pnl[i]),
+                size_grp=self._i(self.size_grp[p_i]),
+                d_px60=self._i(self.B["px_ma60"][p_i]),
+                d_ret60=self._i(self.B["ret60"][p_i]),
+                fin_rev=fr, fin_rev_yoy=fy, fin_np=nr, fin_np_yoy=ny,
+                fin_q=fq, fin_end=fend,
+            ))
+
+        # ---- 全局汇总
+        srt = np.argsort(ext_d, kind="stable")
+        rows_sorted = [rows[i] for i in srt]
+
+        wins = net[pnl]
+        loss = net[~pnl]
+        tot_win = float(wins.sum()) if len(wins) else 0.0
+        tot_loss = float(-loss.sum()) if len(loss) else 0.0
+        pf = (tot_win / tot_loss) if tot_loss > 0 else None
+        payoff = (float(wins.mean() / (-loss.mean()))
+                  if len(wins) and len(loss) and loss.mean() < 0 else None)
+        # 盈亏分布（等宽分箱，覆盖 −60% ~ +120%）
+        edges = [-1.0, -0.5, -0.3, -0.2, -0.1, -0.05, 0.0,
+                 0.05, 0.1, 0.2, 0.3, 0.5, 1.0, 2.0]
+        cnt, _ = np.histogram(net, bins=edges)
+        hist = dict(edges=[round(float(e) * 100, 1) for e in edges],
+                    counts=[int(c) for c in cnt])
+        # 单笔持有天数内的年化（供参考；H=20 时换算为年化）
+        summary = dict(
+            n_trade=int(len(net)),
+            hold=int(hold),
+            cost=float(cost),
+            win=float(pnl.mean()),
+            mean=float(net.mean()),
+            median=float(np.median(net)),
+            std=float(net.std(ddof=1)) if len(net) > 1 else None,
+            best=float(net.max()), worst=float(net.min()),
+            p10=float(np.percentile(net, 10)),
+            p25=float(np.percentile(net, 25)),
+            p75=float(np.percentile(net, 75)),
+            p90=float(np.percentile(net, 90)),
+            pf=pf, payoff=payoff,
+            avg_excess=(float(np.nanmean(exc)) if np.isfinite(exc).any() else None),
+            excess_win=(float((exc > 0).mean()) if np.isfinite(exc).any() else None),
+            avg_ret=float(r.mean()),
+            date_start=str(self.day_str[int(ent_d.min())]) if len(ent_d) else None,
+            date_end=str(self.day_str[int(min(ext_d.max(), self.nd - 1))]),
+            n_stock=int(len(set(self.code[pos].tolist()))),
+        )
+
+        # ---- 逐年交易统计
+        yearly = []
+        for y in range(2015, 2027):
+            s = years == y
+            if s.sum() < 5:
+                continue
+            rr = net[s]
+            w = rr > 0
+            tl = float(-rr[~w].sum()) if (~w).any() else 0.0
+            yearly.append(dict(
+                year=int(y), n=int(s.sum()), n_win=int(w.sum()),
+                win=float(w.mean()), mean=float(rr.mean()),
+                median=float(np.median(rr)),
+                sum=float(rr.sum()),
+                pf=(float(rr[w].sum() / tl) if tl > 0 else None),
+                best=float(rr.max()), worst=float(rr.min()),
+            ))
+
+        # ---- 最佳 / 最差 各 20 笔
+        order = np.argsort(-net)
+        def pick(idxs):
+            out = []
+            for i in idxs:
+                out.append(dict(code=str(self.code[pos[i]]),
+                                name=str(self.stk_name[pos[i]]),
+                                signal_date=str(self.day_str[sig_d[i]]),
+                                exit_date=(str(self.day_str[ext_d[i]])
+                                           if ext_d[i] < self.nd else None),
+                                net=round(float(net[i]) * 100, 2),
+                                ret=round(float(r[i]) * 100, 2),
+                                excess=(round(float(exc[i]) * 100, 2)
+                                        if np.isfinite(exc[i]) else None)))
+            return out
+        best20 = pick(order[:20])
+        worst20 = pick(order[-20:][::-1])
+
+        return dict(n_trade=int(len(net)), rows=rows_sorted, summary=summary,
+                    yearly=yearly, hist=hist,
+                    best=best20, worst=worst20, hold=int(hold))
+
     # ================================================================ 扫描
     def scan(self, pool_mask=None, limit=200, p=None, lookback=180):
         """扫描**最近一个有信号的交易日**，输出符合条件的个股明细 + 打分。
@@ -453,6 +822,11 @@ class Engine:
         hv20v = self.df["hv20"].values
         rvolv = self.df["rvol20"].values
         for k, i in enumerate(idx[:limit]):
+            # 财务字段（as-of 生效期）
+            fq = int(self.fin_asof_q[i]) if self.fin_avail else 0
+            fend = None
+            if self.fin_avail and self.fin_asof_d[i] >= 0:
+                fend = str(self.day_str[self.fin_asof_d[i]])
             items.append(dict(
                 code=str(self.code[i]), name=str(self.stk_name[i]),
                 ind=str(self.ind_name[i]), ex=str(self.exchange[i]),
@@ -470,6 +844,15 @@ class Engine:
                 rvol=self._f(rvolv[i], 2) if np.isfinite(rvolv[i]) else None,
                 score=round(float(score[k]), 1),
                 can_buy=bool(self.can_buy[i]),
+                # ---- 财务（动态）
+                fin_rev=self._money(self.fin_rev[i]) if self.fin_avail else None,
+                fin_np=self._money(self.fin_np[i]) if self.fin_avail else None,
+                fin_rev_yoy=(round(float(self.fin_rev_yoy[i]) * 100, 2)
+                             if self.fin_avail and np.isfinite(self.fin_rev_yoy[i]) else None),
+                fin_np_yoy=(round(float(self.fin_np_yoy[i]) * 100, 2)
+                            if self.fin_avail and np.isfinite(self.fin_np_yoy[i]) else None),
+                fin_q=fq,
+                fin_end=fend,
             ))
 
         mkt_ok = bool(self.mkt_bull[last]) if last < self.nd else False
@@ -554,6 +937,15 @@ class Engine:
         except Exception:
             return None
 
+    @staticmethod
+    def _money(x):
+        """金额 → 元，保留为可读整数（前端按 亿/万 格式化）。"""
+        try:
+            v = float(x)
+            return int(round(v)) if np.isfinite(v) else None
+        except Exception:
+            return None
+
     # ================================================================ 元信息
     def meta(self):
         # 股票清单（最新交易日）
@@ -573,6 +965,14 @@ class Engine:
             industries=self.industries,
             n_industry_stocks=len(stocks),
             stocks=stocks,
+            fin_avail=bool(getattr(self, "fin_avail", False)),
+            fin_n_stocks=int(getattr(self, "fin_n_stocks", 0)),
+            fin_n_periods=int(getattr(self, "fin_n_periods", 0)),
+            fin_date_start=getattr(self, "fin_date_start", None),
+            fin_date_end=getattr(self, "fin_date_end", None),
+            fin_pub_start=getattr(self, "fin_pub_start", None),
+            fin_pub_end=getattr(self, "fin_pub_end", None),
+            fin_actual_pct=round(float(getattr(self, "fin_actual_pct", 0.0)), 4),
         )
 
 

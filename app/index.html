@@ -171,6 +171,68 @@ tbody tr.top2{background:#fffdf7}
 @keyframes sp{to{transform:rotate(360deg)}}
 .empty{text-align:center;color:var(--tx3);padding:52px 20px;font-size:13px;line-height:1.9}
 .cap{font-size:11.5px;color:var(--tx3);margin-top:8px;line-height:1.6}
+/* ---- 财务筛选 ---- */
+.finwrap{margin-top:14px;border:1px solid var(--line);border-radius:8px;
+  background:#fafbfc;padding:10px 11px}
+.finhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.finhead>span:first-child{font-size:12px;font-weight:600;color:var(--tx)}
+.finbadge{font-size:10px;padding:2px 7px;border-radius:9px;color:#0d7a3a;
+  background:#e6f6ec;border:1px solid #bfe6cd;font-weight:600;white-space:nowrap}
+.finhint{font-size:11px;color:var(--tx3);line-height:1.65;margin-bottom:9px;
+  padding:7px 9px;background:#fff;border:1px dashed var(--line2);border-radius:6px}
+.finhint b{color:#0d7a3a;font-weight:600}
+.finrow{display:flex;align-items:center;gap:5px;margin-bottom:6px}
+.finrow label{flex:0 0 66px;font-size:11.5px;color:var(--tx2)}
+.finrow input[type=number]{flex:1;min-width:0;font-size:11.5px;padding:5px 7px;
+  border:1px solid var(--line2);border-radius:5px;background:#fff;color:var(--tx);
+  font-family:var(--mono)}
+.finrow input[type=number]:focus{outline:none;border-color:var(--blue)}
+/* ---- 交易明细 ---- */
+.trbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:11px;
+  padding:9px 11px;background:#fafbfc;border:1px solid var(--line);border-radius:8px}
+.trbar .lb{font-size:11.5px;color:var(--tx2);font-weight:500}
+.trbar .seg{display:inline-flex;border:1px solid var(--line2);border-radius:6px;
+  overflow:hidden;background:#fff}
+.trbar .seg button{border:0;background:#fff;padding:4px 10px;font-size:11.5px;
+  color:var(--tx2);cursor:pointer;font-family:inherit;border-right:1px solid var(--line2)}
+.trbar .seg button:last-child{border-right:0}
+.trbar .seg button.on{background:var(--blue);color:#fff}
+.trbar .seg button:hover:not(.on){background:#f2f4f7}
+.trbar select,.trbar input[type=text]{font-size:11.5px;padding:4px 8px;border:1px solid var(--line2);
+  border-radius:6px;background:#fff;color:var(--tx);font-family:var(--mono);outline:none}
+.trbar select{font-family:inherit}
+.trbar input[type=text]{width:104px}
+.trbar .sp{flex:1}
+.trbar .mini{font-size:11.5px;padding:4px 12px;border:1px solid var(--line2);background:#fff;
+  color:var(--tx2);border-radius:6px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.trbar .mini:hover{background:#f2f4f7;border-color:var(--blue);color:var(--blue)}
+.trow{display:flex;gap:7px;align-items:center;justify-content:space-between;
+  margin-top:9px;font-size:12px;color:var(--tx2);flex-wrap:wrap}
+.trow .pg{display:flex;gap:4px;align-items:center}
+.trow .pg button{min-width:29px;padding:3px 8px;font-size:11.5px;border:1px solid var(--line2);
+  background:#fff;border-radius:5px;cursor:pointer;font-family:var(--mono);color:var(--tx2)}
+.trow .pg button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+.trow .pg button:disabled{opacity:.4;cursor:not-allowed}
+.trow .pg button:hover:not(.on):not(:disabled){background:#f2f4f7}
+.tag2{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:9px;
+  border:1px solid var(--line2);background:#f6f7f9;color:var(--tx3);
+  font-family:var(--mono);margin-left:5px}
+tr.lossc{background:#fef7f7}
+tr.winc td{border-bottom:1px solid #f0f1f4}
+td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
+.tkx{font-family:var(--mono);font-size:10.5px;padding:1px 5px;border-radius:8px;
+  border:1px solid;display:inline-block}
+.tkx.w{background:#e9f7ef;border-color:#b7e4cd;color:#15694a}
+.tkx.l{background:#fdeaea;border-color:#f2c4c4;color:#a83232}
+.hint2{font-size:11px;color:var(--tx3);margin-top:7px;line-height:1.6}
+.finrow select{flex:1;font-size:11.5px;padding:5px 7px;border:1px solid var(--line2);
+  border-radius:5px;background:#fff;color:var(--tx)}
+.finrow .unit{font-size:10.5px;color:var(--tx3);flex:0 0 auto;min-width:22px}
+.finquick{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.finquick button{font-size:10.5px;padding:4px 9px;border:1px solid var(--line2);
+  background:#fff;border-radius:11px;color:var(--tx2);cursor:pointer}
+.finquick button:hover{background:#eef4ff;border-color:var(--blue);color:var(--blue)}
+.finquick button.on{background:var(--blue);border-color:var(--blue);color:#fff}
 .kv{display:flex;gap:22px;flex-wrap:wrap;font-size:12px;color:var(--tx2);
   padding:10px 13px;background:#fafbfc;border:1px solid var(--line);
   border-radius:var(--rmd);margin-bottom:12px}
@@ -389,6 +451,64 @@ tbody tr.top2{background:#fffdf7}
           <button data-v="BJ">北交所</button>
         </div>
         <div class="cap">北交所流动性弱、涨跌幅 30%，默认不选。</div>
+
+        <div class="finwrap">
+          <div class="finhead">
+            <span>财务筛选</span>
+            <span class="finbadge" id="fin_badge">动态 · 无前视偏差</span>
+          </div>
+          <div class="finhint">
+            回测时按<b>财报实际披露日</b>动态对齐：任意历史交易日只使用「当时已公告」的财报，
+            绝不使用未来数据，<b>无前视偏差</b>。财报为累计口径，同比增长按去年同期对比。
+          </div>
+
+          <div class="finrow">
+            <label>营业总收入</label>
+            <input type="number" id="fin_rev_min" placeholder="下限" step="0.1">
+            <span class="unit">亿元</span>
+            <input type="number" id="fin_rev_max" placeholder="上限" step="0.1">
+            <span class="unit">亿元</span>
+          </div>
+          <div class="finrow">
+            <label>营收同比</label>
+            <input type="number" id="fin_ry_min" placeholder="下限" step="1">
+            <span class="unit">%</span>
+            <input type="number" id="fin_ry_max" placeholder="上限" step="1">
+            <span class="unit">%</span>
+          </div>
+          <div class="finrow">
+            <label>归母净利润</label>
+            <input type="number" id="fin_np_min" placeholder="下限" step="0.1">
+            <span class="unit">亿元</span>
+            <input type="number" id="fin_np_max" placeholder="上限" step="0.1">
+            <span class="unit">亿元</span>
+          </div>
+          <div class="finrow">
+            <label>归母同比</label>
+            <input type="number" id="fin_ny_min" placeholder="下限" step="1">
+            <span class="unit">%</span>
+            <input type="number" id="fin_ny_max" placeholder="上限" step="1">
+            <span class="unit">%</span>
+          </div>
+          <div class="finrow">
+            <label>财报期</label>
+            <select id="fin_period">
+              <option value="latest">最新可用</option>
+              <option value="q1">只看 Q1</option>
+              <option value="q2">只看半年报</option>
+              <option value="q3">只看 Q3</option>
+              <option value="q4">只看年报</option>
+            </select>
+          </div>
+          <div class="finquick">
+            <button data-fin="rev_up">营收正增长</button>
+            <button data-fin="rev20">营收增20%+</button>
+            <button data-fin="np_up">利润正增长</button>
+            <button data-fin="big">营收&gt;10亿</button>
+            <button data-fin="clear">清空</button>
+          </div>
+          <div class="cap" id="fin_stat">未启用财务筛选</div>
+        </div>
       </div>
     </div>
 
@@ -416,6 +536,7 @@ tbody tr.top2{background:#fffdf7}
     <div id="tabs">
       <button data-t="scan" class="on">今日选股 <span class="cnt" id="c-scan"></span></button>
       <button data-t="bt">策略回测</button>
+      <button data-t="trades">交易明细</button>
       <button data-t="tune">参数寻优</button>
       <button data-t="stock">单股透视</button>
       <button data-t="help">研究结论</button>
@@ -427,6 +548,9 @@ tbody tr.top2{background:#fffdf7}
       </div>
       <div class="pane" id="p-bt">
         <div class="empty">等待回测结果。默认参数 = 报告第 12 节验证的最优 3 条件策略。</div>
+      </div>
+      <div class="pane" id="p-trades">
+        <div class="empty">等待回测结果。点上方「策略回测」跑一次，或直接在此查看逐笔交易明细。</div>
       </div>
       <div class="pane" id="p-tune">
         <div class="card">
@@ -472,9 +596,23 @@ const F = (v, n = 1, suf = '') => (v === null || v === undefined || !isFinite(v)
   ? '—' : v.toFixed(n) + suf;
 const PCT = (v, n = 1) => (v === null || v === undefined || !isFinite(v)) ? '—'
   : (v * 100).toFixed(n) + '%';
+/* ⚠️ PCTN = 值本身已是百分数（如 8.53 表示 8.53%），直接加 % 号，切勿再 ×100。
+   交易明细的 rows / best / worst 用这个（后端已乘 100）；
+   summary / yearly / hist 里的字段是比率（0.0452），仍用 PCT。
+   两套单位混在同一个接口里，最容易写错 —— 改这里前先看 engine.trades() 的注释。 */
+const PCTN = (v, n = 2) => (v === null || v === undefined || !isFinite(v)) ? '—'
+  : v.toFixed(n) + '%';
 const cls = v => (v > 0 ? 'pos' : v < 0 ? 'neg' : 'neu');
 const NF = new Intl.NumberFormat('zh-CN');
 const NUM = v => (v === null || v === undefined) ? '—' : NF.format(Math.round(v));
+/* 金额（元）→ 亿/万 可读文本 */
+const MONEY = v => {
+  if (v === null || v === undefined || !isFinite(v)) return '—';
+  const a = Math.abs(v);
+  if (a >= 1e8) return (v / 1e8).toFixed(1) + '亿';
+  if (a >= 1e4) return (v / 1e4).toFixed(0) + '万';
+  return v.toFixed(0);
+};
 
 let META = null, LAST = null, DEFAULT_PARAMS = {}, PRESETS = [];
 let POOL = { mode: 'all', codes_text: '', industries: [], exchanges: ['SH', 'SZ'] };
@@ -511,6 +649,10 @@ function collect() {
   $$('#confirms input:checked').forEach(i => c.push(i.value));
   const m60 = segVal('#seg-ma60'), m120 = segVal('#seg-ma120'), r20 = segVal('#seg-ret20');
   const rs = segVal('#seg-rs'), ihv = segVal('#seg-ihv'), rv = segVal('#seg-rv');
+  // 财务：界面用「亿元 / %」，后端用「元 / 小数」
+  const fnum = id => { const v = $('#' + id).value.trim(); return v === '' ? null : parseFloat(v); };
+  const toYuan = v => (v === null || !isFinite(v)) ? null : v * 1e8;
+  const toFrac = v => (v === null || !isFinite(v)) ? null : v / 100;
   return {
     px_ma60_min: nz(m60 && m60.lo), px_ma60_max: nz(m60 && m60.hi),
     px_ma120_min: nz(m120 && m120.lo), px_ma120_max: nz(m120 && m120.hi),
@@ -523,8 +665,51 @@ function collect() {
     hv_min: nz(ihv && ihv.lo), hv_max: nz(ihv && ihv.hi),
     rvol_min: nz(rv && rv.lo), rvol_max: nz(rv && rv.hi),
     confirm: c,
-    hold: parseInt($('#hold').value, 10)
+    hold: parseInt($('#hold').value, 10),
+    // ---- 财务（动态）
+    rev_min: toYuan(fnum('fin_rev_min')), rev_max: toYuan(fnum('fin_rev_max')),
+    rev_yoy_min: toFrac(fnum('fin_ry_min')), rev_yoy_max: toFrac(fnum('fin_ry_max')),
+    np_min: toYuan(fnum('fin_np_min')), np_max: toYuan(fnum('fin_np_max')),
+    np_yoy_min: toFrac(fnum('fin_ny_min')), np_yoy_max: toFrac(fnum('fin_ny_max')),
+    fin_period: $('#fin_period').value || 'latest'
   };
+}
+/* 财务条件生效状态提示 */
+function updateFinBadge() {
+  const el = $('#fin_stat'); if (!el) return;
+  const q = [];
+  const fnum = id => { const v = $('#' + id).value.trim(); return v === '' ? null : parseFloat(v); };
+  const box = (lo, hi, nm, unit) => {
+    if (lo === null && hi === null) return;
+    q.push(`${nm} ${lo === null ? '' : '≥' + lo}${(lo !== null && hi !== null) ? ' 且 ' : ''}${hi === null ? '' : (lo === null ? '≤' : '') + hi}${unit}`);
+  };
+  box(fnum('fin_rev_min'), fnum('fin_rev_max'), '营收', '亿');
+  box(fnum('fin_ry_min'), fnum('fin_ry_max'), '营收同比', '%');
+  box(fnum('fin_np_min'), fnum('fin_np_max'), '归母', '亿');
+  box(fnum('fin_ny_min'), fnum('fin_ny_max'), '归母同比', '%');
+  const fp = $('#fin_period').value;
+  if (fp && fp !== 'latest') q.push('仅' + ({ q1: '一季报', q2: '半年报', q3: '三季报', q4: '年报' }[fp] || fp));
+  if (q.length === 0) {
+    el.innerHTML = '未启用财务筛选';
+    el.style.color = '';
+  } else {
+    el.innerHTML = `已启用 ${q.length} 项 · ${q.join(' + ')}`;
+    el.style.color = '#0d7a3a';
+  }
+}
+/* 财务快捷按钮 */
+function setFinQuick(kind) {
+  const set = (id, v) => { $('#' + id).value = (v === null ? '' : v); };
+  if (kind === 'clear') {
+    ['fin_rev_min', 'fin_rev_max', 'fin_ry_min', 'fin_ry_max',
+     'fin_np_min', 'fin_np_max', 'fin_ny_min', 'fin_ny_max'].forEach(i => set(i, null));
+    $('#fin_period').value = 'latest';
+  } else if (kind === 'rev_up') { set('fin_ry_min', 0); }
+  else if (kind === 'rev20') { set('fin_ry_min', 20); }
+  else if (kind === 'np_up') { set('fin_ny_min', 0); }
+  else if (kind === 'big') { set('fin_rev_min', 10); }
+  $$('.finquick button').forEach(b => b.classList.toggle('on', b.dataset.fin === kind && kind !== 'clear'));
+  updateFinBadge();
 }
 function applyParams(p) {
   const setSeg = (id, lo, hi) => {
@@ -548,8 +733,23 @@ function applyParams(p) {
   setV('#seg-hv', p.mkt_hv ?? 'any');
   const cf = new Set(p.confirm || []);
   $$('#confirms input').forEach(i => i.checked = cf.has(i.value));
+  // ---- 财务字段：元 → 亿元，小数 → %
+  const setN = (id, v, mul) => {
+    const el = $('#' + id);
+    if (v === null || v === undefined || !isFinite(v)) { el.value = ''; return; }
+    const x = v * mul;
+    // 整数不显示多余小数位（20 而非 20.0）
+    el.value = Number.isInteger(x) ? String(x) : x.toFixed(Math.abs(x) < 1 ? 2 : 1);
+  };
+  setN('fin_rev_min', p.rev_min, 1e-8); setN('fin_rev_max', p.rev_max, 1e-8);
+  setN('fin_np_min', p.np_min, 1e-8); setN('fin_np_max', p.np_max, 1e-8);
+  setN('fin_ry_min', p.rev_yoy_min, 100); setN('fin_ry_max', p.rev_yoy_max, 100);
+  setN('fin_ny_min', p.np_yoy_min, 100); setN('fin_ny_max', p.np_yoy_max, 100);
+  $('#fin_period').value = p.fin_period || 'latest';
+  $$('.finquick button').forEach(b => b.classList.remove('on'));
   syncLabels();
   updateModeBadge();
+  updateFinBadge();
 }
 function syncLabels() {
   const sz = ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '全部'];
@@ -580,6 +780,13 @@ function updateModeBadge() {
   if (p.mkt_state !== 'any') { n++; L.push(p.mkt_state === 'bear' ? '市场<MA60' : '市场>MA60'); }
   if (p.mkt_hv !== 'any') { n++; L.push(p.mkt_hv === 'high' ? '市场高波动' : '市场低波动'); }
   if (p.confirm.length) { n += p.confirm.length; L.push('确认×' + p.confirm.length); }
+  // 财务（动态）
+  const fq = [];
+  if (p.rev_min !== null || p.rev_max !== null) fq.push('营收');
+  if (p.rev_yoy_min !== null || p.rev_yoy_max !== null) fq.push('营收同比');
+  if (p.np_min !== null || p.np_max !== null) fq.push('归母');
+  if (p.np_yoy_min !== null || p.np_yoy_max !== null) fq.push('归母同比');
+  if (fq.length) { n += fq.length; L.push('财务:' + fq.join('/')); }
   const b = $('#bmode');
   b.textContent = n ? `${n} 个条件 · ` + L.slice(0, 4).join(' + ') + (L.length > 4 ? ' …' : '')
     : '无过滤 · 全市场基准';
@@ -612,6 +819,8 @@ $$('#tabs button').forEach(b => b.addEventListener('click', () => {
   b.classList.add('on');
   $$('.pane').forEach(p => p.classList.remove('on'));
   $('#p-' + b.dataset.t).classList.add('on');
+  // 交易明细：首次进入或参数已变时按需拉取
+  if (b.dataset.t === 'trades' && !TR) runTrades();
   setTimeout(() => Object.values(charts).forEach(c => c.resize()), 40);
 }));
 
@@ -670,9 +879,15 @@ async function runBacktest() {
   const b = $('#run');
   b.innerHTML = '<span class="spin"></span> 回测中';
   b.disabled = true;
+  // 参数变了 → 交易明细需要重新拉取
+  TR = null;
   try {
     const r = await api('/api/backtest', { params: collect(), pool: currentPool() });
     renderBacktest(r);
+    // 若当前正停在「交易明细」页，同步刷新
+    if ($('#tabs button.on') && $('#tabs button.on').dataset.t === 'trades') {
+      runTrades();
+    }
   } catch (e) {
     $('#p-bt').innerHTML = `<div class="errbox"><b>回测失败：</b>${e.message}</div>`;
   } finally { b.textContent = '运行回测'; b.disabled = false; }
@@ -727,11 +942,18 @@ function renderScan(r) {
       <th class="sorter" data-k="size_grp">市值组</th>
       <th class="sorter" data-k="hv20">HV20</th>
       <th class="sorter" data-k="rvol">量比</th>
+      <th class="sorter" data-k="fin_rev">营收</th>
+      <th class="sorter" data-k="fin_rev_yoy">营收同比</th>
+      <th class="sorter" data-k="fin_np">归母净利</th>
+      <th class="sorter" data-k="fin_np_yoy">归母同比</th>
+      <th>财报期</th>
       <th class="sorter" data-k="score">得分</th>
       <th>次日可买</th>
     </tr></thead><tbody id="scanbody"></tbody></table></div>
     <div class="cap">市值组：0 = 最小 10%，9 = 最大 10%。分位：1 = 最弱，10 = 最强。
-      「次日可买」= 信号次日开盘未涨停（可实际买入）。</div></div>`;
+      「次日可买」= 信号次日开盘未涨停（可实际买入）。
+      财务列为<b>该候选日当时已公告</b>的财报（累计口径，同比增长按去年同期对比），
+      即回测中实际使用的数值。<span style="color:#0d7a3a">动态对齐已生效</span>。</div></div>`;
 
   $('#p-scan').innerHTML = h;
   renderScanRows(r.items);
@@ -780,6 +1002,11 @@ function renderScanRows(items) {
       <td>D${it.size_grp ?? '—'}</td>
       <td>${F(it.hv20, 1, '%')}</td>
       <td>${F(it.rvol, 2)}</td>
+      <td style="color:#5c6270">${MONEY(it.fin_rev)}</td>
+      <td class="${cls(it.fin_rev_yoy)}">${F(it.fin_rev_yoy, 1, '%')}</td>
+      <td style="color:#5c6270">${MONEY(it.fin_np)}</td>
+      <td class="${cls(it.fin_np_yoy)}">${F(it.fin_np_yoy, 1, '%')}</td>
+      <td style="color:#8d94a3;font-size:11px">${it.fin_end ? it.fin_end.slice(2, 7) + ' Q' + (it.fin_q || '') : '—'}</td>
       <td style="font-weight:600;color:#1d4c85">${F(it.score, 1)}</td>
       <td>${it.can_buy ? '<span style="color:#17764f">是</span>'
         : '<span style="color:#a83232">否</span>'}</td></tr>`;
@@ -954,6 +1181,371 @@ function renderBacktest(r) {
       label: { show: true, position: 'top', fontSize: 11, color: '#5c6270',
         formatter: p => p.value.toFixed(1) + '%' }
     }]
+  });
+}
+
+/* ---------------- 渲染：交易明细 ---------------- */
+let TR = null;          // 最近一次交易明细响应
+const TST = { page: 1, page_size: 50, sort: 'exit_date', order: 'desc',
+              win: null, year: null, code: '' };
+// 排序字段 ↔ 中文表头（点击表头时切换）
+const TCOLS = [
+  ['seq', '#', 1, 'rk2'],
+  ['code', '代码', 1, 'l'],
+  ['name', '名称', 1, 'nm'],
+  ['ind', '行业', 1, 'l'],
+  ['signal_date', '信号日', 0],
+  ['entry_date', '买入日', 0],
+  ['exit_date', '卖出日', 0],
+  ['buy', '买入价', 0],
+  ['sell', '卖出价', 0],
+  ['net', '净收益', 0],
+  ['ret', '毛收益', 0],
+  ['bench', '同期基准', 0],
+  ['excess', '超额', 0],
+  ['size_grp', '市值组', 0],
+  ['d_px60', '距MA60', 0],
+  ['fin_rev', '营收', 0],
+  ['fin_rev_yoy', '营收同比', 0],
+  ['fin_np', '归母净利', 0],
+  ['fin_np_yoy', '归母同比', 0],
+];
+
+async function runTrades() {
+  const el = $('#p-trades');
+  el.innerHTML = `<div class="card"><div class="empty">
+    <span class="spin"></span> 正在提取逐笔交易明细（10 万笔量级，约 3~8 秒）…</div></div>`;
+  try {
+    const body = {
+      params: collect(), pool: currentPool(), cost: 0.003,
+      page: TST.page, page_size: TST.page_size,
+      sort: TST.sort, order: TST.order,
+    };
+    if (TST.win !== null) body.win = TST.win;
+    if (TST.year) body.year = TST.year;
+    if (TST.code) body.code = TST.code;
+    const r = await api('/api/trades', body);
+    if (r.error) { el.innerHTML = `<div class="errbox"><b>无法列出交易：</b>${r.error}</div>`; return; }
+    TR = r;
+    renderTrades(r);
+  } catch (e) {
+    el.innerHTML = `<div class="errbox"><b>交易明细加载失败：</b>${e.message}</div>`;
+  }
+}
+
+function renderTrades(r) {
+  const s = r.summary, f = r.filtered_summary;
+  const cs = r.conditions && r.conditions.length
+    ? r.conditions.map(c => `<span class="c">${c}</span>`).join('')
+    : '<span class="c none">无过滤 = 全市场基准</span>';
+  let h = `<div class="condlist">${cs}</div>`;
+
+  // ---- 汇总卡片
+  h += `<div class="mgrid" style="margin-bottom:14px">
+    <div class="mc hl"><div class="l">完成交易</div>
+      <div class="v sm">${NUM(s.n_trade)} 笔</div>
+      <div class="n">${NUM(s.n_stock)} 只股票</div></div>
+    <div class="mc"><div class="l">单笔胜率</div>
+      <div class="v ${s.win > .5 ? 'pos' : 'neg'}">${PCT(s.win)}</div>
+      <div class="n">盈利 ${NUM(Math.round(s.n_trade * s.win))} 笔</div></div>
+    <div class="mc"><div class="l">单笔均值</div>
+      <div class="v ${cls(s.mean)}">${PCT(s.mean, 2)}</div>
+      <div class="n">中位数 ${PCT(s.median, 2)}</div></div>
+    <div class="mc"><div class="l">盈亏比 / PF</div>
+      <div class="v">${F(s.payoff, 2)}<span style="font-size:13px;color:var(--tx3)">
+        / ${F(s.pf, 2)}</span></div>
+      <div class="n">标准差 ${PCT(s.std, 1)}</div></div>
+    <div class="mc"><div class="l">最佳 / 最差</div>
+      <div class="v sm"><span class="pos">${PCT(s.best, 0)}</span>
+        <span style="color:var(--tx3)">/</span>
+        <span class="neg">${PCT(s.worst, 0)}</span></div>
+      <div class="n">P10 ${PCT(s.p10, 1)} · P90 ${PCT(s.p90, 1)}</div></div>
+    <div class="mc"><div class="l">平均超额</div>
+      <div class="v ${cls(s.avg_excess)}">${PCT(s.avg_excess, 2)}</div>
+      <div class="n">跑赢基准 ${PCT(s.excess_win, 1)} 的笔数</div></div>
+    <div class="mc"><div class="l">持有期</div>
+      <div class="v sm">${r.hold} 日</div>
+      <div class="n">单边成本 ${(r.cost * 100).toFixed(2)}% · 双边 ${(r.cost * 200).toFixed(2)}%</div></div>
+    <div class="mc"><div class="l">交易区间</div>
+      <div class="v sm" style="font-size:13px">${s.date_start || '—'}</div>
+      <div class="n">至 ${s.date_end}</div></div>
+  </div>`;
+
+  // ---- 口径说明
+  h += `<div class="card"><h3>交易口径 <span class="tag">固定持有期 · 无前视偏差</span></h3>
+    <div class="desc" style="margin-bottom:0">
+      每一笔交易 = <b>信号日 T</b> 收盘后按条件选出 → <b>T+1 开盘</b>买入 →
+      持有 <b>${r.hold} 个交易日</b> → <b>T+1+${r.hold} 开盘</b>卖出。
+      净收益已扣 <b>${(r.cost * 200).toFixed(2)}%</b> 双边成本（印花税+佣金+滑点）。
+      「同期基准」= 同口径（T+1开盘 → T+1+${r.hold}开盘）的全市场链式收益，
+      「超额」= 净收益 − 基准。「营收 / 归母」列是该信号日<b>当时已公告</b>的财报
+      （动态对齐，无前视偏差）。<br>
+      <span style="color:#a8622c">⚠️ 这些交易<b>不是同时发生的</b>：按日度再平衡口径统计的组合
+      CAGR 见「策略回测」页；本页逐笔收益是「每笔独立持有」的单笔口径，两者不可直接相乘。</span>
+    </div></div>`;
+
+  // ---- 分布图 + 逐年图
+  h += `<div class="charts">
+    <div class="card" style="margin:0"><h3>单笔净收益分布
+      <span class="tag">${r.hist.edges[0]}% ~ ${r.hist.edges[r.hist.edges.length-1]}%</span></h3>
+      <div class="chart" id="ch-hist"></div>
+      <div class="cap">横轴为净收益率分箱，纵轴为笔数。长期右偏是多头交易策略的典型形态。</div></div>
+    <div class="card" style="margin:0"><h3>逐年交易表现 <span class="tag">含双边成本</span></h3>
+      <div class="chart" id="ch-tyear"></div>
+      <div class="cap">柱 = 该年单笔平均净收益；折线 = 该年单笔胜率。样本少（&lt;30 笔）年份请谨慎解读。</div></div>
+  </div>`;
+
+  // ---- 逐年表
+  if ((r.yearly || []).length) {
+    h += `<div class="card"><h3>逐年交易统计</h3>
+      <div class="tw"><table><thead><tr>
+        <th style="text-align:left">年份</th><th>交易数</th><th>盈利数</th><th>胜率</th>
+        <th>平均净收益</th><th>中位数</th><th>累计</th><th>盈亏比</th>
+        <th>最佳</th><th>最差</th></tr></thead><tbody>`;
+    r.yearly.forEach(y => {
+      h += `<tr><td class="l"><b>${y.year}</b></td><td>${NUM(y.n)}</td>
+        <td>${NUM(y.n_win)}</td>
+        <td class="${y.win > .5 ? 'pos' : 'neg'}">${PCT(y.win, 1)}</td>
+        <td class="${cls(y.mean)}">${PCT(y.mean, 2)}</td>
+        <td class="${cls(y.median)}">${PCT(y.median, 2)}</td>
+        <td class="${cls(y.sum)}">${F(y.sum, 1)}</td>
+        <td>${F(y.pf, 2)}</td>
+        <td class="pos">${PCT(y.best, 1)}</td>
+        <td class="neg">${PCT(y.worst, 1)}</td></tr>`;
+    });
+    h += `</tbody></table></div>
+      <div class="cap">「累计」= 该年所有交易净收益<b>简单相加</b>（每股等权 1 份，非复利），
+        用于比较各年的机会质量，不等于该年的组合收益率。</div></div>`;
+  }
+
+  // ---- 最佳 / 最差榜
+  if ((r.best || []).length) {
+    const tb = (arr, isBest) => arr.map(x => `<tr>
+      <td class="l">${x.code}</td><td class="nm">${x.name}</td>
+      <td style="color:var(--tx3)">${x.signal_date}</td>
+      <td style="color:var(--tx3)">${x.exit_date || '—'}</td>
+      <td class="${isBest ? 'pos' : 'neg'}">${PCTN(x.net, 1)}</td>
+      <td class="${isBest ? 'pos' : 'neg'}">${PCTN(x.excess, 1)}</td></tr>`).join('');
+    h += `<div class="charts" style="margin-top:14px">
+      <div class="card" style="margin:0"><h3>最佳 20 笔 <span class="tag">按净收益</span></h3>
+        <div class="tw"><table><thead><tr><th style="text-align:left">代码</th>
+          <th style="text-align:left">名称</th><th style="text-align:left">信号日</th>
+          <th style="text-align:left">卖出日</th><th>净收益</th><th>超额</th>
+        </tr></thead><tbody>${tb(r.best, true)}</tbody></table></div>
+        <div class="cap">超跌反转的收益高度集中于少数极端反弹（如 2024-09「924 行情」）。</div></div>
+      <div class="card" style="margin:0"><h3>最差 20 笔 <span class="tag">按净收益</span></h3>
+        <div class="tw"><table><thead><tr><th style="text-align:left">代码</th>
+          <th style="text-align:left">名称</th><th style="text-align:left">信号日</th>
+          <th style="text-align:left">卖出日</th><th>净收益</th><th>超额</th>
+        </tr></thead><tbody>${tb(r.worst, false)}</tbody></table></div>
+        <div class="cap">最差笔集中在「跌了还能再跌」的退市/暴雷股——小市值策略的主要风险来源。</div></div>
+    </div>`;
+  }
+
+  // ---- 过滤器 + 明细表
+  const yrs = (r.yearly || []).map(y => y.year);
+  h += `<div class="card"><h3>逐笔交易明细
+    <span class="tag">共 ${NUM(r.n_trade)} 笔 · 筛选后 ${NUM(r.n_filtered)} 笔</span></h3>
+    <div class="desc">每一行是一笔完整交易。点表头可排序，行底色：<span style="color:#a83232">浅红=亏损</span>。
+      回测过程中<b>实际使用的财报</b>列在右侧（该信号日当时已公告的数值）。</div>
+    <div class="trbar">
+      <span class="lb">盈亏</span>
+      <span class="seg" id="t-win">
+        <button data-w="" class="${TST.win === null ? 'on' : ''}">全部</button>
+        <button data-w="1" class="${TST.win === true ? 'on' : ''}">仅盈利</button>
+        <button data-w="0" class="${TST.win === false ? 'on' : ''}">仅亏损</button>
+      </span>
+      <span class="lb">年份</span>
+      <select id="t-year"><option value="">全部</option>
+        ${yrs.map(y => `<option value="${y}" ${String(TST.year) === String(y) ? 'selected' : ''}>${y}</option>`).join('')}
+      </select>
+      <span class="lb">个股</span>
+      <input type="text" id="t-code" placeholder="600519" value="${TST.code || ''}">
+      <span class="sp"></span>
+      <select id="t-size">
+        <option value="50" ${TST.page_size === 50 ? 'selected' : ''}>50 条/页</option>
+        <option value="100" ${TST.page_size === 100 ? 'selected' : ''}>100 条/页</option>
+        <option value="200" ${TST.page_size === 200 ? 'selected' : ''}>200 条/页</option>
+      </select>
+      <button class="mini" id="t-apply">应用筛选</button>
+      <button class="mini" id="t-reset">清除</button>
+      <button class="mini" id="t-exp">导出 CSV</button>
+    </div>`;
+  if (f && f.n !== undefined) {
+    h += `<div class="hint2">筛选结果：<b>${NUM(f.n)}</b> 笔 ·
+      胜率 <b class="${f.win > .5 ? 'pos' : 'neg'}">${PCT(f.win, 1)}</b> ·
+      平均净收益 <b class="${cls(f.mean)}">${PCT(f.mean, 2)}</b> ·
+      中位数 <b class="${cls(f.median)}">${PCT(f.median, 2)}</b> ·
+      累计 <b class="${cls(f.sum)}">${F(f.sum, 1)}</b>${f.pf ? ` · PF <b>${F(f.pf, 2)}</b>` : ''}</div>`;
+  }
+  h += `<div class="tw" style="margin-top:11px"><table><thead><tr>
+    ${TCOLS.map(([k, lbl]) => `<th class="ts" data-k="${k}" ${
+      k === 'code' || k === 'name' || k === 'ind' ? 'style="text-align:left"' : ''}>${lbl}${
+      r.sort === k ? `<span class="ar">${r.order === 'desc' ? '▼' : '▲'}</span>` : ''}</th>`).join('')}
+    </tr></thead><tbody id="tbody-trades"></tbody></table></div>
+    <div class="trow">
+      <span>第 <b>${r.page}</b> / ${r.n_page} 页 ·
+        显示 ${NUM((r.page - 1) * r.page_size + 1)}–${NUM((r.page - 1) * r.page_size + r.rows.length)} 条</span>
+      <span class="pg" id="t-pg"></span>
+    </div></div>`;
+
+  $('#p-trades').innerHTML = h;
+
+  renderTradeRows(r.rows);
+  drawTradeCharts(r);
+  bindTradeControls(r);
+}
+
+function renderTradeRows(rows) {
+  const tb = $('#tbody-trades'); if (!tb) return;
+  tb.innerHTML = rows.map(it => `<tr class="${it.win ? '' : 'lossc'}">
+    <td class="rk2">${it.seq}</td>
+    <td class="l">${it.code}</td>
+    <td class="nm">${it.name}</td>
+    <td class="l" style="color:#5c6270">${it.ind}</td>
+    <td style="color:var(--tx3)">${it.signal_date || '—'}</td>
+    <td>${it.entry_date || '—'}</td>
+    <td>${it.exit_date || '—'}</td>
+    <td>${F(it.buy, 2)}</td>
+    <td>${F(it.sell, 2)}</td>
+    <td class="${cls(it.net)}" style="font-weight:600">${PCTN(it.net)}
+      <span class="tkx ${it.win ? 'w' : 'l'}">${it.win ? '盈' : '亏'}</span></td>
+    <td class="${cls(it.ret)}">${PCTN(it.ret)}</td>
+    <td class="${cls(it.bench)}">${PCTN(it.bench)}</td>
+    <td class="${cls(it.excess)}">${PCTN(it.excess)}</td>
+    <td>D${it.size_grp ?? '—'}</td>
+    <td><span class="pill ${it.d_px60 === 1 ? 'd1' : it.d_px60 === 2 ? 'd2' : 'dn'}">D${it.d_px60 ?? '—'}</span></td>
+    <td style="color:#5c6270">${MONEY(it.fin_rev)}</td>
+    <td class="${cls(it.fin_rev_yoy)}">${F(it.fin_rev_yoy, 1, '%')}</td>
+    <td style="color:#5c6270">${MONEY(it.fin_np)}</td>
+    <td class="${cls(it.fin_np_yoy)}">${F(it.fin_np_yoy, 1, '%')}</td>
+  </tr>`).join('');
+}
+
+function drawTradeCharts(r) {
+  // ---- 收益分布直方图
+  const e = r.hist.edges, c = r.hist.counts;
+  const labels = c.map((_, i) => {
+    const a = e[i], b = e[i + 1];
+    return (a >= 0 && b <= 0) ? '0' : `${a}~${b}`;
+  });
+  const hc = mkChart('ch-hist');
+  hc && hc.setOption({
+    grid: { left: 56, right: 16, top: 24, bottom: 34 },
+    tooltip: { trigger: 'axis', ...TIP,
+      formatter: p => `<b>${p[0].name}%</b><br>笔数: <b>${NUM(p[0].value)}</b>` },
+    xAxis: { type: 'category', data: labels, ...AX,
+      axisLabel: { ...AX.axisLabel, rotate: 38, fontSize: 9.5 },
+      name: '净收益率 (%)', nameLocation: 'middle', nameGap: 30,
+      nameTextStyle: { fontSize: 10.5, color: '#8d94a3' } },
+    yAxis: { type: 'value', ...AX,
+      axisLabel: { ...AX.axisLabel,
+        formatter: v => v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v } },
+    series: [{
+      type: 'bar', barMaxWidth: 30,
+      data: c.map((v, i) => {
+        const mid = (e[i] + e[i + 1]) / 2;
+        return { value: v, itemStyle: { color: mid >= 0 ? '#2ea06a' : '#cf5b5b',
+          borderRadius: mid >= 0 ? [3, 3, 0, 0] : [0, 0, 3, 3] } };
+      }),
+    }]
+  });
+
+  // ---- 逐年图
+  const Y = r.yearly || [];
+  const yc = mkChart('ch-tyear');
+  yc && yc.setOption({
+    grid: { left: 50, right: 50, top: 34, bottom: 26 },
+    tooltip: { trigger: 'axis', ...TIP,
+      formatter: p => { const i = p[0].dataIndex, y = Y[i];
+        return `<b>${y.year} 年</b><br>交易 ${NUM(y.n)} 笔 · 盈利 ${NUM(y.n_win)} 笔<br>` +
+          `平均净收益: <b>${PCT(y.mean, 2)}</b><br>胜率: <b>${PCT(y.win, 1)}</b><br>` +
+          `中位数: <b>${PCT(y.median, 2)}</b><br>最佳 ${PCT(y.best, 1)} / 最差 ${PCT(y.worst, 1)}`; } },
+    legend: { top: 2, right: 6, itemWidth: 12, itemHeight: 8,
+      textStyle: { fontSize: 11, color: '#5c6270' } },
+    xAxis: { type: 'category', data: Y.map(x => String(x.year)), ...AX },
+    yAxis: [
+      { type: 'value', ...AX, axisLabel: { ...AX.axisLabel, formatter: v => v + '%' } },
+      { type: 'value', max: 100, ...AX, splitLine: { show: false },
+        axisLabel: { ...AX.axisLabel, formatter: v => v + '%' } },
+    ],
+    series: [
+      { name: '平均净收益', type: 'bar', barMaxWidth: 34, yAxisIndex: 0,
+        data: Y.map(x => ({ value: +(x.mean * 100).toFixed(2),
+          itemStyle: { color: x.mean >= 0 ? '#2ea06a' : '#cf5b5b',
+            borderRadius: x.mean >= 0 ? [3, 3, 0, 0] : [0, 0, 3, 3] } })) },
+      { name: '胜率', type: 'line', yAxisIndex: 1, smooth: true, symbolSize: 6,
+        data: Y.map(x => +(x.win * 100).toFixed(1)),
+        lineStyle: { width: 1.6, color: '#c98a2b' }, itemStyle: { color: '#c98a2b' } },
+    ]
+  });
+}
+
+function bindTradeControls(r) {
+  // 表头排序
+  $$('#p-trades th.ts').forEach(th => th.addEventListener('click', () => {
+    const k = th.dataset.k;
+    if (TST.sort === k) TST.order = TST.order === 'desc' ? 'asc' : 'desc';
+    else { TST.sort = k; TST.order = (k === 'code' || k === 'name' || k === 'ind') ? 'asc' : 'desc'; }
+    TST.page = 1; runTrades();
+  }));
+  // 盈亏筛选
+  $$('#t-win button').forEach(b => b.addEventListener('click', () => {
+    const v = b.dataset.w;
+    TST.win = v === '' ? null : (v === '1');
+    TST.page = 1; runTrades();
+  }));
+  // 应用筛选
+  const apply = () => {
+    const y = $('#t-year') ? $('#t-year').value : '';
+    TST.year = y ? parseInt(y, 10) : null;
+    TST.code = ($('#t-code') ? $('#t-code').value.trim() : '');
+    const ps = $('#t-size') ? parseInt($('#t-size').value, 10) : 50;
+    if (ps !== TST.page_size) { TST.page_size = ps; TST.page = 1; }
+    runTrades();
+  };
+  const ap = $('#t-apply'); ap && ap.addEventListener('click', apply);
+  const sz = $('#t-size'); sz && sz.addEventListener('change', apply);
+  const cd = $('#t-code'); cd && cd.addEventListener('keydown', e => {
+    if (e.key === 'Enter') apply();
+  });
+  const rs = $('#t-reset'); rs && rs.addEventListener('click', () => {
+    TST.win = null; TST.year = null; TST.code = ''; TST.page = 1;
+    runTrades();
+  });
+  // 分页
+  const pgn = $('#t-pg');
+  if (pgn) {
+    const tot = r.n_page, cur = r.page;
+    const mk = (label, pg, dis, on) =>
+      `<button ${dis ? 'disabled' : ''} class="${on ? 'on' : ''}" data-pg="${pg}">${label}</button>`;
+    let btns = mk('首页', 1, cur === 1, false);
+    btns += mk('‹', Math.max(1, cur - 1), cur === 1, false);
+    let a = Math.max(1, cur - 2), b = Math.min(tot, a + 4);
+    a = Math.max(1, b - 4);
+    for (let i = a; i <= b; i++) btns += mk(String(i), i, false, i === cur);
+    btns += mk('›', Math.min(tot, cur + 1), cur === tot, false);
+    btns += mk('末页', tot, cur === tot, false);
+    pgn.innerHTML = btns;
+    $$('#t-pg button').forEach(x => x.addEventListener('click', () => {
+      TST.page = parseInt(x.dataset.pg, 10); runTrades();
+    }));
+  }
+  // 导出
+  const ex = $('#t-exp'); ex && ex.addEventListener('click', async () => {
+    const body = { kind: 'trades', params: collect(), pool: currentPool() };
+    if (TST.win !== null) body.win = TST.win;
+    if (TST.year) body.year = TST.year;
+    const resp = await fetch('/api/export', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) { alert('导出失败：' + resp.status); return; }
+    const blob = await resp.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `超跌反转交易明细_H${r.hold}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
   });
 }
 
@@ -1197,6 +1789,12 @@ $('#size_max').addEventListener('input', () => { syncLabels(); updateModeBadge()
 $('#hold').addEventListener('input', syncLabels);
 $('#deep_any').addEventListener('change', updateModeBadge);
 $$('#confirms input').forEach(i => i.addEventListener('change', updateModeBadge));
+/* ---- 财务筛选 ---- */
+$$('.finrow input[type=number]').forEach(i => i.addEventListener('input', updateFinBadge));
+$('#fin_period').addEventListener('change', updateFinBadge);
+$$('.finquick button').forEach(b => b.addEventListener('click', () => {
+  setFinQuick(b.dataset.fin);
+}));
 $$('#inds input').forEach(i => i.addEventListener('change', () => {
   const n = $$('#inds input:checked').length;
   $('#indcnt').textContent = n ? `（选中 ${n} 个）` : '（0 选中 = 不限）';
