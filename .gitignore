@@ -1,0 +1,73 @@
+# ============================================================
+#  A股因子研究 —— Git 忽略规则
+#
+#  核心原则：**只传代码与轻量结果，不传可重建的大数据**
+#  面板文件可由 scripts/ 全链路重建（见 README「数据重建」）
+# ============================================================
+
+# ---------- 大体积数据（可重建，绝不入库）----------
+# ⚠️ GitHub 单文件硬上限 100MB，面板文件 2~4GB 会被服务器直接拒绝
+data/
+!data/.gitkeep
+
+# ---------- 生成的图表数据 / 中间产物 ----------
+output/*.parquet
+output/*.log
+output/chart_data.json
+output/chart_extra.json
+
+# ---------- 依赖 ----------
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ---------- 系统 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- 编辑器 / IDE ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+\#*\#
+
+# ---------- 密钥与本地配置（防泄漏）----------
+.env
+.env.*
+*.key
+*.pem
+secrets.json
+*_secret*
+config.local.*
+*.token
+credentials.json
+
+# ---------- 运行期 / 临时 ----------
+*.tmp
+*.temp
+*.bak
+*.orig
+*.pid
+*.log
+!output/*.md
+nohup.out
+
+# ---------- 大模型的本地缓存 ----------
+.cache/
+__tmp__/
+
+# ---------- 其它工具目录 ----------
+# .workbuddy-ai/ 内含对话记忆与本地项目约定，保留在本地
+# 若希望团队共享项目约定，见 README「团队协作」一节
+.workbuddy-ai/

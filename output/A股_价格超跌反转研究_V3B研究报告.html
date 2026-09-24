@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="u5FCoSwWxqqtXRqDuYanSO">
+<head data-page-node-id="azuuNvbxaixeUufzqaITrx">
+<meta charset="utf-8" data-page-node-id="XwFD0YzaSjEdSTQLW6xqBx">
+<meta name="viewport" content="width=device-width,initial-scale=1" data-page-node-id="CcV8CI0C0NPyCX797RK228">
+<title>A股 价格超跌反转研究 · V3B 研究报告</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+:root{
+  --bg:#0f1115; --bg2:#161a21; --bg3:#1d222b; --line:#2a3140;
+  --fg:#e6e9ef; --fg2:#a8b2c4; --fg3:#6b7689;
+  --up:#ff5c5c; --dn:#31c48d; --acc:#5b9dff; --acc2:#c084fc; --warn:#fbbf24;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);
+  font:14px/1.75 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  padding:0 0 80px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+header{padding:56px 0 32px;border-bottom:1px solid var(--line);margin-bottom:8px}
+h1{font-size:30px;font-weight:700;letter-spacing:-.4px;line-height:1.35}
+.sub{color:var(--fg2);margin-top:12px;font-size:13.5px}
+.meta{margin-top:20px;display:flex;flex-wrap:wrap;gap:10px}
+.tag{background:var(--bg3);border:1px solid var(--line);border-radius:5px;
+  padding:4px 11px;font-size:12px;color:var(--fg2)}
+.tag b{color:var(--acc);font-weight:600}
+h2{font-size:21px;font-weight:650;margin:52px 0 6px;padding-top:22px;
+  border-top:1px solid var(--line)}
+h2 .num{color:var(--acc);font-family:ui-monospace,monospace;font-size:15px;
+  margin-right:10px;font-weight:500}
+h3{font-size:16px;font-weight:620;margin:30px 0 12px;color:var(--fg)}
+h4{font-size:14px;font-weight:600;margin:20px 0 8px;color:var(--fg2)}
+p{margin:11px 0;color:#cdd4e0}
+.lead{font-size:15px;color:var(--fg2);margin:14px 0 22px}
+ul,ol{margin:11px 0 11px 22px;color:#cdd4e0}
+li{margin:6px 0}
+code{background:var(--bg3);border:1px solid var(--line);border-radius:4px;
+  padding:1.5px 6px;font-family:ui-monospace,SFMono-Regular,monospace;
+  font-size:12.5px;color:#9ecbff}
+pre{background:var(--bg2);border:1px solid var(--line);border-left:3px solid var(--acc);
+  border-radius:6px;padding:15px 18px;overflow-x:auto;margin:16px 0}
+pre code{background:none;border:none;padding:0;color:#c9d4e6;font-size:12.5px;line-height:1.65}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:12.8px}
+th{background:var(--bg3);color:var(--fg2);font-weight:600;text-align:right;
+  padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+td{padding:8px 10px;border-bottom:1px solid #212734;text-align:right;
+  font-family:ui-monospace,SFMono-Regular,monospace;white-space:nowrap}
+tbody tr:hover{background:#171c24}
+.pos{color:var(--up)}.neg{color:var(--dn)}.dim{color:var(--fg3)}
+.strong{color:var(--acc);font-weight:600}
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:8px;
+  padding:18px 20px;margin:18px 0}
+.card.key{border-left:3px solid var(--acc)}
+.card.warn{border-left:3px solid var(--warn)}
+.card.bad{border-left:3px solid var(--dn)}
+.card.good{border-left:3px solid var(--up)}
+.card h4{margin-top:0;color:var(--fg);font-size:14.5px}
+.chart{width:100%;height:400px;margin:20px 0}
+.chart.sm{height:320px}
+.chart.lg{height:470px}
+.cap{color:var(--fg3);font-size:12px;text-align:center;margin:-12px 0 22px}
+.tcap{color:var(--fg3);font-size:12px;text-align:left;margin:0 0 9px}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin:20px 0}
+.kpi div{background:var(--bg2);border:1px solid var(--line);border-radius:7px;padding:14px 16px}
+.kpi .l{color:var(--fg3);font-size:11.5px;letter-spacing:.3px}
+.kpi .v{font-size:21px;font-weight:650;font-family:ui-monospace,monospace;margin-top:5px}
+.kpi .n{color:var(--fg3);font-size:11.5px;margin-top:3px}
+footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);
+  color:var(--fg3);font-size:12px;line-height:1.85}
+.badge{display:inline-block;border-radius:4px;padding:2px 7px;font-size:11.5px;
+  font-weight:600;font-family:ui-monospace,monospace}
+.b-yes{background:rgba(255,92,92,.16);color:#ff8080}
+.b-no{background:rgba(49,196,141,.16);color:#4dd9a3}
+.b-mid{background:rgba(251,191,36,.16);color:#fcd34d}
+.scroll{overflow-x:auto;margin:16px 0}
+.scroll table{margin:0;min-width:760px}
+.toc{background:var(--bg2);border:1px solid var(--line);border-radius:8px;
+  padding:16px 22px;margin:26px 0}
+.toc ol{margin:0;columns:2;column-gap:36px;list-style:none;margin-left:0}
+.toc li{margin:5px 0;font-size:13px}
+.toc a{color:var(--fg2);text-decoration:none}
+.toc a:hover{color:var(--acc)}
+.toc .n{color:var(--acc);font-family:ui-monospace,monospace;margin-right:7px;font-size:12px}
+</style>
+</head>
+<body data-page-node-id="TQFCPJP7Pl4cjaHWwyUVa7">
+<div class="wrap" data-page-node-id="TmhOxeJ8ucO9I6EH218Z22">
+
+<header data-page-node-id="AI0dmku4HF2CtbOfuCgleX">
+  <h1 data-page-node-id="8wuuGFS9CnCnRGlqONN7tz">A股 价格超跌反转研究 · V3B</h1>
+  <div class="sub" data-page-node-id="9dhg2cOfYb1re0xVbWxNuG">核心问题：<b data-page-node-id="9ybUeIYokfvDL65sZwnXNs">股票经历明显价格下跌以后，什么条件能够判断它正在从下跌转向反弹？</b></div>
+  <div class="meta" data-page-node-id="Bc70yS1fXJy2FkH3vE7YK2">
+    <span class="tag" data-page-node-id="mtuLQC6E5zihfdzi3z2Nrg">样本 <b data-page-node-id="FUyK9aMA2mnCsmRdLsm5ld">2015-01 ~ 2026-09</b></span>
+    <span class="tag" data-page-node-id="mXndm0Km0X85v20u4O7lJk">面板 <b data-page-node-id="RLbGgtm5JNxqnayWZIH49Y">10,535,057</b> 行 · <b data-page-node-id="6qN2L6F7isNTSqe87YdEdk">5,304</b> 只 · <b data-page-node-id="ShWxHH3sC3ClgYOzfajrHW">2,871</b> 交易日</span>
+    <span class="tag" data-page-node-id="SWKPH3sKoVrEAHocdUrkOk">成本 <b data-page-node-id="nv8lMW5ImAvDWvOez1OvgH">0.3%</b> 双边</span>
+    <span class="tag" data-page-node-id="i53del4WBP1BDD106ZWQfJ">超额口径 <b data-page-node-id="IMtRRxmW8wVJiqBDXjD1KN">日加权 + 按日聚类 t</b></span>
+  </div>
+</header>
+
+<div class="card warn" data-page-node-id="TntXG9q9V1mJQ00MHHK8c1">
+<h4 data-page-node-id="UDS9ABoUBpAczA6eeAnLxl">⚠️ 本轮先修正了两个严重的方法学错误</h4>
+<p data-page-node-id="HEHnl7mD9S46EXQJZI8Wu3"><b data-page-node-id="m6I1AZRXNBGzAn57yBRaB1">错误 1 · 收益区间错位</b>（影响第 2、11~13 节）。此前所有「状态组合」回测把
+<code data-page-node-id="3AqmXEnJMXoJeXtxY2NHnb">oret[t]</code>（T 日开盘 → T+1 开盘）当作信号后的收益，但信号是 <b data-page-node-id="1GMTtYxl1ilHJiz918jlNC">T 日收盘</b>才生成的，
+可交易的第一个区间应是 <code data-page-node-id="zkRHwBWhcoDVHygdc9jWFn">oret[t+1]</code>（T+1 开盘 → T+2 开盘）。
+超跌股在「信号日当天」恰好是继续暴跌的那一天，被错误计入组合。
+实测同一 mask（ret5 D1）：错位口径 <b data-page-node-id="PBCfwBkFKxUwMwmm4S74dg">−1.301%/日</b>，正确口径 <b data-page-node-id="hhee4wZPfCjL2TnwUsuK6e">+0.0068%/日</b>，
+<b data-page-node-id="twG5Q3yYAFneEOMCGSBwpJ">差 1.37pp/日、方向完全反转</b>。修正后 MDD 从 −100% 回到 −39%~−59%。</p>
+<p data-page-node-id="H16yDtcCaqeotd8d77eip9"><b data-page-node-id="Rq6VV6qfTig4JLm2w0ghSU">错误 2 · 块内秩排序</b>（影响第 9~10 节）。向量化「逐日截面平均秩」时用了单键排序，
+使同一天的元素在排序后被打散，日内序号算成负数。修正后真实因子 IC 平均变动 0.0034、
+最大 0.0107（结论方向未变、量级更准）；更重要的是它曾在常数因子上伪造出
+<b data-page-node-id="EUJfRkm2BRkFkqMozZzinz">+0.0869（t+5.52）的假 IC 榜首</b>。详见第 10 节。</p>
+<p data-page-node-id="LTc7kFFs9Lspi1eVGLlDG8">本报告所有数字均为修正后口径。</p>
+</div>
+
+<div class="toc" data-page-node-id="FGjFIBHdlFGte73XCCOrxd">
+<ol data-page-node-id="nEH13Is663Wi7UprGqghhd">
+<li data-page-node-id="vFJJFbegz76m1665py9rNG"><span class="n" data-page-node-id="XHkcqwaWXU4ZvCB624p2QK">01</span><a href="#s1" data-page-node-id="eQ5dklGqzyPIfa0Ku5Ub93">纯价格超跌十分位结构</a></li>
+<li data-page-node-id="5s88FCmui9iuOVd6AMUgmQ"><span class="n" data-page-node-id="0oMeQFrK4qXPn4dGq7fqfD">02</span><a href="#s2" data-page-node-id="6jxjFC0NxzoOaIPywVD8hj">中等超跌 vs 极端超跌</a></li>
+<li data-page-node-id="rVB0nhP5DHGP0HlcpXb2R5"><span class="n" data-page-node-id="lVhDuQXSZ5EcD3CtedocC9">03</span><a href="#s3" data-page-node-id="EwHZtv4A5PPovmEmDFxcYw">反转确认信号（8 个）</a></li>
+<li data-page-node-id="BBShsIbROjXa34zUD6XYX5"><span class="n" data-page-node-id="Z0ZfeAuTaFvVcZwFBbAfIK">04</span><a href="#s4" data-page-node-id="lnSWLkzLAFlgUUVVlHt8aE">量能能否作为确认</a></li>
+<li data-page-node-id="eEXY68U7yaTPE5ljaa7lfn"><span class="n" data-page-node-id="lULJ6B3gqE5zHOSPawj6lS">05</span><a href="#s5" data-page-node-id="fxkyJWBWlBQyvoOl6nmpVI">三阶段结构</a></li>
+<li data-page-node-id="HVnzDEXDk86GhZXcnm1mj9"><span class="n" data-page-node-id="5wqd0G4Jjo5I3bxvht2Pv8">06</span><a href="#s6" data-page-node-id="rdy8tTnNIUcd5AUQcepl4z">市场环境过滤</a></li>
+<li data-page-node-id="Rnjud9U9rIv0B2OfLt18NX"><span class="n" data-page-node-id="EGb8fHkd70MX3ne5jG7x1F">07</span><a href="#s7" data-page-node-id="fGIywike05H9OpKmA3oWAR">相对强弱</a></li>
+<li data-page-node-id="EdhzOeUq9nwYr7u6bIfka2"><span class="n" data-page-node-id="12Hxf52HZ1UcwoQW5sBLyC">08</span><a href="#s8" data-page-node-id="em1egLBRlsJIU2GmOI8Vxs">市值分位</a></li>
+<li data-page-node-id="dDoIT6borJQzOBGJ77JGvq"><span class="n" data-page-node-id="v4qim9Z2b9kbmORE7XGGUW">09</span><a href="#s9" data-page-node-id="tuzwPOvKyVVjlYJTGJ3K65">候选因子池</a></li>
+<li data-page-node-id="AeJ2JMxMZ6eVa3JTCMVCDU"><span class="n" data-page-node-id="eYZ5NI27hFCZHrKHWKn98Z">10</span><a href="#s10" data-page-node-id="lOhOyd6dZ3ljNw4OKu3wPD">IC / ICIR / Fama-MacBeth</a></li>
+<li data-page-node-id="QI52ExiO2FbRIH0bJDLINz"><span class="n" data-page-node-id="UFyROhez2kPXIJHNjEjhkX">11</span><a href="#s11" data-page-node-id="6jVONb9ExzhvZiD3dGAZEd">8 个策略严格比较</a></li>
+<li data-page-node-id="GAtgjq8GIwx2Ozm54ARNxx"><span class="n" data-page-node-id="5RYX5MvfLJfwJ97bC2eIa6">12</span><a href="#s12" data-page-node-id="VO8YJio3ExGAskKGCXmHzM">最简单有效 + 稳健性</a></li>
+<li data-page-node-id="MO7HfA7VeZTtZeHsDvdFHI"><span class="n" data-page-node-id="hUhpH6DP8ooXOAAhVsy0kO">13</span><a href="#s13" data-page-node-id="15hqrEomXKhRRiSqy28hCi">最终归因与回答</a></li>
+</ol>
+</div>
+
+<h2 id="s1" data-page-node-id="irJ3Bs8nJCSScdiGFaRtMH"><span class="num" data-page-node-id="WD6yzKI0uDbVBGjrfi7A8M">01</span>纯价格超跌十分位结构</h2>
+<p class="lead" data-page-node-id="RuZS1LHCCWjWhQOlxHe0Cq">8 个价格维度，逐日横截面分 D1~D10（D1 = 最弱 10%，D10 = 最强 10%），
+统计各分位未来 1/5/10/20 日收益。先看形状，再看符号。</p>
+
+<div class="card key" data-page-node-id="YDwv5XXNet5llL7JlHQB42">
+<h4 data-page-node-id="ve1nD13cStKMruAE3EJGTX">决定性发现：不存在单一的「超跌最优分位」——它完全取决于时间尺度</h4>
+<ul data-page-node-id="NBGFNay2ZmBF6Icx1QLR7X">
+<li data-page-node-id="DGDTvHPBp47DolmZLHOQ3J"><b data-page-node-id="xjq0MnPWEsBeiHDWewr23B">短周期（≤10 日）是动量型</b>：<code data-page-node-id="nlwlGOU4bt2OeBlJwDfSu1">ret5</code>/<code data-page-node-id="HbLXn26GxKemVyEUOAXVsW">ret10</code> 呈倒 U，
+最优是 <b data-page-node-id="v6PqvBRIT4aRnw3tT5tlhy">D5</b>，而 <b data-page-node-id="B603bXDgRApPoNJSYMSrND">D1 是负超额</b>（−0.33% / −0.12%）</li>
+<li data-page-node-id="vdHeevQOXxxsmkXD1UbKBU"><b data-page-node-id="eWE9XK81bDFNnX7ZS4CCn9">中周期（20 日）是过渡区</b>：<code data-page-node-id="0VXxBnNLxrrbXPEARAo2c0">ret20</code> 最优 D2（+0.201%，t+4.7），D1 也显著为正（+0.185%，t+3.1）</li>
+<li data-page-node-id="vob0iQWVvmYQPpuOYI9dHj"><b data-page-node-id="GYbk8uOzWJlUN6WSGpzDWf">中长周期（≥40 日）是反转型</b>：<code data-page-node-id="AN9Zx8dlGvOhh5PpR5HIjl">ret40</code>/<code data-page-node-id="v2iwANvJXar5b0JqJhhsfN">ret60</code>/<code data-page-node-id="iuDfhZYTmXQYnSxIcHrsHo">距MA60</code>/<code data-page-node-id="RzxN0GbOXCikGFY2oyIHv2">距MA120</code>
+<b data-page-node-id="qGWZbTfSY7QbCCDfqHv5tU">单调递减，D1 就是最优点</b>，且 |t| 更高（+3.5 ~ +6.3）</li>
+<li data-page-node-id="Jigw0IaiBRFNGo65IiAm7z"><b data-page-node-id="DJKevHyDsrfOSsbtOKwlth">所有维度的 D10 都是极端负值</b>（−1.39% ~ −1.66%，|t| 15.5 ~ 21.0）→ 追强势股是系统性错误</li>
+</ul>
+</div>
+
+<div class="chart lg" id="c-decile" data-page-node-id="HJWVWvaMwn5XhxLaK7EMxs"></div>
+<div class="cap" data-page-node-id="qIVXf6D0cfhJMXtM1whnAH">图 1 · 8 个价格维度 H=20 日超额收益（%）的十分位结构。注意左侧三组是单调递减，右侧两组是倒 U。</div>
+
+<div class="chart" id="c-shape" data-page-node-id="R4PLgDoICEVpa27V385arG"></div>
+<div class="cap" data-page-node-id="T5OMke4x3eZjTS5YH8yX9N">图 2 · 「最优分位」与「D1 超额」随窗口长度的变化。窗口越长，超跌越有效、D1 越优。</div>
+
+<div class="scroll" data-page-node-id="N4eDExHUGKPd56bhwBxVDW"><p class="tcap" data-page-node-id="5IauHpYADsjcOSRLh7VCfS">每列给出该维度「最优分位」的数值 —— 因最优分位随维度变化（短周期 D4~D5，长周期 D1），不能跨列直接比 D 号。</p><table id="t-decile" data-page-node-id="C3rIznQxoInI4pYGZDA8JO"></table></div>
+<div class="cap" data-page-node-id="hu2xtJS14sGwhtim9GHcV5">表 1 · H=20 日各维度十分位超额（%）与按日聚类 t 值</div>
+
+<div class="card" data-page-node-id="vsE3BPxoQZA4G0VJuvQxxr">
+<h4 data-page-node-id="M7GHn4uUs8U5p0TUdjZiqO">这修正了此前的一个前提</h4>
+<p data-page-node-id="YbHpCAdPVLjlKN7sEnkyjX">此前观察「最优区域不是最极端的 D1，而是 D2~D6」——这在 <code data-page-node-id="4Io7vTLyIwHTqZy7AaaVTc">ret20</code>（D2 最优）
+和 <code data-page-node-id="sx9dtaHyMWYXoYR74ttNzU">ret5</code>/<code data-page-node-id="8PTBw00mYVGEELQDaqZv7l">ret10</code>（D5 最优）上成立，
+但在 <code data-page-node-id="NAbrGTBPZYVCjqmxMsGjf6">ret40</code>/<code data-page-node-id="v5r4TGQc0I7lSBPxn2JE1I">ret60</code>/<code data-page-node-id="PVgIyQsvFHEEBIkkmn1SGz">距MA60</code>/<code data-page-node-id="DwdCzmpyarE3MohuFL3FH4">距MA120</code> 上
+<b data-page-node-id="dtb4dBSpxzawSbowCeOOcq">D1 才是最优</b>。若把「D2~D6」当作统一约束，会系统性地放弃最强信号区域。</p>
+</div>
+
+<h3 data-page-node-id="L5cf0AHTxFc8BQpKQKbCne">反转从信号后第 1 天就开始</h3>
+<div class="scroll" data-page-node-id="Jkg1iuqKLr78ZQfDbT2udv"><table id="t-d1h" data-page-node-id="CAEYfWosqD0VYQXdDLmKvL"></table></div>
+<div class="cap" data-page-node-id="wOl0aKlsMHwm6Eg3Oa4ZHo">表 2 · 各维度 D1 在 H=1/5/10/20 的超额（%）。H=1 就已显著为正 → 不存在「等待确认」的窗口。</div>
+
+<h2 id="s2" data-page-node-id="d9YvWVZm7fMzKtBBQiEGOb"><span class="num" data-page-node-id="pEVkYrcba4dVUZPBH3HP5O">02</span>中等超跌 vs 极端超跌</h2>
+<p class="lead" data-page-node-id="GcoWYa7lFOT3SJ5pYoQAE5">直接对照 D1 与 D2~D6 在同一个维度上的表现。</p>
+
+<div class="chart" id="c-combo" data-page-node-id="7Dd4ckAYWT7f5LkPrkg8dW"></div>
+<div class="cap" data-page-node-id="73pBJMR1CpiIDoidGFpFXN">图 3 · 各组合 H=20 超额（%）与 t 值。深色为「深度超跌」类，浅色为「中等超跌」类。</div>
+
+<div class="scroll" data-page-node-id="iPZ5tIwbmHm9MvUgsd02jn"><table id="t-combo" data-page-node-id="w9wMJnu9RWIXK6beyJc00B"></table></div>
+<div class="cap" data-page-node-id="PjKypJYShoiFDNpPUATglf">表 3 · 21 个组合的完整统计（H=20）</div>
+
+<div class="card key" data-page-node-id="qZ4cOl03OOvpNWTaFoU6f7">
+<h4 data-page-node-id="6xtUnSWVKJhWBIDNslLULe">答案：<b data-page-node-id="NZgRYgzcOfLvL9HUJmbN4d">取决于维度</b>，不是普适结论</h4>
+<ul data-page-node-id="3iNEYTYLKzLVfN2MbpsygQ">
+<li data-page-node-id="9H2giySygBqA8bxqUxCXU6"><b data-page-node-id="ArELUtbqufIxLbUfxpsA3i">中长周期维度（ret40 / ret60 / 距MA60 / 距MA120）</b>：D1 显著优于 D2~D6
+<ul data-page-node-id="XWFAQvdM2GVw2Rdbn5bXms">
+<li data-page-node-id="e7D3qfPtNHHI6mw9CIztlG"><code data-page-node-id="Zy1LYT5HtGbguaOlXVF56F">ret40</code> D1 +0.383%(t+6.3) vs D2~D6 +0.059%(t+2.1)</li>
+<li data-page-node-id="z3LrhC2P8tGO3i1U79KRIF"><code data-page-node-id="q77DehuIrZS0PFws92n3yp">距MA60</code> D1 +0.369%(t+5.8) vs D2~D6 +0.118%(t+4.2)</li>
+</ul></li>
+<li data-page-node-id="ffiWkvnVA5yh0CNP4QUjTp"><b data-page-node-id="2mVipF08rjrvwrqik6y1UU">20 日维度（ret20）</b>：D2 略优于 D1（+0.201% vs +0.185%），但差距不显著</li>
+<li data-page-node-id="rv4w1ltF7c4WUHK6JAZyYH"><b data-page-node-id="XLfaSMvFZfZP5jcSCn5pUX">短周期维度（ret5）</b>：D1 <b data-page-node-id="Ncjf3jExbNGIgwGVw2Fyz3">为负</b>（−0.327% t−5.6），此时 D2~D6 确实更好</li>
+</ul>
+<p data-page-node-id="BGFVMTXaDMVjoHCtfH6xJw">→ 「中等超跌更容易反转」<b data-page-node-id="ZtnLJk9KvDhpvc2nzX41zZ">只在短周期维度成立</b>；在真正有效的维度上，<b data-page-node-id="du7fdgmaZyrCK9K7qGNG8I">越极端越好</b>。</p>
+</div>
+
+<h2 id="s3" data-page-node-id="J27D82qMSaPcQfSGii54pS"><span class="num" data-page-node-id="v78PF8TFATuWXPBFWFD1Jb">03</span>反转确认信号（8 个）</h2>
+<p class="lead" data-page-node-id="ZSMFS52YfWm1D44a56Lwlc">在「深度超跌」基线上叠加 8 个确认信号，检验确认能否提升表现。
+两个基线同时测：<b data-page-node-id="GkVsp8MxYo1QVN5DdXlXze">S</b> = ret20 D2~D6（用户规格）、<b data-page-node-id="gPr8YfpDpVlhSIkSMm798G">L</b> = ret40/ret60/距MA60 任一 D1（实测更强）。</p>
+
+<div class="chart lg" id="c-confirm" data-page-node-id="BVBfxfVhjnms9ABlR1lg6w"></div>
+<div class="cap" data-page-node-id="Gl5gZjsGOeAT5kzMs4qDmR">图 4 · 8 个确认信号相对基线的超额变化（H=20）。柱子向下 = 确认信号有害。</div>
+
+<div class="scroll" data-page-node-id="j0LLmerYsQDjvkBA45hD6n"><table id="t-confirm" data-page-node-id="hwsujtVDU8iiquAyyUNWPj"></table></div>
+<div class="cap" data-page-node-id="d7WQgH8spnyVIaFyjFUk9o">表 4 · 确认信号完整统计（两个基线，H=5/20/60）</div>
+
+<div class="card bad" data-page-node-id="vIaYPBIyqat9SIODeLlGYJ">
+<h4 data-page-node-id="Ygal9JB16rRZsW5nAR4zjs">结论：<b data-page-node-id="TqMq6NOm0UTrJjk0SulriL">全部 8 个确认信号都是负贡献</b>，无一例外</h4>
+<ul data-page-node-id="B0LegWMFj7WjmNYWnKSb88">
+<li data-page-node-id="CG5CswuKxEbjIhgDQdg4BV"><b data-page-node-id="jAwGceKLVgvHfEc51ErgMH">最有害：C 连续2日上涨</b> — H=20 超额 <b data-page-node-id="F7tpHaHBSu9bNKjWgQz9Gm">−3.33%</b>（t−40.1），
+H=5 <b data-page-node-id="2HbKzCJuaTo1bZtVGSYbrl">−3.19%</b>（t−60.3）→ 超跌股连涨 2 天是<b data-page-node-id="pe97YNA9EMOcuvRC2sYH6j">卖出</b>信号</li>
+<li data-page-node-id="W15aaPOAKDaNO7j3ETVoEl"><b data-page-node-id="DJAalpZGMaoancbkjlKyj1">E MACD柱翻红</b> — −1.98%（t−21.5）→ 翻红那一刻是短期高点</li>
+<li data-page-node-id="bYAyZ94UlrUpEnrPXabayk"><b data-page-node-id="Fa787EURsbAmTvwT6wV8ht">B MA5向上</b> — −0.68%（t−16.1）</li>
+<li data-page-node-id="zVebon95ElAIXxovDmP98J"><b data-page-node-id="KLpQyi4UTqJnhTDkvbvBTR">H Close站上MA20</b> — −0.19%（t−2.8）；<b data-page-node-id="3Itsptod0RklVOittmlBv1">G Close站上MA10</b> — −0.10%（t−1.9）</li>
+<li data-page-node-id="zOqNFjnaOb0OvOh0HXio0V"><b data-page-node-id="BRf34BgR4iQHY9mOZ1OW0P">A Close&gt;MA5</b> — −0.09%（t−1.7）</li>
+<li data-page-node-id="EDCoEsdUdEtSoHCVCQzR1c">唯一「不显著有害」：<b data-page-node-id="3z1L1TCWziXqhE6TMCXe5H">D MACD柱连续3日改善</b>（+0.000%，t 0.0）与
+<b data-page-node-id="Ts3n9jNZRIhb7nFHYzpHAS">F DIF&gt;DEA</b>（+0.149%，t+2.7，但 H=60 转为 −0.65%）</li>
+</ul>
+<p data-page-node-id="ldZkj4m7APtJNpLXntgPrE"><b data-page-node-id="UHh3wiVivDgphxThov5NEK">方向完全一致</b>：无论用哪个基线、哪个持有期，「等确认再买」都比「直接买超跌」更差。
+这与第 1 节的发现吻合 —— 反转在 T+1 就开始了，任何「等确认」都只是在等待已经涨完的部分。</p>
+</div>
+
+<h2 id="s4" data-page-node-id="3JZaApVSkjxRSrMwLhhwtm"><span class="num" data-page-node-id="yqyAFrOMj1BhuHOpRYaGfF">04</span>量能能否作为确认</h2>
+<p class="lead" data-page-node-id="O6sGRcUaHKQDSL5E8OwFob">不再问「缩量是不是买点」，改问「量能是否可作为反转确认」。测 9 档阈值 + 「缩量下跌→放量上涨」专项。</p>
+
+<div class="chart" id="c-vol" data-page-node-id="V371Nrg6iZvUDkSoszCQMQ"></div>
+<div class="cap" data-page-node-id="t6Jjac2WuogryuAowD1tOL">图 5 · 量比阈值网格（基线 L）。横轴为阈值，两条曲线为「≥阈值」与「≤阈值」。</div>
+
+<div class="scroll" data-page-node-id="NpZdVYhmwO5BTgULiEpSzf"><table id="t-vol" data-page-node-id="zk2BYYVdJLc2NxzHziC5eu"></table></div>
+<div class="cap" data-page-node-id="l2I6m0SpX9SqdyA1yzaKG4">表 5 · 量比网格 + 缩量→放量专项（H=5/10/20）</div>
+
+<div class="card bad" data-page-node-id="3yz2s2Z1LZ65MAvqdm8IKE">
+<h4 data-page-node-id="qJMWMzGDWvJuBHCeQq8Mfr">结论：<b data-page-node-id="YZOIEUn0ToIqB39QA7yUYc">放量是反向指标，缩量才是正向</b></h4>
+<ul data-page-node-id="6mDIG9Igw7mkIB8wcrW7Kn">
+<li data-page-node-id="kisVgwc0ShxSBiHD4Jmbk5"><b data-page-node-id="bHKsAe2dsZdQuJNUHIDLYZ">量比越高越差</b>：≥0.7 时 H=20 为 +0.263%（t+4.75，<b data-page-node-id="9yd9pP4l6wEtkxarKyBOpd">全网格最优</b>），
+≥1.2 降到 −0.018%，≥2.5 为 <b data-page-node-id="N5otuBeSUnHu6JtvWnOy0Z">−0.854%</b>（t−7.7）</li>
+<li data-page-node-id="jqzkHo7iIKl2heegvaytCm"><b data-page-node-id="zCcNHXLE6GYTN1JitUAEqc">量比 ≤ 1.5 反而是最优区间</b>：+0.298%（t+5.33）</li>
+<li data-page-node-id="iIolU2xRV059yBmzAHUoig"><b data-page-node-id="QpTCGGwDqBOAdYI0JzkKrh">「缩量下跌 → 放量上涨」（用户重点假设）</b>：H=20 超额 <b data-page-node-id="YDz0OfQXT84Qcmr8VIx6UD">−1.351%</b>（t−9.3），
+是全部量能变体中最差之一。基线 L 是 +0.219%，<b data-page-node-id="5Wp6oMXLyfJ8SVyjI7xaP9">叠加后变成 −1.351%，恶化 1.57pp</b></li>
+<li data-page-node-id="hVbN09KIeWu2LF5A2MNssW">「放量上涨（不限前期缩量）」也是负的（−0.372%，t−4.8）</li>
+</ul>
+<p data-page-node-id="9msHwV0MNLKmC4RbnndKrd">→ 量能<b data-page-node-id="UXQsBtQLV5GO6KfNCmOnuB">不能</b>作为反转确认。在超跌股上，放量意味着恐慌抛压仍在释放，而非承接。</p>
+</div>
+
+<h2 id="s5" data-page-node-id="5nVbSzNsPeEd45yZJ2gHeB"><span class="num" data-page-node-id="HwaPtLAggd4Pb0saYx4Dwr">05</span>三阶段结构</h2>
+<p class="lead" data-page-node-id="sbq9iALvvYc1pMUu3VKoB4">「先超跌 → 卖压衰竭（缩量止跌）→ 放量反转」是否优于单纯超跌？</p>
+
+<div class="scroll" data-page-node-id="j6SgVBCWIrEwY43mniFZVF"><table id="t-stage" data-page-node-id="AxJcQFZ3aXQDTVE6Wz0PmY"></table></div>
+<div class="cap" data-page-node-id="Cizu9if05z5CBLqEG0SYte">表 6 · 三阶段结构完整统计。每一层的加入都让表现变差。</div>
+
+<div class="card bad" data-page-node-id="o86UQ4LQV4J6jjD2TZQu4t">
+<h4 data-page-node-id="BucdjrIugNGP7ZotAVheSC">结论：<b data-page-node-id="ZgecF0JUxm37FAWaBWOwa1">三阶段结构是单调恶化</b>，每一层都在减分</h4>
+<ul data-page-node-id="ae5j1FXx6sMss8sCBv9aqH">
+<li data-page-node-id="T9fGKkFpKsbcalEocWdgXH">阶段 1（超跌）单独：H=20 <b data-page-node-id="PC0rtq1nwpdpnXusmyqXGl">+0.219%</b>（t+4.03）</li>
+<li data-page-node-id="dLEzhsUuyihRzHDFLoamPF">阶段 1+2a（量能渐降+不创新低）：<b data-page-node-id="YaCd4XUw6M2n5auVbqQuKW">−0.523%</b>（t−6.78）→ 恶化 0.74pp</li>
+<li data-page-node-id="CNtK1kxLE3cTKdjyKJMovG">阶段 1+3（直接反转确认）：<b data-page-node-id="qEDs2Oxg3K2A60ICjEd7wY">−0.750%</b>（t−8.68）→ 恶化 0.97pp</li>
+<li data-page-node-id="169WwxDAVJKF9x2zaVio3d">阶段 1+2a+3（完整三阶段）：<b data-page-node-id="iqqoh1UvoImlyWOX69jtVi">−1.327%</b>（t−3.09）→ 恶化 <b data-page-node-id="XfCduPimRCXOyW9FpUWSuf">1.55pp</b>，样本仅剩 621 个</li>
+</ul>
+<p data-page-node-id="O6x0ecPnw25sbYGP3Hh7Zh">「卖压衰竭」和「反转确认」这两层不仅没有过滤掉坏样本，反而<b data-page-node-id="H2cRFhBjcHX5XF5ooKyEoH">系统性地筛出了后续更差的样本</b>。
+完整三阶段只剩 621 个样本，已经无法作为策略。</p>
+</div>
+
+<h2 id="s6" data-page-node-id="xgkeGVIaE3A0UaUksL2lYi"><span class="num" data-page-node-id="4o6HI6oAVjdLqlA3ghBHa0">06</span>市场环境过滤</h2>
+<p class="lead" data-page-node-id="3WDzH70fSLCD7UWrhARHqM">指数原始 K 线仅 2023 起（902 个交易日），故全部从面板自建：等权市场净值 → MA20/MA60、Breadth、市场 HV20。</p>
+
+<div class="chart" id="c-market" data-page-node-id="CCP5zTaDwam39eAHbgfHK4"></div>
+<div class="cap" data-page-node-id="WppP0HCHWabhs4HmdUFeZH">图 6 · 不同市场环境下的超额收益（H=20）。注意「市场 Close&gt;MA60」是负的。</div>
+
+<div class="scroll" data-page-node-id="dFap8BPqk9SN1OWjOThWiP"><table id="t-market" data-page-node-id="WPViARUpKq03mCKYPKBOzh"></table></div>
+<div class="cap" data-page-node-id="EtxEMiBImTiKs1ABW3Y1Fr">表 7 · 市场环境过滤完整统计</div>
+
+<div class="card bad" data-page-node-id="McBpA9G67UI8KtlJMV2Hdi">
+<h4 data-page-node-id="G9b9B1imjhlOxtN5rfw4OO">结论：与用户假设<b data-page-node-id="GOPjz4yLdFtOsyU1R5cUpW">完全相反</b> —— 超跌反转在<b data-page-node-id="kCq63QztlQbJLVgxmTBWLE">熊市</b>里更强</h4>
+<ul data-page-node-id="FTQxGqSKQjlgd5yoKulA5C">
+<li data-page-node-id="aFshkWsGIXDWoz3mHO3nBG">「个股超跌 + 市场 Close&gt;MA60」：H=20 <b data-page-node-id="wNsTgqmncNzjyafnJ5TtcE">−0.596%</b>（t−10.2）→ <b data-page-node-id="vkFqsvx90RUHZRIuVQLg13">负超额</b></li>
+<li data-page-node-id="uLAz7XS34oLf43Pfcciwqu">「个股超跌 + 市场 Close&lt;MA60」：H=20 <b data-page-node-id="Dv6abzcJ5ZC6bbluFZTg24">+1.286%</b>（t+14.1）→ 正超额，是前者的 <b data-page-node-id="4s5AaxCf7WQRobnvdEHXnF">2 倍多</b></li>
+<li data-page-node-id="YmnyKOPDLpX6M3vW7io0cx">MA20&gt;MA60（多头排列）同样为负（−0.584%）；MA20&lt;MA60 为正（+1.285%）</li>
+<li data-page-node-id="U8Xxcyc722pa3tIrAP9yGQ">市场高波动（HV20 &gt; 中位）时 +0.792%（t+9.1）；低波动时 −0.346%（t−5.6）</li>
+</ul>
+<p data-page-node-id="JIA90NS3h1SCEG823UPapW"><b data-page-node-id="ksk44k0P3OJQYkLNTnrnHE">机制解释</b>：超跌反转赚的是<b data-page-node-id="AqGfEYvPRkiUDH9mYCZ4Zq">恐慌错杀的修复</b>。牛市里「超跌」多为基本面恶化（该跌），
+熊市里「超跌」才更多是流动性冲击（错杀）。这与「市场趋势过滤」的直觉正好相反。</p>
+</div>
+
+<h2 id="s7" data-page-node-id="wDDzxw5UFmFCcnLsRVab04"><span class="num" data-page-node-id="hZFBP7udl4DsdZNYuiews0">07</span>相对强弱</h2>
+<p class="lead" data-page-node-id="jhxY8xTAeqEETuVWFJWr7o">检验「绝对超跌 + 相对强势」是否为更好的组合。
+注意口径：<code data-page-node-id="ZjJsLC0d4Crikm5kuuGczi">rs_mkt20</code> = 相对全市场等权；<code data-page-node-id="YIDpk6pFAxIcdFbhhP9LbW">rs_sz20</code> = 相对<b data-page-node-id="G9VnPeYFT3CIxwbCYwsU5t">同规模组</b>等权。</p>
+
+<div class="chart" id="c-rs" data-page-node-id="A74Fu7z85aU4E5eBIN4e4i"></div>
+<div class="cap" data-page-node-id="pnd30iHlzKQ192eiFD750s">图 7 · rs_sz20 各分位在深度超跌样本内的 H=20 超额。单调递减 —— 相对强势反而更差。</div>
+
+<div class="scroll" data-page-node-id="bhtSLJ9y3BD9HxaM8qVPCu"><table id="t-rs" data-page-node-id="0CTa8AnRcxcrpoGrLJvTe2"></table></div>
+<div class="cap" data-page-node-id="8VgmxJTuEBSN1qn21i2IVw">表 8 · 相对强弱分组完整统计</div>
+
+<div class="card bad" data-page-node-id="6pfmkcqa6n2JUTC1VoFsCA">
+<h4 data-page-node-id="gVT5xWGWlhXOzs3IPilyx1">结论：「绝对超跌 + 相对强势」是<b data-page-node-id="DbfnTySC7w6A3qtAWtqpxs">最差的组合之一</b></h4>
+<ul data-page-node-id="GoRDW5vdp1j6bqy4pvvYAf">
+<li data-page-node-id="tCKWxci2AeGTT1H9ADVw7B"><code data-page-node-id="eA4xLtV3bTb6X8KvfCwkv4">rs_sz20</code> <b data-page-node-id="tY5w9dbs5i2rbKEP88qzel">D8~D10（最强势）</b>：H=20 <b data-page-node-id="pgPSEs4MUFRZAdyNYqhrry">−1.103%</b>（t−10.4），
+H=60 <b data-page-node-id="iOyktl3dvfzCtB8RGuV8eD">−2.957%</b>（t−18.4）→ 相对强势的超跌股后续最差</li>
+<li data-page-node-id="FfQX8bmCtFSK7VZG2eLBOv"><code data-page-node-id="6bHrC4EHmLIdX5GYF0FvGu">rs_sz20</code> <b data-page-node-id="X9WuGiSEtXuFokKNrNGRGy">D1（最弱势）</b>：H=20 <b data-page-node-id="8xbkNTifzSm7PEnZRb9bVh">+0.409%</b>（t+6.1）→ <b data-page-node-id="6cavktoWyII2Gzpfwnm2NI">最优</b></li>
+<li data-page-node-id="z7i7AjCZcx42w7cz5P34kC">「绝对超跌 + rs_sz20 强」= −1.103%（t−10.4），相对基线 L 的 +0.219% <b data-page-node-id="iKwT5g7nAO7RyWDyyPREOv">恶化 1.32pp</b></li>
+<li data-page-node-id="pHCpb7YqIFRxrndM1Uov1k">唯一的例外：<code data-page-node-id="Jymx04yTiG1xxzfLGXHX2e">rs_mkt60</code> D1（相对市场最弱）也是最优（+0.220%），
+与 rs_sz20 方向一致 → <b data-page-node-id="W0d6KJkbIjB7ThkJl5SfnH">「弱者恒弱」在超跌样本内并不成立，反而是「跌得最惨的继续修复」</b></li>
+</ul>
+<p data-page-node-id="VlOZHRznibgZlW2PvlWfKD">→ 用户的「绝对超跌 + 相对强势」假设<b data-page-node-id="JsucAlWBNUYLGVlSVv8QrV">被数据否定</b>。正确的组合是「绝对超跌 + <b data-page-node-id="72aXIKAkGOFabv8CwM7HiH">相对也弱</b>」。</p>
+</div>
+
+<h2 id="s8" data-page-node-id="J8GmpDxLOACQX9Ji7FgtPm"><span class="num" data-page-node-id="at6WGN8uAOU3SWI3oSFNeC">08</span>市值分位</h2>
+<p class="lead" data-page-node-id="mC28OXLMnrvIH5YGvM0vQ2">这是本轮<b data-page-node-id="NkkoN0yMcHoJ4G0GYfvcZo">唯一一个「越极端越好」且效应量最大的维度</b>。</p>
+
+<div class="chart" id="c-size" data-page-node-id="tAh62EaT8Ei1i73XCGrNkX"></div>
+<div class="cap" data-page-node-id="qlNv6u9jmDyDXpQ2MXGg45">图 8 · 市值分组在深度超跌样本内的 H=20 超额（%）。从最小 10% 到最大 10%，单调递减。</div>
+
+<div class="scroll" data-page-node-id="nEHzw336WVENRQ7bmWcQFB"><table id="t-size" data-page-node-id="EcOidAIA3j6vhh7ezbIPal"></table></div>
+<div class="cap" data-page-node-id="1gbSdKssdKz5dAl2RLtZdU">表 9 · 市值分组完整统计</div>
+
+<div class="card good" data-page-node-id="IJewHBuakI3ergN5HVDgJ9">
+<h4 data-page-node-id="pgKQXdt9aKfoWF7jMUuxVF">结论：超跌反转<b data-page-node-id="6UJVdDHuAIml0UUCCTPiqo">几乎完全来自小市值</b>，且「剔除最小 10%」严重损害表现</h4>
+<div class="kpi" data-page-node-id="KFu2GGNloYCoGG9VM0tK9C">
+<div data-page-node-id="J06jmGBDCB3UWLw4zm4XCy"><div class="l" data-page-node-id="DP6cqA0I5YyKGpIo6pRnBZ">最小 10%</div><div class="v pos" data-page-node-id="JnasMQeEegvb4QlGoJjEoB">+1.572%</div><div class="n" data-page-node-id="sgR6tJUS5bekzYxFu05Eoz">t+15.2 · CAGR 54.0%</div></div>
+<div data-page-node-id="AOOgvCYuWQYnQEvLE5sRwr"><div class="l" data-page-node-id="gU0cFjsnfGT3QFEoqZYeuo">10-30%</div><div class="v pos" data-page-node-id="VaW6x24TG6CM0tYHaWqF2o">+0.985%</div><div class="n" data-page-node-id="saPtOqL0ErFcaG3wqAnCzX">t+15.5 · CAGR 35.1%</div></div>
+<div data-page-node-id="JlkhwnE8NFF0mOFfGc3ots"><div class="l" data-page-node-id="iwQwgIuXEgr1BG2XlYXxXJ">30-70%</div><div class="v pos" data-page-node-id="2VPXuXWcum22L2mEqOOjo9">+0.142%</div><div class="n" data-page-node-id="XiW8EA69iADvCKZzEZXzE6">t+2.6 · CAGR 22.8%</div></div>
+<div data-page-node-id="lPhwh3BsIJtOLsAXe7P5FT"><div class="l" data-page-node-id="UIrClrzX3oeR3wem1b3fVY">70-90%</div><div class="v neg" data-page-node-id="ilNsHskB43T3TkjJO9K69m">−0.565%</div><div class="n" data-page-node-id="8bKsoTi5t0xmVS7pfUrNgm">t−8.5 · CAGR 8.0%</div></div>
+<div data-page-node-id="gp8FlLhwo9xCJcRCiEm5lM"><div class="l" data-page-node-id="8lYYLKoqcjB9ccpM5Eoz3O">最大 10%</div><div class="v neg" data-page-node-id="2ENBVfIkGaOF9ZgpaAyJqE">−0.909%</div><div class="n" data-page-node-id="So306iPFBUAejdou1AXoKp">t−9.0 · CAGR 4.8%</div></div>
+</div>
+<ul data-page-node-id="TzTcemAgG2un6k9IdPBVmK">
+<li data-page-node-id="qaiOneZxHQwMLHnpSwDjQ4"><b data-page-node-id="nU7W2pilVxXlAX2hc4jr8P">单调性完美</b>：从最小 10% 到最大 10%，H=20 超额 5 组依次
++1.572% → +0.985% → +0.142% → −0.565% → −0.909%</li>
+<li data-page-node-id="IsYBJAb8A8fYywO9HOB78o"><b data-page-node-id="whAx5jE3OggAOyS4zJGhb3">「剔除最小 10%」的后果</b>：深度超跌基线 H=20 从 <b data-page-node-id="EukxTAzvOjuMGLfOtxY1qx">+0.219% 降到 +0.103%</b>（t 从 +4.03 降到 +1.85），
+CAGR 从 22.1% 降到 20.0%，Sharpe 从 0.74 降到 0.69</li>
+<li data-page-node-id="v5bwL87hBj2nHjNCH7qpNF">→ 用户规格中的「剔除市值最小 10% 股票」这条风控<b data-page-node-id="qruHwmiTaX2gTvPSyDDikX">方向完全错误</b>，它剔掉的正是 alpha 最集中的区域</li>
+</ul>
+</div>
+
+<h2 id="s9" data-page-node-id="Fu9QJpwJvg6CezaUAmqa5E"><span class="num" data-page-node-id="7nDYH4C3lWtcZl4Zot7jHV">09</span>候选因子池</h2>
+<p class="lead" data-page-node-id="4cdFsdnno0fzKjgbyaneg1">32 个候选因子（价格 / 趋势 / MACD / 量能 / 相对强弱 / 波动 / 市场），不给权重，全部实测。</p>
+
+<div class="chart lg" id="c-icshape" data-page-node-id="xC852UJUY4xHD9lPrvQ5DU"></div>
+<div class="cap" data-page-node-id="FVuWY44F0Hf43y9WuLLE4j">图 9 · 8 个代表性因子的十分位结构（H=20 超额）。<b data-page-node-id="g2CryZDbGuArAcspN6Bq90">技术型指标（MACD柱Z / 量能 / 波动）左端全为负，价格型与规模型左端全为正。</b></div>
+
+<div class="card key" data-page-node-id="Hw0iM4S6tkdq9tKuJIj4Zg">
+<h4 data-page-node-id="rmQmSQUlFiJSw236ARTZBA">「左侧符号分化」再次被确认，且本轮新增了规模维</h4>
+<ul data-page-node-id="Yr2ZTtuccdTrCPN2gLJXI4">
+<li data-page-node-id="C0lE7HJhbpqWMe62DgO97G"><b data-page-node-id="frzs404GmIAJSTKo6N9qxZ">价格型（左端正）</b>：距MA60 +0.369%、过去40日 +0.383%、相对同规模20日 +0.353%、
+MA5斜率 <b data-page-node-id="CO49hClAP2lOohoJbRUbvF">+0.653%（全池最强）</b></li>
+<li data-page-node-id="FwiI22E60cWQKEK3boCVZa"><b data-page-node-id="dg3iIXt5UsvchpeYV5MLU7">技术型（左端负）</b>：MACD柱Z −0.346%、MACD柱1日变化 −1.025%、
+VOL/VOL20 −0.341%、20日历史波动 −0.359%、ATR占比 −0.402%</li>
+<li data-page-node-id="danFEAA5Y1IKCtRxrNQaqK">→ <b data-page-node-id="jSOBNxy1lg2FludZUCfOnV">「超跌」必须用价格/规模尺子衡量，不能用技术指标尺子</b>。
+用 <code data-page-node-id="6sZzjWqGJPyZOIphb3bN81">hist_z</code> 或 <code data-page-node-id="Y4Cgvy2N8l8DVr28uxAVfw">volz20</code> 定义「超跌」会取到完全相反的一侧</li>
+</ul>
+</div>
+
+<h2 id="s10" data-page-node-id="jaEhUDCXGuZjrrZN9FAHMn"><span class="num" data-page-node-id="vdWEw710C5T82kkZMarE7k">10</span>IC / ICIR / Fama-MacBeth</h2>
+
+<div class="scroll" data-page-node-id="po1FsY2JAvNVi1xhR1Bkdm"><table id="t-ic" data-page-node-id="nUEEYmomVNCvDHoeoV6p6c"></table></div>
+<div class="cap" data-page-node-id="4KWVrNPmNwPneCzx5QTgUz">表 10 · 单因子 Rank IC（H=20），按 |IC| 降序。仅含<b data-page-node-id="0qum7dXF7Hvoj0jdNDDmsp">有横截面区分度</b>的因子</div>
+
+<div class="card warn" data-page-node-id="ZbCR8foMsDNS17i5qCfNVc">
+<h4 data-page-node-id="SIqLSMGwhx73TjUQhDTnC7">为什么表 10 里没有「市场类」因子</h4>
+<p data-page-node-id="6YI6Wha2zVQh1BDyufEwpL">本轮因子池里有 4 个<b data-page-node-id="ZDG8HHJDIhLx7oESeBCucN">市场级时间序列</b>（Breadth、市场距MA60、市场MA20/MA60−1、市场HV20）。
+它们在<b data-page-node-id="RFjsvx7G4VpUtoW905WGfz">同一天内对所有股票取同一个值</b> —— 横截面方差为 0，因此<b data-page-node-id="fSbEb1z9pq1DcPgDErNOLv">逐日截面 Rank IC 在数学上无定义</b>。</p>
+<p data-page-node-id="d2Tc1ReNm6JbDbdKzwP48a">实测：把 Breadth 直接丢进 IC 计算，2871 个交易日里有 <b data-page-node-id="WxetIujKokfA9559KWUyvE">4 天</b>因浮点残差（~1e−16）
+凑出「貌似合理」的 IC（+0.041 / +0.101 / +0.112 / +0.093），均值 <b data-page-node-id="2NBURd9WzokGJ9lzHt6nAb">+0.0869</b>、
+t 值 +5.52，足以把 <b data-page-node-id="HJL6vjQVPplEk2iQ0oVMw1">一个零信息因子顶到 IC 榜首</b>。本轮已加入护栏
+（要求当日因子秩方差 ≥ 1.0）将其剔除。</p>
+<p data-page-node-id="9dBYoOS7ftWnEg0mEeHKqE">这 4 个变量的正确用法是<b data-page-node-id="ohoWPmcHLWDoyceJkLCpZc">「市场环境过滤器」</b>（第 6 节），而不是横截面因子 ——
+它们回答的是「<b data-page-node-id="TMNIn0MaLwzHHsQskzi8Lj">什么时候买</b>」，不是「<b data-page-node-id="bMSMN5gYHia5nD8nJDjd31">买哪只</b>」。</p>
+</div>
+
+<div class="card bad" data-page-node-id="JwzIXRxJ6DMuL8uPYHuprE">
+<h4 data-page-node-id="39YZzFcJIrbvFXxm1DcncO">⚠️ 本轮修正的第二个方法学 bug：块内秩排序错误</h4>
+<p data-page-node-id="9eYhvtiZMMFcySdjMoTUKB">为了让 32 因子 × 3 持有期的 IC 计算能在可接受时间内跑完，我手写了向量化的
+「逐日截面平均秩」函数。初版用<b data-page-node-id="BPM34VRe2vqtWHydZ8ahWT">单键排序</b> <code data-page-node-id="xby040Y4d4qC6YaPibsGAZ">np.argsort(v)</code>：</p>
+<pre data-page-node-id="iqXjTdvFV5wmi63s8pvFPX"><code data-page-node-id="C72JvWYqv7f5NrvQR5mntE">order = np.argsort(v, kind="stable")     # ❌ 单键：同一天的元素在排序后被打散
+pos   = np.arange(n) - off[day_idx[order]]   # ← 算出负数，秩完全错误</code></pre>
+<p data-page-node-id="lapObDfHHztaRTXOIa8Omh">根因：<code data-page-node-id="q9nco02Sjlobe2SP3KrG8i">arange(n)</code> 是<b data-page-node-id="Hu3qQ5SHuREG6Db7IEwHeV">全局位</b>，<code data-page-node-id="IvRjCyRQVgA3ERo6aYGaZD">off[d]</code> 是<b data-page-node-id="8opDcEfF9Zv4WTiqmUuJEw">当日起点位</b>。
+只有当天元素在排序后<b data-page-node-id="PdX5uzSGMnVDrSa6A9nOzf">相邻</b>时，相减才等于「日内序号」。单键排序不保证这一点。</p>
+<p data-page-node-id="paBpJEPr4fguyoo0Fn4LFs"><b data-page-node-id="IZz8cNwx1Leg6Q2WukiaN5">影响</b>：修正后真实因子的 IC 平均变动 <b data-page-node-id="hdAWA7eXsAFhxzcLMrfgzL">0.0034</b>、最大变动 <b data-page-node-id="jyxaAJSgCtVL4VqnSJ740j">0.0107</b>
+（如「20日历史波动」−0.0743 → <b data-page-node-id="DraSmVYCYDwZ8TnV5YqIRH">−0.0851</b>）。<b data-page-node-id="ijmR4WrH64fWB2LcRA545w">结论方向未变</b>（价格型/波动型仍居首、
+MA60 斜率仍为正），但量级更准确。而常数因子上则会凭空造出 <b data-page-node-id="kg3URmC4K2uGj7zOpzg4OH">+0.0869</b> 的伪 IC。</p>
+<p data-page-node-id="jzDuMx5ame1Ir2mukZ31zf"><b data-page-node-id="iCcGBC4unZfK77j3BJPgBf">为什么差点漏掉</b>：用「每块内值恰好单调」的小例子测试会<b data-page-node-id="D5XWNduzzs2FMIxkeIemz6">通过</b>。
+必须用「多值 + 跨块重排」的随机样本，并与
+<code data-page-node-id="kx2gf4EdzPefsYV1oi0moA">pandas.groupby(d).rank(method="average")</code> 对照（<b data-page-node-id="bAlLQJqfX5BCbFMDPb34ZQ">maxdiff 必须为 0</b>）。
+本报告所有 IC 数字均已按修正实现重算。</p>
+</div>
+
+<div class="chart" id="c-fmb" data-page-node-id="kHhTriRn1HS74XFZQpAEJN"></div>
+<div class="cap" data-page-node-id="uvMEe7ZbPqlec9jnVF0ItI">图 10 · Fama-MacBeth 截面标准化系数（超跌子样本内，H=20）</div>
+
+<div class="scroll" data-page-node-id="Oc9nmE3HaY5l3TDZt5EHDO"><table id="t-fmb" data-page-node-id="TidrlXWGntaTx0ZYk6f3Ms"></table></div>
+<div class="cap" data-page-node-id="pyOJCSDEQGgFpHyBcu4fy5">表 11 · Fama-MacBeth 多因子回归 —— 控制其他变量后仍有效的因子</div>
+
+<div class="card key" data-page-node-id="pcmdv32VYaxa6L9NukHjov">
+<h4 data-page-node-id="h80aB4taTKWH5PCdNs8Enn">控制混杂后仍然有效的因子</h4>
+<ul data-page-node-id="1YBCN1DE7hfT0J2CVRjDK8">
+<li data-page-node-id="KPZSjozlzWoHpmed5ol6VI"><b data-page-node-id="0vFGRCKxa1haaWVItH9sNP">MA60 斜率</b> −0.1491（t−39.5）与 <b data-page-node-id="SAyTrPLfu5TlZMAAA1F4UQ">MA20 斜率</b> −0.1334（t−67.1）：
+<b data-page-node-id="f3Msx1iaZIDOWOC4rXL4bd">趋势越向下，后续反弹越强</b> —— 与「等趋势转好再买」完全相反</li>
+<li data-page-node-id="ne5xLpKNDxCsJXz8kKDUZk"><b data-page-node-id="lYpYVNLPg8Tvb7ErE5yrMB">过去60日涨幅</b> −0.1258（t−31.7）：跌得越多越好（长窗口反转）</li>
+<li data-page-node-id="JOnsv2EAooDBiXFuiANGr8"><b data-page-node-id="VUKGVX8Zn1z1F52nEkoCZ8">过去20日涨幅</b> −0.0533（t−12.4）</li>
+<li data-page-node-id="AlbOfiNivwAsP5Id9Wh1bo"><b data-page-node-id="7jSbjT6bFNwbjwYnnM0kfG">相对同规模20日强弱</b> −0.0359（t−8.7）：相对弱者更好（验证第 7 节）</li>
+<li data-page-node-id="BHgmKEwUXw7MrzfrXViimZ"><b data-page-node-id="RaMPF1EETL8vjVWA3AsfPr">MACD柱连续改善天数</b> <b data-page-node-id="KkSIEPG4zvp8PVQYEKcJYB">+0.0082</b>（t+6.5）：唯一为「正」的技术型因子，但量级极小</li>
+<li data-page-node-id="mKKqVP16iZeffn557Wq2DN"><b data-page-node-id="K8DpwIKnnVVOk7IPgaQKs6">VOL/VOL20</b> −0.0076（t−7.0）：缩量更好（验证第 4 节）</li>
+<li data-page-node-id="FU4gYOJbZhadmNEhJZotSQ"><b data-page-node-id="CkvaXPjatYNZI5e0rWGFzO">距MA120</b>（t+0.39）与 <b data-page-node-id="Grkm5L6sADHgZwoITVlYBK">MACD柱3日变化</b>（t+0.17）：<b data-page-node-id="g6Y7szSacH3BsrDOpDpPM9">控制其他变量后完全失效</b> —— 是伪因子</li>
+</ul>
+</div>
+
+<div class="card warn" data-page-node-id="j1255pXKXZ2MMOgW4wE10g">
+<h4 data-page-node-id="ia1kYnBGisCuj5m0c8Fj0P">多重检验警告</h4>
+<p data-page-node-id="aXBCfZpnRgVsYydrDZuBm2">本轮共测试 <b data-page-node-id="PkrbEbNH8dsiatOKEi8fHZ">300+ 个变体</b>（8 维度 × 10 分位 × 4 持有期 = 320，加 21 组合、
+18 确认、46 量能、12 三阶段、18 市场、30 相对强弱、14 市值、96 因子 IC 等）。
+在 |t|&gt;3 的阈值下，纯随机产生至少一个显著结果的概率接近 1。
+因此本报告只采信<b data-page-node-id="IQmzcLaZFCxUWFIH7PLvPB">「跨维度方向一致 + 跨年份稳定 + 参数邻域平滑」</b>的结论，
+单点显著一律视为噪声。</p>
+</div>
+
+<h2 id="s11" data-page-node-id="c2MelXtBz78ucCbdULlSY6"><span class="num" data-page-node-id="vNl8ddBDJFaBvhuLtTyPk8">11</span>8 个策略严格比较</h2>
+<p class="lead" data-page-node-id="ZzoZgQpgjzTQ82UAb9ixgo">用户指定的 8 个策略 + 7 个依据前 10 节实测方向构造的「反向修正版」。
+统一口径：T 日信号 → T+1 开盘买入 → 持有 20 日 → T+1+20 开盘卖出，含 0.3% 双边成本。</p>
+
+<div class="chart lg" id="c-strat8" data-page-node-id="cEx6jCY7XjVIXkkyfYlGrN"></div>
+<div class="cap" data-page-node-id="S7ikTAUi9ogrxBoRx0FEI2">图 11 · 15 个策略的年化（柱）与最大回撤（点）。前 8 个是用户规格，后 7 个是反向修正版。</div>
+
+<div class="scroll" data-page-node-id="Cp3hD3wnuARoXb7aRlBSN8"><table id="t-strat8" data-page-node-id="SbbE3dXRBTVjI67CSnyghD"></table></div>
+<div class="cap" data-page-node-id="4KB3RNMg6E7PBeEsGBoRW0">表 12 · 15 个策略完整对比（含四段分期与样本外）</div>
+
+<div class="card bad" data-page-node-id="6ADQQVENWpqetyIF24VB4u">
+<h4 data-page-node-id="hIMrK1hzHgW4WMFX60rGVD">用户指定的 8 个策略：<b data-page-node-id="TmiDq5Q0KNfEhyEiBRdRFT">6 个劣于「什么都不加」</b></h4>
+<p data-page-node-id="yHiQKb1BS3eseEfhaorSnf">基准是「1 纯价格超跌」（CAGR 10.7% / MDD −53.5% / Sharpe 0.48）。</p>
+<ul data-page-node-id="pZg02tC0pW8EspIp9GTOzL">
+<li data-page-node-id="rxbLH9JHpz8yHLKnXiRMrl">「5 +相对强势」→ <b data-page-node-id="8twFxRuOWTprwKGKeSKVeL">CAGR −3.9%</b>（最差，Sharpe 0.05，MDD −77.6%）</li>
+<li data-page-node-id="kWbnHKYGBg2JMfEoVDgdbP">「8 +MACD改善+放量+市场趋势」→ <b data-page-node-id="CbChWneoRzSNLBb3HoxCfd">CAGR −4.0%</b>（Sharpe −0.00，MDD −77.4%）</li>
+<li data-page-node-id="CkhAOjjEYuwfh6EDDD5Kn2">「6 +市场趋势」→ CAGR 0.0%（Sharpe 0.14）</li>
+<li data-page-node-id="EWBXSFApAJG4Gd6hfNHUen">「7 +MACD改善+放量」→ CAGR 4.5%</li>
+<li data-page-node-id="RX3IjtO2Febf7uhh5q4BnU">「3 +MACD改善」→ 8.2%；「2 +MA5反转」→ 9.3%；「4 +放量反转」→ 9.5%（均低于基准 10.7%）</li>
+<li data-page-node-id="F3C4LZDqGAWrPEa3RTw95g"><b data-page-node-id="IBgyCMe7USySYJPumXidXi">唯一不劣化的方向是「什么都不加」</b>：条件越多越差，单调恶化</li>
+</ul>
+</div>
+
+<div class="card good" data-page-node-id="JjPOdSBcxhImiSHaaZpjhL">
+<h4 data-page-node-id="DLyGI7gPXZJxW0uTUp7J8e">反向修正版：<b data-page-node-id="DaL4UhLcb13ySy02QUKjuB">7 个全部显著优于用户规格</b></h4>
+<div class="kpi" data-page-node-id="EeW5b68icAcHSUd5mM1241">
+<div data-page-node-id="vR8Mo89fjBJ14GP1FO13IH"><div class="l" data-page-node-id="MZ5JGWKDq52w7wcDTedmsf">深度超跌 + 小市值30%</div><div class="v" data-page-node-id="8tNdVKXYZGGYIEDDVZlg8A">24.2%</div><div class="n" data-page-node-id="wI1Uh7nZTcDYdhZaCERZHA">MDD −48.1% · Sharpe 0.82</div></div>
+<div data-page-node-id="weUaGQfix2p1xwoavdB0Ci"><div class="l" data-page-node-id="l7CAFNvE7zGlduEgRto66x">+ 熊市</div><div class="v" data-page-node-id="ACR8t1KhwPfRII7a0WiMLB">22.2%</div><div class="n" data-page-node-id="SHQsytVjcvsn4UEQlnGOdE">MDD −39.5% · Sharpe 0.81</div></div>
+<div data-page-node-id="yfJyXcz2TdGzWJxWDq3v4P"><div class="l" data-page-node-id="Wv7LE2Z274eSBBHAWQeKtt">+ 熊市 + rs弱（4 条件）</div><div class="v pos" data-page-node-id="zG3OQmf3rBqcFIKefg8Fn6">24.7%</div><div class="n" data-page-node-id="AhLqKJaDgBVWoLbTC8TxUh">MDD −39.8% · Sharpe 0.87</div></div>
+<div data-page-node-id="vHUk2vKuAVpmDBwmHX35zG"><div class="l" data-page-node-id="ttNgwM2JHPgme5MPIERvQW">小市值10%（最小10%）</div><div class="v pos" data-page-node-id="8M6aPA2StEhgmfDaxTYoLA">29.7%</div><div class="n" data-page-node-id="krQCKRcUOe9mln9zTiNkdz">MDD −47.4% · Sharpe 0.94</div></div>
+</div>
+<p data-page-node-id="YE8FOLDZzQjsEr5G7r9du0">「深度超跌 + 小市值 + 熊市 + rs弱」的胜率 <b data-page-node-id="CXaSi1S2MsPHfjJkDBAcNO">58.1%</b>、PF <b data-page-node-id="xU9j8FC2mczlsGJaQMZwns">2.14</b>、
+样本外（2021-2026）<b data-page-node-id="wu0tBsSroRXXaQeQSDJ4SB">+262.7%</b>，全面优于任何一个用户规格策略。</p>
+</div>
+
+<h2 id="s12" data-page-node-id="HeQAIsALzuYi5RsFDEufCI"><span class="num" data-page-node-id="t7afo76m1UuB9Hi5FtKKJC">12</span>最简单有效 + 稳健性</h2>
+<p class="lead" data-page-node-id="7iF1MdD0FL1iWTpCav7VgE">用户明确要求：「3~5 个条件就能成立，跨市场环境、跨年份、跨参数都稳定」，
+并给出取舍原则 —— 3 条件年化 20%/回撤 25%/样本外有效，优于 15 条件年化 35%/回撤 20%/样本外仅 5%。</p>
+
+<h3 data-page-node-id="dckA4X7Agzb4NEq65A022R">12.1 条件数网格</h3>
+<div class="chart lg" id="c-simple" data-page-node-id="QboRTKAgvl5kXWK9vqoBTO"></div>
+<div class="cap" data-page-node-id="qSY6R6BAVVClVSu8wcCZCJ">图 12 · 简单策略网格。按条件数分组，纵轴为年化（%），颜色深浅为 Sharpe。</div>
+
+<div class="scroll" data-page-node-id="q9IDWr0oayB8EiLywUMOtP"><table id="t-simple" data-page-node-id="XPwGlOTeGELBaB6NiMQjBk"></table></div>
+<div class="cap" data-page-node-id="yiw8mEIsOzNZBJi67UK6rJ">表 13 · 简单策略网格完整对比</div>
+
+<h3 data-page-node-id="v2hpgDr4LD1AcTjyQ7IEIG">12.2 参数邻域稳定性</h3>
+<div class="chart" id="c-robust" data-page-node-id="KYuGYs0jFf4x0KdbRKclDh"></div>
+<div class="cap" data-page-node-id="8ylJ4LSo30DntykKAY7wLE">图 13 · 距MA60 阈值（D1/D1~D2/D1~D3）× 小市值（10%/20%/30%）× 市场（不限/熊市）共 18 个邻域组合的年化。</div>
+
+<div class="scroll" data-page-node-id="ecSpp8Ws7XGWSlJb2Id7p9"><table id="t-robust" data-page-node-id="da6Dv3wbggl8kmcjEGzowA"></table></div>
+<div class="cap" data-page-node-id="oUKEh3AW43srZ4LNJkFZ50">表 14 · 18 个参数邻域组合。全部 18 个的负分段数均为 <b data-page-node-id="d30wEC2z3woouH1IiZkt9q">0</b>。</div>
+
+<div class="card good" data-page-node-id="nnYVOxUfvdECBrDjAC22YM">
+<h4 data-page-node-id="lh4T25tVVmT3r3pRFfRNCw">参数邻域<b data-page-node-id="ckTKMCCt4pU6HFDNTm3XVT">极为平滑</b> —— 这是本轮最可信的证据</h4>
+<ul data-page-node-id="JG8pSGxfexE7AZ7WFxuIv9">
+<li data-page-node-id="L2WhVz4V3OCOoZR3XmZ52z">距MA60 阈值从 D1 放宽到 D1~D3：CAGR 从 28.8% 平滑降到 22.0%（单调，无断崖）</li>
+<li data-page-node-id="ORJI9vrkVGxhB7PrXQk3mt">小市值从 10% 放宽到 30%：CAGR 从 31.5% 平滑降到 28.8%</li>
+<li data-page-node-id="AZogL8UagGz4eNskr7TVhV">加入「熊市」过滤：每一档都改善 Sharpe（0.95→1.01、0.90→0.98、0.85→0.96）</li>
+<li data-page-node-id="5wcxE6NStpRy4xDzrAgBAg"><b data-page-node-id="tQixN6GcEStE9lPk3mNrOc">18/18 个组合的四个分期全部为正</b>（负分段数 = 0）</li>
+</ul>
+<p data-page-node-id="6YHonLdU6sPbTtf05BT8VV">对比 V3 的教训：那时「距MA60&lt;−20%」只有单一点显著、邻域全不显著 → 判定过拟合。
+本轮的邻域是<b data-page-node-id="GFAGx0vXXSSPx7zERZhcQn">一整片同号且平滑</b>，形态完全不同。</p>
+</div>
+
+<h3 data-page-node-id="Zdu69ZETaeQhjEnQFHmQtR">12.3 成本 / 持有期 / 可交易性</h3>
+<div class="scroll" data-page-node-id="bH8lHRV9p1BHFng4XnRjJB"><table id="t-sens" data-page-node-id="7lLhDe2zmPpv28wTdbeFo1"></table></div>
+<div class="cap" data-page-node-id="KlSvFc88bDCPrhMvuIWHM5">表 15 · 成本敏感性（上）与持有期敏感性（下），候选策略 = 距MA60 D1~D2 + 小市值30% + 熊市</div>
+
+<div class="card" data-page-node-id="PbiKFAzOiCPvd9QGt81R8X">
+<h4 data-page-node-id="kgl7Y1HEuf4LXpWmnC4SDh">稳健性三项检查</h4>
+<ul data-page-node-id="vT91wER2MbhXeUViFMv5dw">
+<li data-page-node-id="ER3AAwZvDOSei7CAisedSK"><b data-page-node-id="Ajg8VXz6S85mMKuVP2zL4V">成本</b>：0.3% 双边 → CAGR 26.0%；即使 1.0% 双边仍 +18.5%（Sharpe 0.71）。
+单笔均值 4.05% → 3.05%，成本占比可控</li>
+<li data-page-node-id="rsfT5qVJ9lAFrAjGCCvdb0"><b data-page-node-id="19GPWZMriAMK9sk0OVmWtt">持有期</b>：5 日 +17.1%、10 日 +17.3%、20 日 +26.0%、<b data-page-node-id="pupwVL78BKnLtVmZwkxUJW">40 日 +29.1%（最优）</b>、60 日 +28.6%。
+20~60 日是一个<b data-page-node-id="LW5nBBQvH64V2Yu8048yUF">宽平台</b>，不是单点最优</li>
+<li data-page-node-id="yCkRU11Kuk5xE49GYDjftq"><b data-page-node-id="p608FBWY93gtQVOWnUggfC">可交易性</b>：信号日 <code data-page-node-id="2899mKryXFZWGq0gIoLwK0">can_buy_open</code> 为真的比例 <b data-page-node-id="cYHILGU5EM7Fjz2DpCJmEM">99.68%</b>；
+持仓日占比 69.5%（熊市过滤导致 30% 时间空仓）；日均持仓 2,545 只 → 容量充足</li>
+</ul>
+</div>
+
+<h3 data-page-node-id="edX5wm7p1jJimNDOLDH9sF">12.4 逐年 + 四段分期 + 样本外</h3>
+<div class="chart lg" id="c-year" data-page-node-id="8TfB7me5BEtQPfd6OlHQlH"></div>
+<div class="cap" data-page-node-id="HapMik01d6kktPC8uLEEB3">图 14 · 候选策略与三个对照组的逐年收益（%）。2017 / 2018 是唯一两个负年份。</div>
+
+<div class="scroll" data-page-node-id="ASCrrCq5qnisuvZsgHxYm5"><table id="t-year" data-page-node-id="U4azQ2l58pn8VLEmPlLrJ6"></table></div>
+<div class="cap" data-page-node-id="2CWEkQGLJHGVD9UQnTGQZx">表 16 · 候选策略逐年（impl 实际执行口径，含 0.3% 成本）</div>
+
+<div class="card key" data-page-node-id="OUr6pKkAntDcBAmVP69rw1">
+<h4 data-page-node-id="M5kKaZGdEQqMRSJnopDYzC">「最简单有效」的答案：<b data-page-node-id="nA6dt7YByb8NtkndMv43o1">3 个条件</b></h4>
+<pre data-page-node-id="URaUgjRANLqIhokY8sf8mH"><code data-page-node-id="r0DthQoaK5w04vmGm9yoRR">条件 1  距MA60 处于当日横截面 D1~D2（最弱 20%）
+条件 2  市值处于最小 30%（size_grp ≤ 2）
+条件 3  全A等权市场净值 &lt; 其 MA60（熊市）
+
+持有   20 日（T+1 开盘买入，T+21 开盘卖出）
+成本   0.3% 双边
+
+实测   CAGR 26.0%  MDD −41.2%  Sharpe 0.91  胜率 57.6%  PF 2.02
+       正年份 10/12   负年份仅 2017(−12%) / 2018(−17%)
+       四段分期全部为正   样本外(2021-2026) +219.4%</code></pre>
+<p data-page-node-id="IAhUzqMm0FMvuPOgNCtLkv">若愿意接受 4 个条件，加「<code data-page-node-id="zAs6ISGEllxaI1uhHVaHKT">rs_sz20</code> D1~D3（相对同规模也弱）」→
+CAGR 24.7%、MDD −39.8%、Sharpe 0.87、胜率 <b data-page-node-id="r90ftviDZHx4CnoCy58Wfd">58.1%</b>、PF <b data-page-node-id="wExED2DiRAgcBRgyi3qHxq">2.14</b>、
+样本外 <b data-page-node-id="XVHz6eKUJqsEBzmMFTgKxf">+262.7%</b>。但 Sharpe 并未提升，<b data-page-node-id="qBQEOt84H7stMEOU5S5ce3">不值得多这一个条件</b>。</p>
+<p data-page-node-id="45cGS5TiCpO4rzyXMyj3f8">对比用户规格的 8 条件版本（CAGR −4.0%）：<b data-page-node-id="2MVD0H1trHXEk5X1gdy8A8">条件数从 8 降到 3，年化从 −4% 升到 26%</b>。
+这正好印证了用户自己给的取舍原则。</p>
+</div>
+
+<h2 id="s13" data-page-node-id="Y42T9MH4RCSEvo8Xg2e1UM"><span class="num" data-page-node-id="kBvEDGjHmnaESuNi18WMbO">13</span>最终归因与回答</h2>
+
+<div class="chart lg" id="c-attr" data-page-node-id="rGuJLxQLXr58HmoLpTgm0Q"></div>
+<div class="cap" data-page-node-id="M9RwryycMHJc8fCZ7ZS2ng">图 15 · 归因对照。核心问题：小市值到底是「反转 alpha」还是「规模 beta」？</div>
+
+<div class="scroll" data-page-node-id="Nq9cCDGGvPYmr4xGqqbt2k"><table id="t-attr" data-page-node-id="bGn6jRWwml9959gtvnCEkA"></table></div>
+<div class="cap" data-page-node-id="NB5z4kpTCT21EhSc1rirue">表 17 · 归因对照完整统计 + 逐年</div>
+
+<div class="card warn" data-page-node-id="vvPGhKU998qjteQ00pUV0i">
+<h4 data-page-node-id="VwscrGBbycjbMaCYxWLoJL">⚠️ 归因的诚实结论：<b data-page-node-id="JoEaROY4dkNLi9v4tENDtB">一半来自规模 beta，不是纯反转 alpha</b></h4>
+<ul data-page-node-id="AQWIVuJpxEZf8fFNRgYc1w">
+<li data-page-node-id="PpeHQCtZeZXVtJTLXoF5ab">「小市值30% 单独（<b data-page-node-id="TtvCJbLXmZvH0p4BKHbH9r">无超跌条件</b>）」：CAGR <b data-page-node-id="M6pasTiPB23RxDqGuFTQGV">+21.7%</b>、Sharpe 0.81</li>
+<li data-page-node-id="eJVSYI89p8LUbaEVX5CNuC">「距MA60 D1 单独（全市值）」：CAGR +14.7%、Sharpe 0.58</li>
+<li data-page-node-id="FJWO7CNLAvFAcirzkf5buh">「两者叠加」：CAGR +28.0%、Sharpe 0.90</li>
+<li data-page-node-id="JcBbgXvWbGPS8ctYjDqep4"><b data-page-node-id="lDRXv2MkzS0KrUSvwqjmRP">叠加 − 小市值单独 = +6.3 pp</b> ← 超跌条件带来的真实增量</li>
+<li data-page-node-id="58M41QM9pKrQ0WASc5vmXZ"><b data-page-node-id="T1vI2XBGnSenbEeUU8mgAQ">叠加 − 距MA60单独 = +13.3 pp</b> ← 小市值带来的增量</li>
+<li data-page-node-id="ZdHT2vtxSkbosDvFKv4GNX">「距MA60 D1 + 大市值(70-90%)」：CAGR 仅 <b data-page-node-id="RcjivqQGrhSwhB4qbrhrKa">+2.9%</b>（Sharpe 0.26）→ 没有小市值，超跌几乎不赚钱</li>
+</ul>
+<p data-page-node-id="aKLWNHegjmwW6zXv2rezZ0">→ 超跌反转确实有独立贡献（+6.3pp），但<b data-page-node-id="vPslCGI1iNUHKcwhMEIYTj">主要收益来自小市值风格</b>。
+2015-2026 恰好是小市值占优的时期，这构成真实的样本外风险。</p>
+</div>
+
+<h3 data-page-node-id="rMUMLPSJOUxiMVzdiFSX6n">最终回答：到底什么情况下，最值得关注一只下跌股的反弹？</h3>
+
+<div class="card good" data-page-node-id="CfGXOmoCNTepxk5rbT1Z6W">
+<h4 data-page-node-id="BhKRhAdOKB8zOuol77H9PT">五个条件，按重要性排序</h4>
+<ol data-page-node-id="j4iuDrloIabxvrCRc2k13e">
+<li data-page-node-id="W4Ebh2I1ysUbNpLxBNntVw"><b data-page-node-id="XvipU2e4JEiXS3TA9wHber">用「距MA60」而不是「MACD/量能」定义超跌</b>。价格型指标左侧为正（+0.369%，t+5.8），
+技术型指标左侧为负（hist_z −0.346%、volz20 −0.341%）。用错尺子会取到相反的一侧。</li>
+<li data-page-node-id="7dKs9SsV6F287kCAwDz95v"><b data-page-node-id="pEO3rzNIU8shICSUZPaHfk">越极端越好，不要退到 D2~D6</b>。距MA60 / ret40 / ret60 / 距MA120 全部是<b data-page-node-id="m2mwCxCtGUTGQLPeLauoRz">单调递减</b>，
+D1 就是最优。只有 ≤10 日的短周期维度才是倒 U。</li>
+<li data-page-node-id="9CYAcFurp9XLwknutwW9L0"><b data-page-node-id="yP2v2NLA8z7pIpl0yxuR8L">必须叠加小市值</b>。这是效应量最大、单调性最完美的维度
+（最小10% +1.572% → 最大10% −0.909%）。没有小市值，超跌几乎不赚钱（+2.9%）。</li>
+<li data-page-node-id="K7tZxokFvgJq0jIRi7gbF5"><b data-page-node-id="gnNF1tVwHjTKa5FlcDGLHh">在市场下跌时买，不要在市场走强时买</b>。市场 Close&lt;MA60 时 +1.286%（t+14.1），
+Close&gt;MA60 时 −0.596%（t−10.2）。机制：牛市里的「超跌」多为基本面恶化，熊市里才更多是错杀。</li>
+<li data-page-node-id="j9kAymipGQJkorile0gGAy"><b data-page-node-id="HxvCw8fTGY942dZS1W89VA">相对也弱更好，不要找「相对强势」</b>。rs_sz20 D1（最弱）+0.409%，D8~D10（最强）−1.103%。</li>
+</ol>
+<h4 style="margin-top:16px" data-page-node-id="npQmR4kbzc2qT0ehc0NP6C">明确<b data-page-node-id="2VcGsFfdCcsqAndIky3FlP">不要</b>做的事</h4>
+<ul data-page-node-id="CThDdhtQIoSjsQP0026dF9">
+<li data-page-node-id="ZP08F0IFIAVHQZzWJ8Raya">❌ 等「反转确认」（Close&gt;MA5 / MA5向上 / 连涨2日 / MACD翻红 / 站上MA10/MA20）—— <b data-page-node-id="KEdsc6MTKZn1athsxICrDD">8 个全部负贡献</b>，最差的「连涨2日」是 −3.33%（t−40.1）</li>
+<li data-page-node-id="8EEfCYN7MjCjo0yWupldXS">❌ 等「放量」—— 量比越高越差，≥2.5 时 −0.854%。「缩量下跌→放量上涨」是 −1.351%（t−9.3）</li>
+<li data-page-node-id="UBg0jWb4cgkcBprvkm5FHk">❌ 做「三阶段结构」（超跌→缩量止跌→放量反转）—— 每加一层就恶化，完整三阶段 −1.327%</li>
+<li data-page-node-id="xXPlVUvPMOGrM9iXeIObCg">❌ 剔除小市值 —— 这会剔掉 alpha 最集中的区域（H=20 从 +0.219% 降到 +0.103%，t 从 +4.03 降到 +1.85）</li>
+<li data-page-node-id="juROnCxyaSkvsJQsLf3L1k">❌ 用市场趋势做过滤（买在市场 Close&gt;MA60）—— 方向完全反了</li>
+</ul>
+<p style="margin-top:14px" data-page-node-id="v2J45TPW4owHCC8lDQ7Wh1"><b data-page-node-id="YgfKEhBZ6TV9YhRaLf4xcx">一句话</b>：A股一只明显下跌的股票最值得关注它的反弹，
+当且仅当它<b data-page-node-id="7LvMYSleQ2r4A1eH0iCvwj">跌得足够深（距MA60 最弱 20%）、足够小（最小 30% 市值）、且市场本身正在下跌</b>时。
+<b data-page-node-id="Hl5MVCzbs275WsAdWXsgXX">反转在 T+1 就开始，任何「等确认」都是在等已经涨完的部分。</b></p>
+</div>
+
+<h3 data-page-node-id="RPWBLQ1pwafSSY4lUXoVCV">是否所有策略都不成立？—— <b data-page-node-id="EGVLQ4Eyd15iQ6HWRiaN1T">不是，但成立的是「反向修正版」</b></h3>
+
+<div class="card warn" data-page-node-id="hmNt995dy9B5iHRgQHeryC">
+<h4 data-page-node-id="5D3nWvDweZro2KzUQTI6P6">必须同时说清的三件事</h4>
+<ol data-page-node-id="3lMlHZn7NXJHHFhyBu0OZD">
+<li data-page-node-id="of1y670kMvaj0GeWB2FCrx"><b data-page-node-id="9TP1fkzEeerIJgMSDHYAmj">用户规格的 8 个策略：不成立</b>。6 个劣于「什么都不加」，最好的方向是「不加条件」。
+加入反转确认 / 放量 / 相对强势 / 市场趋势<b data-page-node-id="oRG1azxUgbbL1wzzgnkhFl">全部为负贡献</b>，且方向高度一致（|t| 普遍 &gt; 10）。</li>
+<li data-page-node-id="b4maVG6BwUNRWHONGGxHmb"><b data-page-node-id="tsS2PX1kWOjGzOYbUVzSOP">反向修正版：成立，但有保留</b>。3 条件版本 CAGR 26.0% / MDD −41.2% / Sharpe 0.91，
+18/18 参数邻域四个分期全为正，成本到 1.0% 仍 +18.5%，持有期 20~60 日是宽平台。
+但归因显示<b data-page-node-id="RyiqDsiL4hCvTAxTrX3j4E">主要收益来自小市值 beta</b>（+13.3pp 来自规模，+6.3pp 来自超跌），
+2015-2026 恰好是小市值占优期，<b data-page-node-id="EHyCw4D7uWcuMEA4z6lJkF">这是真实的样本外风险</b>。</li>
+<li data-page-node-id="FxcdE4w8JvDI9UByDsVERl"><b data-page-node-id="0x0F1XSwuRMymw7x46FPiX">本报告的方法学修正改变了此前结论的量级</b>。修正「收益区间错位」后，
+超跌类组合的年化从 −60%~−96% 变为 +15%~+30%，MDD 从 −100% 变为 −39%~−59%。
+此前任何基于「状态组合日度再平衡」的负结论都需要按此口径复核。</li>
+</ol>
+</div>
+
+<footer data-page-node-id="dCRlFXVKBlGNilgjbtiUMS">
+<p data-page-node-id="kzckaGwhy0igd6yyBGSVnX"><b data-page-node-id="oDLQURlSiqIn3F3exVS9RH">口径说明</b></p>
+<p data-page-node-id="HXBRBdMEMY8yc9rqcNlJjJ">· 样本：2015-01-01 ~ 2026-09-21，沪深A股，剔除 ST、上市未满 120 日、ret 缺失。清洗后 10,535,057 行 / 5,304 只 / 2,871 交易日。</p>
+<p data-page-node-id="nZVnnkCPqHQzFCwgf8xMct">· 收益口径：<code data-page-node-id="9nHzpuC8r1YpUnkPqq1X1I">oret_sig[t] = open[t+2]/open[t+1] − 1</code>（T 日收盘信号 → T+1 开盘买入 → T+2 开盘卖出）。</p>
+<p data-page-node-id="HSo3FmAnX7C8lemO4NNH03">· 超额：先按日求均值，再对日度均值序列做 t 检验（按日聚类，避免横截面相关性高估显著性）。市场基准为全A等权日度链式收益。</p>
+<p data-page-node-id="ZwIzp1r4ojaZ8xnK0fP2ZF">· 年化：交易日约定（<code data-page-node-id="UzlFcdJuiZV5u5ZOithRzl">nd/252</code>）。同时报出算术年化 <code data-page-node-id="luJsoVRDiPXkDt0slZfpgv">mean×252</code>，二者差异即波动拖累。</p>
+<p data-page-node-id="enRy3BuEIKQAHMG452EOqq">· 成本：0.3% 双边（含冲击与滑点），按持仓天数摊薄。跌停顺延至下一可卖日。</p>
+<p data-page-node-id="RqxiB9O5rp63N7q2303vyk">· 指数原始 K 线仅 2023 起，故市场环境变量（等权净值 MA20/MA60、Breadth、市场 HV20）全部从面板自建。</p>
+<p style="margin-top:14px" data-page-node-id="YbsepwlMnKHnoRhMonGDmN"><b data-page-node-id="BT7vAUeDX9uD4BwSbGTl0x">免责声明</b>：本报告为量化研究方法论与历史数据统计分析，
+所有结论均为对 2015-2026 年历史样本的统计描述，<b data-page-node-id="ZCeJHxGQQ0YGps6iOP68nB">不构成任何投资建议</b>。
+历史统计规律不保证未来重现；归因分析已明确提示小市值风格依赖风险。
+据此进行的任何投资决策，风险由投资者自行承担。</p>
+</footer>
+
+</div>
+
+<script>
+var D = {"decile": {"dims": ["过去5日", "过去10日", "过去20日", "过去40日", "过去60日", "距MA20", "距MA60", "距MA120"], "cols": ["ret5", "ret10", "ret20", "ret40", "ret60", "px_ma20_pct", "px_ma60_pct", "px_ma120_pct"], "exw": [[-0.327, 0.002, 0.083, 0.107, 0.111, 0.091, 0.043, -0.081, -0.409, -1.45], [-0.122, 0.09, 0.133, 0.139, 0.14, 0.116, 0.008, -0.212, -0.607, -1.545], [0.185, 0.201, 0.186, 0.173, 0.119, 0.047, -0.074, -0.359, -0.785, -1.628], [0.383, 0.2, 0.127, 0.073, -0.018, -0.088, -0.232, -0.422, -0.74, -1.401], [0.22, 0.12, 0.061, 0.016, -0.011, -0.055, -0.159, -0.355, -0.658, -1.39], [0.025, 0.106, 0.164, 0.2, 0.17, 0.114, -0.005, -0.283, -0.687, -1.656], [0.369, 0.243, 0.133, 0.126, 0.085, 0.002, -0.167, -0.394, -0.795, -1.615], [0.346, 0.115, 0.075, 0.06, 0.01, -0.068, -0.203, -0.397, -0.68, -1.47]], "t": [[-5.56, 0.05, 2.5, 3.68, 4.0, 3.22, 1.43, -2.25, -8.83, -20.99], [-2.15, 2.18, 3.99, 4.58, 4.85, 4.09, 0.24, -5.65, -12.16, -20.24], [3.14, 4.74, 5.2, 5.62, 4.03, 1.56, -2.26, -9.31, -14.97, -19.46], [6.35, 4.61, 3.5, 2.31, -0.59, -3.14, -7.45, -11.34, -14.13, -15.85], [3.53, 2.76, 1.65, 0.51, -0.39, -1.97, -5.35, -9.89, -12.47, -15.49], [0.43, 2.54, 4.72, 6.51, 5.93, 3.97, -0.16, -7.4, -13.42, -20.93], [5.85, 5.4, 3.63, 4.01, 2.95, 0.05, -5.19, -10.06, -14.67, -17.87], [5.45, 2.58, 2.11, 1.95, 0.37, -2.5, -6.57, -10.25, -12.34, -15.63]], "win": [[46.4, 48.6, 49.6, 50.2, 50.4, 50.4, 50.1, 49.2, 47.5, 42.8], [47.4, 49.2, 50.0, 50.4, 50.6, 50.4, 49.7, 48.6, 46.6, 42.4], [49.1, 50.0, 50.4, 50.6, 50.4, 50.0, 49.2, 47.7, 45.7, 41.9], [49.8, 50.1, 50.2, 50.2, 49.8, 49.4, 48.7, 47.5, 45.7, 42.4], [49.2, 49.5, 49.9, 49.9, 49.7, 49.4, 48.7, 47.3, 45.9, 42.5], [48.3, 49.4, 50.1, 50.5, 50.6, 50.3, 49.6, 48.2, 46.3, 42.0], [49.9, 50.1, 50.4, 50.4, 50.2, 49.6, 48.8, 47.7, 45.6, 41.8], [49.8, 49.9, 50.1, 50.0, 49.7, 49.2, 48.4, 47.2, 45.7, 42.2]], "pf": [[1.2, 1.3, 1.34, 1.35, 1.36, 1.36, 1.34, 1.29, 1.2, 0.99], [1.24, 1.33, 1.35, 1.37, 1.37, 1.36, 1.33, 1.26, 1.16, 0.98], [1.32, 1.36, 1.37, 1.38, 1.37, 1.34, 1.3, 1.22, 1.12, 0.97], [1.38, 1.37, 1.36, 1.36, 1.33, 1.3, 1.25, 1.19, 1.11, 0.99], [1.31, 1.33, 1.33, 1.32, 1.32, 1.29, 1.25, 1.19, 1.12, 0.98], [1.28, 1.33, 1.36, 1.38, 1.38, 1.36, 1.32, 1.24, 1.14, 0.97], [1.38, 1.38, 1.37, 1.38, 1.36, 1.33, 1.27, 1.2, 1.11, 0.97], [1.35, 1.33, 1.34, 1.34, 1.32, 1.29, 1.24, 1.19, 1.12, 0.98]]}, "d1_by_h": {"1": {"ret5": 0.015, "ret10": 0.007, "ret20": 0.036, "ret40": 0.053, "ret60": 0.053, "px_ma20_pct": 0.019, "px_ma60_pct": 0.057, "px_ma120_pct": 0.058}, "t1": {"ret5": 1.0, "ret10": 0.49, "ret20": 2.57, "ret40": 3.88, "ret60": 4.08, "px_ma20_pct": 1.29, "px_ma60_pct": 3.9, "px_ma120_pct": 4.33}, "5": {"ret5": -0.044, "ret10": -0.042, "ret20": 0.121, "ret40": 0.204, "ret60": 0.193, "px_ma20_pct": 0.04, "px_ma60_pct": 0.21, "px_ma120_pct": 0.232}, "t5": {"ret5": -1.42, "ret10": -1.32, "ret20": 3.77, "ret40": 6.31, "ret60": 6.25, "px_ma20_pct": 1.19, "px_ma60_pct": 6.19, "px_ma120_pct": 7.23}, "10": {"ret5": -0.204, "ret10": -0.119, "ret20": 0.138, "ret40": 0.305, "ret60": 0.258, "px_ma20_pct": -0.006, "px_ma60_pct": 0.29, "px_ma120_pct": 0.323}, "t10": {"ret5": -4.79, "ret10": -2.79, "ret20": 3.24, "ret40": 6.95, "ret60": 5.99, "px_ma20_pct": -0.13, "px_ma60_pct": 6.41, "px_ma120_pct": 7.27}, "20": {"ret5": -0.327, "ret10": -0.122, "ret20": 0.185, "ret40": 0.383, "ret60": 0.22, "px_ma20_pct": 0.025, "px_ma60_pct": 0.369, "px_ma120_pct": 0.346}, "t20": {"ret5": -5.56, "ret10": -2.15, "ret20": 3.14, "ret40": 6.35, "ret60": 3.53, "px_ma20_pct": 0.43, "px_ma60_pct": 5.85, "px_ma120_pct": 5.45}}, "combos": [{"name": "A1 ret5 D1 (最弱)", "n": 1051066, "cagr": 14.7, "mdd": -53.6, "sharpe": 0.56, "arith": 20.5, "exw20": -0.327, "t20": -5.56, "exw5": -0.044, "t5": -1.42, "win": 46.4, "pf": 1.2}, {"name": "A2 ret20 D1 (最极端)", "n": 1047819, "cagr": 21.5, "mdd": -55.0, "sharpe": 0.72, "arith": 26.1, "exw20": 0.185, "t20": 3.14, "exw5": 0.121, "t5": 3.77, "win": 49.1, "pf": 1.32}, {"name": "A3 ret20 D2~D6", "n": 5246722, "cagr": 18.4, "mdd": -51.3, "sharpe": 0.69, "arith": 22.0, "exw20": 0.145, "t20": 5.28, "exw5": 0.08, "t5": 6.91, "win": 50.3, "pf": 1.36}, {"name": "A4 ret20 D3~D5", "n": 3147754, "cagr": 18.7, "mdd": -51.2, "sharpe": 0.7, "arith": 22.2, "exw20": 0.159, "t20": 5.49, "exw5": 0.085, "t5": 6.87, "win": 50.5, "pf": 1.37}, {"name": "A5 ret20 D2~D3", "n": 2098773, "cagr": 17.0, "mdd": -52.1, "sharpe": 0.64, "arith": 21.3, "exw20": 0.193, "t20": 5.15, "exw5": 0.078, "t5": 4.43, "win": 50.2, "pf": 1.37}, {"name": "B1 ret40 D1 (最极端)", "n": 1043470, "cagr": 25.7, "mdd": -50.0, "sharpe": 0.81, "arith": 29.4, "exw20": 0.383, "t20": 6.35, "exw5": 0.204, "t5": 6.31, "win": 49.8, "pf": 1.38}, {"name": "B2 ret40 D2~D6", "n": 5224942, "cagr": 17.1, "mdd": -50.0, "sharpe": 0.66, "arith": 20.8, "exw20": 0.059, "t20": 2.09, "exw5": 0.058, "t5": 4.93, "win": 49.9, "pf": 1.34}, {"name": "C1 ret60 D1 (最极端)", "n": 1039072, "cagr": 24.8, "mdd": -47.0, "sharpe": 0.8, "arith": 28.4, "exw20": 0.22, "t20": 3.53, "exw5": 0.193, "t5": 6.25, "win": 49.2, "pf": 1.31}, {"name": "C2 ret60 D2~D6", "n": 5202955, "cagr": 15.7, "mdd": -50.9, "sharpe": 0.63, "arith": 19.5, "exw20": 0.026, "t20": 0.91, "exw5": 0.053, "t5": 4.23, "win": 49.7, "pf": 1.32}, {"name": "C3 ret60 D2~D3", "n": 2081246, "cagr": 17.7, "mdd": -50.5, "sharpe": 0.67, "arith": 21.5, "exw20": 0.091, "t20": 2.32, "exw5": 0.094, "t5": 5.23, "win": 49.7, "pf": 1.33}, {"name": "D1 距MA60 D1 (最极端)", "n": 1045862, "cagr": 27.5, "mdd": -50.1, "sharpe": 0.84, "arith": 31.1, "exw20": 0.369, "t20": 5.85, "exw5": 0.21, "t5": 6.19, "win": 49.9, "pf": 1.38}, {"name": "D2 距MA60 D2~D6", "n": 5236972, "cagr": 18.3, "mdd": -50.9, "sharpe": 0.69, "arith": 21.9, "exw20": 0.118, "t20": 4.22, "exw5": 0.079, "t5": 6.53, "win": 50.1, "pf": 1.36}, {"name": "D3 距MA120 D1", "n": 1039299, "cagr": 26.5, "mdd": -49.4, "sharpe": 0.84, "arith": 29.8, "exw20": 0.346, "t20": 5.45, "exw5": 0.232, "t5": 7.23, "win": 49.8, "pf": 1.35}, {"name": "D4 距MA120 D2~D6", "n": 5204083, "cagr": 16.4, "mdd": -50.2, "sharpe": 0.64, "arith": 20.2, "exw20": 0.039, "t20": 1.37, "exw5": 0.061, "t5": 4.96, "win": 49.8, "pf": 1.32}, {"name": "E1 ret20 D2~D6 + Close<MA60", "n": 3675113, "cagr": 14.4, "mdd": -49.3, "sharpe": 0.58, "arith": 18.8, "exw20": -0.028, "t20": -0.54, "exw5": 0.062, "t5": 2.8, "win": 51.3, "pf": 1.43}, {"name": "E2 ret20 D2~D6 + 距MA60<-10%", "n": 1080215, "cagr": 11.4, "mdd": -52.1, "sharpe": 0.48, "arith": 16.9, "exw20": -0.198, "t20": -2.69, "exw5": 0.032, "t5": 0.89, "win": 58.0, "pf": 1.96}, {"name": "E3 ret20 D2~D6 + 距MA60<-20%", "n": 181086, "cagr": 24.1, "mdd": -59.2, "sharpe": 0.72, "arith": 29.9, "exw20": 1.354, "t20": 6.29, "exw5": 0.402, "t5": 4.71, "win": 71.9, "pf": 4.57}, {"name": "E4 ret40 D1 + 距MA60 D1", "n": 732808, "cagr": 27.7, "mdd": -48.8, "sharpe": 0.85, "arith": 31.3, "exw20": 0.47, "t20": 6.98, "exw5": 0.23, "t5": 6.31, "win": 50.1, "pf": 1.39}, {"name": "E5 ret60 D1 + 距MA60 D1", "n": 606963, "cagr": 29.5, "mdd": -48.1, "sharpe": 0.88, "arith": 32.7, "exw20": 0.437, "t20": 6.09, "exw5": 0.265, "t5": 7.2, "win": 49.6, "pf": 1.35}, {"name": "E6 ret40 D1 + ret60 D1 + 距MA60 D1", "n": 449377, "cagr": 30.4, "mdd": -49.2, "sharpe": 0.9, "arith": 33.5, "exw20": 0.513, "t20": 6.73, "exw5": 0.28, "t5": 7.13, "win": 49.8, "pf": 1.36}, {"name": "F1 三者皆 D8~D10 (全最强)", "n": 1742175, "cagr": -12.4, "mdd": -91.8, "sharpe": -0.24, "arith": -7.8, "exw20": -1.236, "t20": -17.66, "exw5": -0.446, "t5": -13.07, "win": 43.8, "pf": 1.02}], "confirm": [{"tag": "S ret20 D2~D6 | 无确认(基线)", "n": 5246722, "exw20": 0.145, "t20": 5.28, "exw5": 0.08, "t5": 6.91, "exw60": -0.36, "t60": -5.88, "win": 50.3, "pf": 1.36}, {"tag": "S ret20 D2~D6 | A Close>MA5", "n": 2266271, "exw20": -0.089, "t20": -1.72, "exw5": -0.039, "t5": -1.43, "exw60": -0.773, "t60": -9.21, "win": 51.9, "pf": 1.47}, {"tag": "S ret20 D2~D6 | B MA5向上", "n": 2908031, "exw20": -0.677, "t20": -16.06, "exw5": -0.515, "t5": -25.99, "exw60": -1.271, "t60": -15.66, "win": 46.7, "pf": 1.11}, {"tag": "S ret20 D2~D6 | C 连续2日上涨", "n": 1169463, "exw20": -3.333, "t20": -40.14, "exw5": -3.189, "t5": -60.32, "exw60": -3.809, "t60": -28.83, "win": 36.2, "pf": 0.57}, {"tag": "S ret20 D2~D6 | D MACD柱连续3日改善", "n": 2672946, "exw20": 0.0, "t20": 0.0, "exw5": 0.01, "t5": 0.56, "exw60": -0.603, "t60": -8.18, "win": 51.6, "pf": 1.42}, {"tag": "S ret20 D2~D6 | E MACD柱翻红", "n": 179015, "exw20": -1.976, "t20": -21.49, "exw5": -1.599, "t5": -31.11, "exw60": -2.862, "t60": -18.91, "win": 40.2, "pf": 0.75}, {"tag": "S ret20 D2~D6 | F DIF>DEA", "n": 2333587, "exw20": 0.149, "t20": 2.66, "exw5": 0.096, "t5": 3.22, "exw60": -0.648, "t60": -6.97, "win": 52.4, "pf": 1.47}, {"tag": "S ret20 D2~D6 | G Close站上MA10", "n": 2086821, "exw20": -0.103, "t20": -1.9, "exw5": -0.014, "t5": -0.45, "exw60": -0.891, "t60": -9.86, "win": 52.3, "pf": 1.48}, {"tag": "S ret20 D2~D6 | H Close站上MA20", "n": 1768398, "exw20": -0.192, "t20": -2.82, "exw5": -0.005, "t5": -0.14, "exw60": -0.925, "t60": -8.11, "win": 51.5, "pf": 1.43}, {"tag": "L 深度超跌并集 | 无确认(基线)", "n": 1737367, "exw20": 0.219, "t20": 4.03, "exw5": 0.165, "t5": 5.83, "exw60": -0.869, "t60": -9.57, "win": 49.3, "pf": 1.33}, {"tag": "L 深度超跌并集 | A Close>MA5", "n": 651688, "exw20": -0.224, "t20": -3.03, "exw5": -0.017, "t5": -0.41, "exw60": -1.515, "t60": -13.15, "win": 50.3, "pf": 1.39}, {"tag": "L 深度超跌并集 | B MA5向上", "n": 1056059, "exw20": -0.447, "t20": -6.95, "exw5": -0.318, "t5": -8.71, "exw60": -1.535, "t60": -14.51, "win": 46.6, "pf": 1.14}, {"tag": "L 深度超跌并集 | C 连续2日上涨", "n": 402784, "exw20": -3.421, "t20": -33.96, "exw5": -3.359, "t5": -58.66, "exw60": -4.316, "t60": -26.72, "win": 36.0, "pf": 0.57}, {"tag": "L 深度超跌并集 | D MACD柱连续3日改善", "n": 904100, "exw20": 0.015, "t20": 0.24, "exw5": 0.068, "t5": 2.15, "exw60": -1.159, "t60": -11.47, "win": 50.3, "pf": 1.37}, {"tag": "L 深度超跌并集 | E MACD柱翻红", "n": 51703, "exw20": -1.95, "t20": -15.23, "exw5": -1.629, "t5": -25.74, "exw60": -2.994, "t60": -14.21, "win": 39.4, "pf": 0.74}, {"tag": "L 深度超跌并集 | F DIF>DEA", "n": 852479, "exw20": -0.064, "t20": -0.9, "exw5": 0.089, "t5": 2.62, "exw60": -1.322, "t60": -11.97, "win": 50.1, "pf": 1.33}, {"tag": "L 深度超跌并集 | G Close站上MA10", "n": 560194, "exw20": -0.447, "t20": -5.85, "exw5": -0.082, "t5": -2.03, "exw60": -1.801, "t60": -14.51, "win": 50.6, "pf": 1.38}, {"tag": "L 深度超跌并集 | H Close站上MA20", "n": 437157, "exw20": -0.684, "t20": -7.93, "exw5": -0.095, "t5": -1.94, "exw60": -2.041, "t60": -13.77, "win": 49.5, "pf": 1.31}], "vol": [{"tag": "S ret20 D2~D6 | 基线", "n": 5246722, "exw5": 0.08, "t5": 6.91, "exw10": 0.128, "t10": 7.59, "exw20": 0.145, "t20": 5.28, "exw60": -0.36, "t60": -5.88}, {"tag": "S ret20 D2~D6 | 量比>=0.5", "n": 4909883, "exw5": 0.093, "t5": 7.75, "exw10": 0.147, "t10": 8.51, "exw20": 0.172, "t20": 6.13, "exw60": -0.335, "t60": -5.43}, {"tag": "S ret20 D2~D6 | 量比>=0.7", "n": 3895690, "exw5": 0.112, "t5": 8.63, "exw10": 0.184, "t10": 9.9, "exw20": 0.215, "t20": 7.23, "exw60": -0.287, "t60": -4.53}, {"tag": "S ret20 D2~D6 | 量比>=0.9", "n": 2643434, "exw5": 0.096, "t5": 6.47, "exw10": 0.176, "t10": 8.55, "exw20": 0.198, "t20": 6.19, "exw60": -0.328, "t60": -4.93}, {"tag": "S ret20 D2~D6 | 量比>=1.0", "n": 2119675, "exw5": 0.079, "t5": 4.99, "exw10": 0.154, "t10": 7.16, "exw20": 0.17, "t20": 5.07, "exw60": -0.37, "t60": -5.37}, {"tag": "S ret20 D2~D6 | 量比>=1.1", "n": 1694615, "exw5": 0.054, "t5": 3.16, "exw10": 0.122, "t10": 5.3, "exw20": 0.13, "t20": 3.67, "exw60": -0.425, "t60": -5.97}, {"tag": "S ret20 D2~D6 | 量比>=1.2", "n": 1356901, "exw5": 0.027, "t5": 1.43, "exw10": 0.084, "t10": 3.45, "exw20": 0.074, "t20": 1.96, "exw60": -0.491, "t60": -6.62}, {"tag": "S ret20 D2~D6 | 量比>=1.5", "n": 727329, "exw5": -0.052, "t5": -2.25, "exw10": -0.032, "t10": -1.08, "exw20": -0.078, "t20": -1.76, "exw60": -0.682, "t60": -8.37}, {"tag": "S ret20 D2~D6 | 量比>=2.0", "n": 301667, "exw5": -0.189, "t5": -5.93, "exw10": -0.221, "t10": -5.32, "exw20": -0.292, "t20": -4.94, "exw60": -0.977, "t60": -9.55}, {"tag": "S ret20 D2~D6 | 量比>=2.5", "n": 147178, "exw5": -0.346, "t5": -8.42, "exw10": -0.465, "t10": -8.56, "exw20": -0.535, "t20": -6.85, "exw60": -1.119, "t60": -8.37}, {"tag": "S ret20 D2~D6 | 量比<=0.5", "n": 336840, "exw5": -0.069, "t5": -1.29, "exw10": -0.076, "t10": -0.95, "exw20": -0.121, "t20": -1.13, "exw60": -0.642, "t60": -3.58}, {"tag": "S ret20 D2~D6 | 量比<=0.7", "n": 1351032, "exw5": -0.012, "t5": -0.47, "exw10": -0.011, "t10": -0.29, "exw20": -0.001, "t20": -0.02, "exw60": -0.557, "t60": -6.18}, {"tag": "S ret20 D2~D6 | 量比<=0.9", "n": 2603288, "exw5": 0.058, "t5": 3.71, "exw10": 0.077, "t10": 3.23, "exw20": 0.094, "t20": 2.76, "exw60": -0.446, "t60": -6.43}, {"tag": "S ret20 D2~D6 | 量比<=1.0", "n": 3127051, "exw5": 0.069, "t5": 4.98, "exw10": 0.104, "t10": 4.92, "exw20": 0.113, "t20": 3.63, "exw60": -0.427, "t60": -6.42}, {"tag": "S ret20 D2~D6 | 量比<=1.1", "n": 3552107, "exw5": 0.079, "t5": 6.11, "exw10": 0.121, "t10": 6.21, "exw20": 0.136, "t20": 4.54, "exw60": -0.391, "t60": -6.02}, {"tag": "S ret20 D2~D6 | 量比<=1.2", "n": 3889821, "exw5": 0.089, "t5": 7.19, "exw10": 0.141, "t10": 7.44, "exw20": 0.167, "t20": 5.7, "exw60": -0.363, "t60": -5.72}, {"tag": "S ret20 D2~D6 | 量比<=1.5", "n": 4519393, "exw5": 0.098, "t5": 8.26, "exw10": 0.153, "t10": 8.52, "exw20": 0.177, "t20": 6.36, "exw60": -0.331, "t60": -5.36}, {"tag": "S ret20 D2~D6 | 量比<=2.0", "n": 4945055, "exw5": 0.093, "t5": 8.06, "exw10": 0.147, "t10": 8.66, "exw20": 0.168, "t20": 6.09, "exw60": -0.335, "t60": -5.5}, {"tag": "S ret20 D2~D6 | 量比<=2.5", "n": 5099544, "exw5": 0.09, "t5": 7.75, "exw10": 0.141, "t10": 8.36, "exw20": 0.159, "t20": 5.8, "exw60": -0.345, "t60": -5.66}, {"tag": "L 深度超跌并集 | 基线", "n": 1737367, "exw5": 0.165, "t5": 5.83, "exw10": 0.219, "t10": 5.72, "exw20": 0.219, "t20": 4.03, "exw60": -0.869, "t60": -9.57}, {"tag": "L 深度超跌并集 | 量比>=0.5", "n": 1641490, "exw5": 0.174, "t5": 6.13, "exw10": 0.235, "t10": 6.07, "exw20": 0.239, "t20": 4.37, "exw60": -0.856, "t60": -9.39}, {"tag": "L 深度超跌并集 | 量比>=0.7", "n": 1312246, "exw5": 0.187, "t5": 6.48, "exw10": 0.267, "t10": 6.75, "exw20": 0.263, "t20": 4.75, "exw60": -0.838, "t60": -9.03}, {"tag": "L 深度超跌并集 | 量比>=0.9", "n": 899903, "exw5": 0.165, "t5": 5.49, "exw10": 0.238, "t10": 5.85, "exw20": 0.196, "t20": 3.43, "exw60": -0.919, "t60": -9.64}, {"tag": "L 深度超跌并集 | 量比>=1.0", "n": 727403, "exw5": 0.139, "t5": 4.53, "exw10": 0.204, "t10": 4.99, "exw20": 0.14, "t20": 2.42, "exw60": -0.975, "t60": -10.11}, {"tag": "L 深度超跌并集 | 量比>=1.1", "n": 587130, "exw5": 0.108, "t5": 3.44, "exw10": 0.155, "t10": 3.67, "exw20": 0.073, "t20": 1.23, "exw60": -1.049, "t60": -10.75}, {"tag": "L 深度超跌并集 | 量比>=1.2", "n": 475041, "exw5": 0.061, "t5": 1.91, "exw10": 0.088, "t10": 2.04, "exw20": -0.018, "t20": -0.29, "exw60": -1.148, "t60": -11.51}, {"tag": "L 深度超跌并集 | 量比>=1.5", "n": 264224, "exw5": -0.047, "t5": -1.31, "exw10": -0.08, "t10": -1.72, "exw20": -0.261, "t20": -3.85, "exw60": -1.406, "t60": -13.12}, {"tag": "L 深度超跌并集 | 量比>=2.0", "n": 117455, "exw5": -0.259, "t5": -5.83, "exw10": -0.388, "t10": -6.54, "exw20": -0.644, "t20": -7.49, "exw60": -1.854, "t60": -13.76}, {"tag": "L 深度超跌并集 | 量比>=2.5", "n": 61326, "exw5": -0.399, "t5": -7.12, "exw10": -0.571, "t10": -7.52, "exw20": -0.854, "t20": -7.72, "exw60": -2.084, "t60": -12.38}, {"tag": "L 深度超跌并集 | 量比<=0.5", "n": 95877, "exw5": 0.03, "t5": 0.3, "exw10": -0.068, "t10": -0.52, "exw20": -0.217, "t20": -1.53, "exw60": -0.735, "t60": -3.26}, {"tag": "L 深度超跌并集 | 量比<=0.7", "n": 425121, "exw5": 0.17, "t5": 3.36, "exw10": 0.132, "t10": 1.95, "exw20": 0.039, "t20": 0.48, "exw60": -0.881, "t60": -7.04}, {"tag": "L 深度超跌并集 | 量比<=0.9", "n": 837464, "exw5": 0.181, "t5": 5.35, "exw10": 0.218, "t10": 4.48, "exw20": 0.214, "t20": 3.45, "exw60": -0.84, "t60": -8.19}, {"tag": "L 深度超跌并集 | 量比<=1.0", "n": 1009964, "exw5": 0.194, "t5": 6.34, "exw10": 0.227, "t10": 4.84, "exw20": 0.236, "t20": 3.89, "exw60": -0.831, "t60": -7.85}, {"tag": "L 深度超跌并集 | 量比<=1.1", "n": 1150237, "exw5": 0.185, "t5": 6.35, "exw10": 0.224, "t10": 5.04, "exw20": 0.257, "t20": 4.33, "exw60": -0.81, "t60": -7.82}, {"tag": "L 深度超跌并集 | 量比<=1.2", "n": 1262326, "exw5": 0.194, "t5": 6.66, "exw10": 0.253, "t10": 6.18, "exw20": 0.284, "t20": 5.02, "exw60": -0.788, "t60": -8.13}, {"tag": "L 深度超跌并集 | 量比<=1.5", "n": 1473143, "exw5": 0.195, "t5": 6.83, "exw10": 0.264, "t10": 6.64, "exw20": 0.298, "t20": 5.33, "exw60": -0.777, "t60": -8.29}, {"tag": "L 深度超跌并集 | 量比<=2.0", "n": 1619912, "exw5": 0.187, "t5": 6.64, "exw10": 0.252, "t10": 6.52, "exw20": 0.272, "t20": 4.95, "exw60": -0.819, "t60": -8.91}, {"tag": "L 深度超跌并集 | 量比<=2.5", "n": 1676041, "exw5": 0.179, "t5": 6.39, "exw10": 0.241, "t10": 6.26, "exw20": 0.252, "t20": 4.63, "exw60": -0.835, "t60": -9.15}, {"tag": "S | 缩量下跌→放量上涨", "n": 122044, "exw5": -1.314, "t5": -15.55, "exw10": -1.297, "t10": -11.1, "exw20": -1.276, "t20": -7.76, "exw60": -2.206, "t60": -13.44}, {"tag": "L | 缩量下跌→放量上涨", "n": 41153, "exw5": -1.614, "t5": -19.04, "exw10": -1.499, "t10": -13.32, "exw20": -1.351, "t20": -9.33, "exw60": -2.452, "t60": -11.36}, {"tag": "S | 缩量→放量(不限阳线)", "n": 253588, "exw5": -0.929, "t5": -13.34, "exw10": -0.834, "t10": -9.46, "exw20": -0.843, "t20": -6.97, "exw60": -1.477, "t60": -10.35}, {"tag": "L | 缩量→放量(不限阳线)", "n": 87448, "exw5": -1.039, "t5": -12.94, "exw10": -0.929, "t10": -8.86, "exw20": -0.833, "t20": -6.6, "exw60": -1.699, "t60": -10.46}, {"tag": "S | 放量上涨(不限前期缩量)", "n": 737976, "exw5": -0.054, "t5": -2.03, "exw10": -0.053, "t10": -1.51, "exw20": -0.115, "t20": -2.29, "exw60": -0.822, "t60": -9.09}, {"tag": "L | 放量上涨(不限前期缩量)", "n": 240410, "exw5": -0.106, "t5": -2.45, "exw10": -0.147, "t10": -2.43, "exw20": -0.372, "t20": -4.8, "exw60": -1.682, "t60": -13.97}, {"tag": "S | 连续3日量比渐降", "n": 1002253, "exw5": 1.444, "t5": 49.46, "exw10": 1.433, "t10": 43.35, "exw20": 1.405, "t20": 33.92, "exw60": 0.781, "t60": 10.44}, {"tag": "L | 连续3日量比渐降", "n": 326464, "exw5": 1.59, "t5": 34.52, "exw10": 1.585, "t10": 28.67, "exw20": 1.49, "t20": 20.75, "exw60": 0.33, "t60": 3.02}], "stage": [{"tag": "S | 阶段1 超跌", "n": 5246722, "exw5": 0.08, "t5": 6.91, "exw20": 0.145, "t20": 5.28, "exw60": -0.36, "t60": -5.88, "win": 50.3, "pf": 1.36}, {"tag": "S | 阶段1+2a 量能渐降+不创新低", "n": 1832385, "exw5": -0.369, "t5": -13.57, "exw20": -0.6, "t20": -10.65, "exw60": -1.286, "t60": -13.74, "win": 46.4, "pf": 1.1}, {"tag": "S | 阶段1+2b 5日低量+不创新低", "n": 903142, "exw5": -0.184, "t5": -4.8, "exw20": -0.217, "t20": -2.77, "exw60": -0.625, "t60": -4.95, "win": 46.8, "pf": 1.15}, {"tag": "S | 阶段1+3 直接反转确认", "n": 731949, "exw5": -0.123, "t5": -4.17, "exw20": -0.272, "t20": -4.24, "exw60": -1.118, "t60": -10.93, "win": 53.1, "pf": 1.64}, {"tag": "S | 阶段1+2a+3 完整三阶段", "n": 1708, "exw5": -0.861, "t5": -6.54, "exw20": -0.869, "t20": -3.23, "exw60": -0.497, "t60": -0.84, "win": 45.1, "pf": 1.18}, {"tag": "S | 阶段1+2b+3 完整三阶段", "n": 13609, "exw5": -1.223, "t5": -14.39, "exw20": -1.56, "t20": -9.82, "exw60": -1.735, "t60": -5.45, "win": 44.2, "pf": 1.02}, {"tag": "L | 阶段1 超跌", "n": 1737367, "exw5": 0.165, "t5": 5.83, "exw20": 0.219, "t20": 4.03, "exw60": -0.869, "t60": -9.57, "win": 49.3, "pf": 1.33}, {"tag": "L | 阶段1+2a 量能渐降+不创新低", "n": 627968, "exw5": -0.287, "t5": -6.06, "exw20": -0.523, "t20": -6.78, "exw60": -1.446, "t60": -12.0, "win": 45.9, "pf": 1.09}, {"tag": "L | 阶段1+2b 5日低量+不创新低", "n": 368385, "exw5": 0.077, "t5": 1.34, "exw20": 0.115, "t20": 0.93, "exw60": -0.94, "t60": -5.92, "win": 47.6, "pf": 1.23}, {"tag": "L | 阶段1+3 直接反转确认", "n": 218953, "exw5": -0.257, "t5": -5.57, "exw20": -0.75, "t20": -8.68, "exw60": -2.225, "t60": -16.2, "win": 51.4, "pf": 1.54}, {"tag": "L | 阶段1+2a+3 完整三阶段", "n": 621, "exw5": -0.771, "t5": -3.34, "exw20": -1.327, "t20": -3.09, "exw60": -0.922, "t60": -1.05, "win": 46.3, "pf": 0.98}, {"tag": "L | 阶段1+2b+3 完整三阶段", "n": 5161, "exw5": -1.17, "t5": -9.5, "exw20": -1.625, "t20": -6.99, "exw60": -2.475, "t60": -5.54, "win": 46.3, "pf": 1.15}], "market": [{"tag": "S ret20 D2~D6 | 全环境", "n": 5246722, "exw5": 0.08, "t5": 6.91, "exw20": 0.145, "t20": 5.28, "cagr": 18.4, "mdd": -51.3}, {"tag": "S ret20 D2~D6 | 市场 Close>MA60", "n": 3004359, "exw5": 0.05, "t5": 3.91, "exw20": -0.095, "t20": -2.65, "cagr": 9.1, "mdd": -51.8}, {"tag": "S ret20 D2~D6 | 市场 Close<MA60", "n": 2242363, "exw5": 0.118, "t5": 5.74, "exw20": 0.449, "t20": 10.85, "cagr": 8.5, "mdd": -39.0}, {"tag": "S ret20 D2~D6 | 市场 MA20>MA60", "n": 3011631, "exw5": 0.038, "t5": 2.41, "exw20": -0.084, "t20": -2.22, "cagr": 4.4, "mdd": -51.3}, {"tag": "S ret20 D2~D6 | 市场 MA20<MA60", "n": 2235091, "exw5": 0.134, "t5": 7.9, "exw20": 0.439, "t20": 11.48, "cagr": 13.4, "mdd": -39.6}, {"tag": "S ret20 D2~D6 | 市场 HV20 > 中位", "n": 2450695, "exw5": 0.16, "t5": 8.52, "exw20": 0.303, "t20": 6.63, "cagr": 24.8, "mdd": -51.3}, {"tag": "S ret20 D2~D6 | 市场 HV20 < 中位", "n": 2796027, "exw5": -0.001, "t5": -0.06, "exw20": -0.015, "t20": -0.51, "cagr": -5.1, "mdd": -65.5}, {"tag": "S ret20 D2~D6 | Breadth > 中位", "n": 2610077, "exw5": 0.1, "t5": 6.62, "exw20": 0.162, "t20": 4.35, "cagr": 14.2, "mdd": -39.5}, {"tag": "S ret20 D2~D6 | Breadth < 中位", "n": 2633997, "exw5": 0.06, "t5": 3.42, "exw20": 0.128, "t20": 3.17, "cagr": 3.6, "mdd": -51.6}, {"tag": "L 深度超跌 | 全环境", "n": 1737367, "exw5": 0.165, "t5": 5.83, "exw20": 0.219, "t20": 4.03, "cagr": 22.1, "mdd": -50.2}, {"tag": "L 深度超跌 | 市场 Close>MA60", "n": 1019015, "exw5": -0.062, "t5": -2.18, "exw20": -0.596, "t20": -10.2, "cagr": 7.3, "mdd": -51.6}, {"tag": "L 深度超跌 | 市场 Close<MA60", "n": 718352, "exw5": 0.464, "t5": 8.88, "exw20": 1.286, "t20": 14.1, "cagr": 13.8, "mdd": -37.7}, {"tag": "L 深度超跌 | 市场 MA20>MA60", "n": 1017151, "exw5": -0.061, "t5": -2.1, "exw20": -0.584, "t20": -9.82, "cagr": 2.3, "mdd": -51.9}, {"tag": "L 深度超跌 | 市场 MA20<MA60", "n": 720216, "exw5": 0.466, "t5": 8.95, "exw20": 1.285, "t20": 14.22, "cagr": 19.4, "mdd": -41.2}, {"tag": "L 深度超跌 | 市场 HV20 > 中位", "n": 807684, "exw5": 0.452, "t5": 9.82, "exw20": 0.792, "t20": 9.05, "cagr": 34.1, "mdd": -47.4}, {"tag": "L 深度超跌 | 市场 HV20 < 中位", "n": 929683, "exw5": -0.116, "t5": -3.7, "exw20": -0.346, "t20": -5.61, "cagr": -9.0, "mdd": -78.0}, {"tag": "L 深度超跌 | Breadth > 中位", "n": 865620, "exw5": 0.208, "t5": 5.04, "exw20": 0.25, "t20": 3.31, "cagr": 18.7, "mdd": -33.5}, {"tag": "L 深度超跌 | Breadth < 中位", "n": 870722, "exw5": 0.122, "t5": 3.15, "exw20": 0.189, "t20": 2.41, "cagr": 2.9, "mdd": -62.6}], "rs": [{"tag": "S ret20 D2~D6 | 基线", "n": 5246722, "exw5": 0.08, "t5": 6.91, "exw20": 0.145, "t20": 5.28, "exw60": -0.36, "t60": -5.88}, {"tag": "S ret20 D2~D6 | rs_mkt20 D1 最弱", "n": 1, "exw5": null, "t5": null, "exw20": null, "t20": null, "exw60": null, "t60": null}, {"tag": "S ret20 D2~D6 | rs_mkt20 D1~D3 弱", "n": 2098415, "exw5": 0.078, "t5": 4.41, "exw20": 0.19, "t20": 5.09, "exw60": -0.391, "t60": -5.05}, {"tag": "S ret20 D2~D6 | rs_mkt20 D4~D7 中", "n": 3147412, "exw5": 0.081, "t5": 7.28, "exw20": 0.112, "t20": 4.15, "exw60": -0.346, "t60": -6.02}, {"tag": "S ret20 D2~D6 | rs_mkt20 D8~D10 强", "n": 0, "exw5": null, "t5": null, "exw20": null, "t20": null, "exw60": null, "t60": null}, {"tag": "S ret20 D2~D6 | rs_sz20 D1 最弱", "n": 187671, "exw5": 0.266, "t5": 9.13, "exw20": 0.523, "t20": 8.22, "exw60": 0.406, "t60": 3.42}, {"tag": "S ret20 D2~D6 | rs_sz20 D1~D3 弱", "n": 2090164, "exw5": 0.161, "t5": 9.68, "exw20": 0.362, "t20": 10.0, "exw60": 0.02, "t60": 0.28}, {"tag": "S ret20 D2~D6 | rs_sz20 D4~D7 中", "n": 3065838, "exw5": 0.029, "t5": 2.52, "exw20": -0.009, "t20": -0.31, "exw60": -0.601, "t60": -9.35}, {"tag": "S ret20 D2~D6 | rs_sz20 D8~D10 强", "n": 71824, "exw5": -0.327, "t5": -5.41, "exw20": -1.023, "t20": -7.85, "exw60": -3.367, "t60": -13.62}, {"tag": "S ret20 D2~D6 | rs_mkt60 D1 最弱", "n": 619403, "exw5": 0.192, "t5": 6.49, "exw20": 0.216, "t20": 3.58, "exw60": -0.832, "t60": -9.07}, {"tag": "S ret20 D2~D6 | rs_mkt60 D1~D3 弱", "n": 2067854, "exw5": 0.142, "t5": 6.8, "exw20": 0.212, "t20": 4.73, "exw60": -0.446, "t60": -6.22}, {"tag": "S ret20 D2~D6 | rs_mkt60 D4~D7 中", "n": 2314612, "exw5": 0.065, "t5": 4.84, "exw20": 0.151, "t20": 5.09, "exw60": -0.043, "t60": -0.66}, {"tag": "S ret20 D2~D6 | rs_mkt60 D8~D10 强", "n": 821381, "exw5": -0.029, "t5": -1.22, "exw20": -0.208, "t20": -4.45, "exw60": -0.709, "t60": -7.74}, {"tag": "S ret20 D2~D6 | 绝对超跌+rs_mkt20 强", "n": 0, "exw5": null, "t5": null, "exw20": null, "t20": null, "exw60": null, "t60": null}, {"tag": "S ret20 D2~D6 | 绝对超跌+rs_sz20 强", "n": 71824, "exw5": -0.327, "t5": -5.41, "exw20": -1.023, "t20": -7.85, "exw60": -3.367, "t60": -13.62}, {"tag": "L 深度超跌 | 基线", "n": 1737367, "exw5": 0.165, "t5": 5.83, "exw20": 0.219, "t20": 4.03, "exw60": -0.869, "t60": -9.57}, {"tag": "L 深度超跌 | rs_mkt20 D1 最弱", "n": 564042, "exw5": 0.132, "t5": 3.55, "exw20": 0.249, "t20": 3.64, "exw60": -0.862, "t60": -7.37}, {"tag": "L 深度超跌 | rs_mkt20 D1~D3 弱", "n": 1174415, "exw5": 0.159, "t5": 5.09, "exw20": 0.29, "t20": 4.87, "exw60": -0.792, "t60": -7.86}, {"tag": "L 深度超跌 | rs_mkt20 D4~D7 中", "n": 461624, "exw5": 0.128, "t5": 4.67, "exw20": -0.033, "t20": -0.59, "exw60": -1.085, "t60": -12.06}, {"tag": "L 深度超跌 | rs_mkt20 D8~D10 强", "n": 101328, "exw5": -0.309, "t5": -6.02, "exw20": -0.987, "t20": -7.94, "exw60": -2.788, "t60": -16.46}, {"tag": "L 深度超跌 | rs_sz20 D1 最弱", "n": 542584, "exw5": 0.207, "t5": 5.76, "exw20": 0.409, "t20": 6.06, "exw60": -0.634, "t60": -5.71}, {"tag": "L 深度超跌 | rs_sz20 D1~D3 弱", "n": 1132863, "exw5": 0.194, "t5": 6.29, "exw20": 0.36, "t20": 6.13, "exw60": -0.682, "t60": -6.91}, {"tag": "L 深度超跌 | rs_sz20 D4~D7 中", "n": 489858, "exw5": 0.101, "t5": 3.59, "exw20": -0.038, "t20": -0.68, "exw60": -1.123, "t60": -12.09}, {"tag": "L 深度超跌 | rs_sz20 D8~D10 强", "n": 114646, "exw5": -0.356, "t5": -7.71, "exw20": -1.103, "t20": -10.43, "exw60": -2.957, "t60": -18.42}, {"tag": "L 深度超跌 | rs_mkt60 D1 最弱", "n": 1038913, "exw5": 0.193, "t5": 6.24, "exw20": 0.22, "t20": 3.53, "exw60": -0.883, "t60": -9.4}, {"tag": "L 深度超跌 | rs_mkt60 D1~D3 弱", "n": 1431934, "exw5": 0.178, "t5": 6.09, "exw20": 0.243, "t20": 4.2, "exw60": -0.83, "t60": -9.03}, {"tag": "L 深度超跌 | rs_mkt60 D4~D7 中", "n": 223528, "exw5": 0.095, "t5": 2.88, "exw20": 0.053, "t20": 0.86, "exw60": -1.247, "t60": -11.15}, {"tag": "L 深度超跌 | rs_mkt60 D8~D10 强", "n": 81579, "exw5": -0.036, "t5": -0.62, "exw20": -0.434, "t20": -3.97, "exw60": -2.04, "t60": -11.67}, {"tag": "L 深度超跌 | 绝对超跌+rs_mkt20 强", "n": 101328, "exw5": -0.309, "t5": -6.02, "exw20": -0.987, "t20": -7.94, "exw60": -2.788, "t60": -16.46}, {"tag": "L 深度超跌 | 绝对超跌+rs_sz20 强", "n": 114646, "exw5": -0.356, "t5": -7.71, "exw20": -1.103, "t20": -10.43, "exw60": -2.957, "t60": -18.42}], "size": [{"tag": "S ret20 D2~D6 | 全市值", "n": 5246722, "exw5": 0.08, "t5": 6.91, "exw20": 0.145, "t20": 5.28, "cagr": 18.4, "mdd": -51.3, "sharpe": 0.69}, {"tag": "S ret20 D2~D6 | 最小10%", "n": 686551, "exw5": 0.364, "t5": 13.64, "exw20": 1.151, "t20": 17.57, "cagr": 38.9, "mdd": -52.5, "sharpe": 1.19}, {"tag": "S ret20 D2~D6 | 10-30%", "n": 1271100, "exw5": 0.233, "t5": 12.26, "exw20": 0.682, "t20": 16.17, "cagr": 27.6, "mdd": -54.3, "sharpe": 0.92}, {"tag": "S ret20 D2~D6 | 30-70%", "n": 2096164, "exw5": 0.065, "t5": 5.22, "exw20": 0.026, "t20": 0.9, "cagr": 17.7, "mdd": -54.4, "sharpe": 0.66}, {"tag": "S ret20 D2~D6 | 70-90%", "n": 839644, "exw5": -0.134, "t5": -7.44, "exw20": -0.593, "t20": -14.49, "cagr": 5.0, "mdd": -68.4, "sharpe": 0.31}, {"tag": "S ret20 D2~D6 | 最大10%", "n": 353263, "exw5": -0.287, "t5": -8.01, "exw20": -1.107, "t20": -14.4, "cagr": -3.1, "mdd": -76.8, "sharpe": 0.07}, {"tag": "S ret20 D2~D6 | 剔除最小10%", "n": 4560171, "exw5": 0.042, "t5": 3.6, "exw20": 0.003, "t20": 0.1, "cagr": 15.8, "mdd": -55.1, "sharpe": 0.62}, {"tag": "L 深度超跌 | 全市值", "n": 1737367, "exw5": 0.165, "t5": 5.83, "exw20": 0.219, "t20": 4.03, "cagr": 22.1, "mdd": -50.2, "sharpe": 0.74}, {"tag": "L 深度超跌 | 最小10%", "n": 135513, "exw5": 0.56, "t5": 12.84, "exw20": 1.572, "t20": 15.16, "cagr": 54.0, "mdd": -46.4, "sharpe": 1.4}, {"tag": "L 深度超跌 | 10-30%", "n": 328528, "exw5": 0.372, "t5": 11.66, "exw20": 0.985, "t20": 15.52, "cagr": 35.1, "mdd": -50.3, "sharpe": 1.02}, {"tag": "L 深度超跌 | 30-70%", "n": 750720, "exw5": 0.166, "t5": 5.94, "exw20": 0.142, "t20": 2.62, "cagr": 22.8, "mdd": -50.2, "sharpe": 0.75}, {"tag": "L 深度超跌 | 70-90%", "n": 359838, "exw5": -0.062, "t5": -1.86, "exw20": -0.565, "t20": -8.54, "cagr": 8.0, "mdd": -65.0, "sharpe": 0.39}, {"tag": "L 深度超跌 | 最大10%", "n": 162768, "exw5": -0.112, "t5": -2.23, "exw20": -0.909, "t20": -8.98, "cagr": 4.8, "mdd": -71.5, "sharpe": 0.31}, {"tag": "L 深度超跌 | 剔除最小10%", "n": 1601854, "exw5": 0.134, "t5": 4.68, "exw20": 0.103, "t20": 1.85, "cagr": 20.0, "mdd": -51.7, "sharpe": 0.69}], "ic": [{"cn": "20日历史波动", "f": "hv20", "g": "波动", "ic": -0.0851, "icir": -0.456, "t": -24.29, "pos": 30.6, "nd": 2831}, {"cn": "ATR占比", "f": "atr_pct", "g": "波动", "ic": -0.0836, "icir": -0.426, "t": -22.66, "pos": 31.7, "nd": 2837}, {"cn": "相对同规模20日强弱", "f": "rs_sz20", "g": "相对强弱", "ic": -0.0806, "icir": -0.547, "t": -29.02, "pos": 28.9, "nd": 2811}, {"cn": "距MA60", "f": "px_ma60_pct", "g": "价格", "ic": -0.0785, "icir": -0.479, "t": -25.47, "pos": 32.8, "nd": 2822}, {"cn": "距MA120", "f": "px_ma120_pct", "g": "价格", "ic": -0.0738, "icir": -0.44, "t": -23.27, "pos": 34.2, "nd": 2792}, {"cn": "过去40日涨幅", "f": "ret40", "g": "价格", "ic": -0.072, "icir": -0.456, "t": -24.18, "pos": 34.0, "nd": 2811}, {"cn": "过去20日涨幅", "f": "ret20", "g": "价格", "ic": -0.0701, "icir": -0.464, "t": -24.67, "pos": 33.1, "nd": 2831}, {"cn": "相对市场20日强弱", "f": "rs_mkt20", "g": "相对强弱", "ic": -0.0699, "icir": -0.463, "t": -24.65, "pos": 33.1, "nd": 2830}, {"cn": "相对市场60日强弱", "f": "rs_mkt60", "g": "相对强弱", "ic": -0.0673, "icir": -0.424, "t": -22.38, "pos": 33.3, "nd": 2790}, {"cn": "过去60日涨幅", "f": "ret60", "g": "价格", "ic": -0.0672, "icir": -0.424, "t": -22.38, "pos": 33.2, "nd": 2791}, {"cn": "DIF", "f": "dif", "g": "MACD", "ic": -0.0666, "icir": -0.425, "t": -22.7, "pos": 35.0, "nd": 2850}, {"cn": "距MA20", "f": "px_ma20_pct", "g": "价格", "ic": -0.0612, "icir": -0.418, "t": -22.28, "pos": 34.7, "nd": 2842}, {"cn": "DEA", "f": "dea", "g": "MACD", "ic": -0.0596, "icir": -0.382, "t": -20.42, "pos": 36.5, "nd": 2850}, {"cn": "过去10日涨幅", "f": "ret10", "g": "价格", "ic": -0.0523, "icir": -0.372, "t": -19.83, "pos": 36.1, "nd": 2841}, {"cn": "MA5斜率", "f": "sl5", "g": "趋势", "ic": -0.0477, "icir": -0.371, "t": -19.78, "pos": 32.4, "nd": 2846}, {"cn": "VOL20/VOL60", "f": "vt_20_60", "g": "量能", "ic": -0.0475, "icir": -0.455, "t": -24.02, "pos": 31.6, "nd": 2792}, {"cn": "MA60斜率", "f": "sl60", "g": "趋势", "ic": 0.0455, "icir": 0.291, "t": 15.35, "pos": 61.8, "nd": 2791}, {"cn": "MACD柱", "f": "hist", "g": "MACD", "ic": -0.0385, "icir": -0.297, "t": -15.84, "pos": 39.1, "nd": 2850}, {"cn": "过去5日涨幅", "f": "ret5", "g": "价格", "ic": -0.0361, "icir": -0.274, "t": -14.61, "pos": 39.8, "nd": 2846}, {"cn": "MA20斜率", "f": "sl20", "g": "趋势", "ic": 0.0284, "icir": 0.189, "t": 10.03, "pos": 55.7, "nd": 2831}, {"cn": "VOL5/VOL20", "f": "vt_5_20", "g": "量能", "ic": -0.0275, "icir": -0.297, "t": -15.79, "pos": 36.6, "nd": 2832}, {"cn": "MACD柱Z", "f": "hist_z", "g": "MACD", "ic": -0.0266, "icir": -0.224, "t": -11.82, "pos": 40.6, "nd": 2792}, {"cn": "VOL/VOL20", "f": "rvol20", "g": "量能", "ic": -0.0259, "icir": -0.289, "t": -15.36, "pos": 36.5, "nd": 2831}, {"cn": "VR20", "f": "vr20m", "g": "量能", "ic": -0.0229, "icir": -0.256, "t": -13.6, "pos": 38.0, "nd": 2831}, {"cn": "MACD柱3日变化", "f": "dhist3", "g": "MACD", "ic": -0.0097, "icir": -0.079, "t": -4.21, "pos": 46.5, "nd": 2848}, {"cn": "5日量能趋势", "f": "dvt5", "g": "量能", "ic": -0.0049, "icir": -0.064, "t": -3.42, "pos": 46.7, "nd": 2827}, {"cn": "MACD柱1日变化", "f": "dhist1", "g": "MACD", "ic": -0.0038, "icir": -0.031, "t": -1.67, "pos": 48.9, "nd": 2850}, {"cn": "MACD柱连续改善天数", "f": "hist_upstreak", "g": "MACD", "ic": -0.0014, "icir": -0.012, "t": -0.66, "pos": 49.7, "nd": 2846}], "ic_shape": [{"cn": "距MA60", "exw": [0.369, 0.243, 0.133, 0.126, 0.085, 0.002, -0.167, -0.394, -0.795, -1.615]}, {"cn": "过去40日", "exw": [0.383, 0.2, 0.127, 0.073, -0.018, -0.088, -0.232, -0.422, -0.74, -1.401]}, {"cn": "相对同规模20日", "exw": [0.353, 0.296, 0.231, 0.194, 0.11, -0.029, -0.181, -0.438, -0.877, -1.732]}, {"cn": "VOL/VOL20", "exw": [-0.341, -0.187, -0.067, 0.008, 0.043, 0.019, 0.007, -0.072, -0.275, -1.074]}, {"cn": "MACD柱Z", "exw": [-0.346, -0.124, -0.077, -0.003, 0.053, 0.029, 0.0, -0.119, -0.388, -1.239]}, {"cn": "20日历史波动", "exw": [-0.359, -0.112, 0.036, 0.157, 0.1, 0.115, 0.006, -0.214, -0.467, -1.199]}, {"cn": "MA5斜率", "exw": [0.653, 0.429, 0.317, 0.16, 0.018, -0.129, -0.301, -0.489, -0.827, -1.66]}, {"cn": "MACD柱连续改善天数", "exw": [-0.684, -0.415, -0.228, -0.056, -0.002, -0.034, -0.128, -0.183, -0.479, -0.902]}], "fmb": [{"cn": "MA60斜率", "coef": -0.1491, "t": -39.52}, {"cn": "MA20斜率", "coef": -0.13335, "t": -67.06}, {"cn": "过去60日涨幅", "coef": -0.12582, "t": -31.74}, {"cn": "过去20日涨幅", "coef": -0.05333, "t": -12.41}, {"cn": "相对同规模20日强弱", "coef": -0.03594, "t": -8.67}, {"cn": "距MA60", "coef": -0.03415, "t": -6.33}, {"cn": "MACD柱Z", "coef": -0.0145, "t": -8.57}, {"cn": "MACD柱连续改善天数", "coef": 0.00816, "t": 6.53}, {"cn": "VOL/VOL20", "coef": -0.00763, "t": -6.98}, {"cn": "20日历史波动", "coef": -0.00552, "t": -2.31}, {"cn": "VOL5/VOL20", "coef": -0.00415, "t": -3.65}, {"cn": "距MA120", "coef": 0.00221, "t": 0.39}, {"cn": "MACD柱3日变化", "coef": 0.00021, "t": 0.17}], "strat8": [{"name": "1 纯价格超跌", "n": 1737367, "cagr": 10.7, "mdd": -53.5, "sharpe": 0.48, "win": 48.3, "pf": 1.24, "payoff": 1.33, "exw20": 0.219, "t20": 4.03, "n_trade": 1711654, "is_": 53.6, "oos": 107.3, "seg": [53.6, 17.2, 17.4, 50.8]}, {"name": "2 +MA5反转(Close>MA5)", "n": 651688, "cagr": 9.3, "mdd": -55.5, "sharpe": 0.44, "win": 49.4, "pf": 1.3, "payoff": 1.33, "exw20": -0.224, "t20": -3.03, "n_trade": 640312, "is_": 41.5, "oos": 95.0, "seg": [41.5, 18.9, 14.1, 43.8]}, {"name": "3 +MACD改善(hist>0)", "n": 852479, "cagr": 8.2, "mdd": -58.8, "sharpe": 0.41, "win": 49.2, "pf": 1.25, "payoff": 1.3, "exw20": -0.064, "t20": -0.9, "n_trade": 838743, "is_": 23.5, "oos": 99.3, "seg": [23.5, 19.6, 11.9, 49.0]}, {"name": "4 +放量反转(量比>1.2)", "n": 475041, "cagr": 9.5, "mdd": -56.6, "sharpe": 0.44, "win": 50.8, "pf": 1.48, "payoff": 1.43, "exw20": -0.018, "t20": -0.29, "n_trade": 469324, "is_": 38.6, "oos": 102.6, "seg": [38.6, 18.1, 14.9, 49.3]}, {"name": "5 +相对强势(rs_sz20强)", "n": 114646, "cagr": -3.9, "mdd": -77.6, "sharpe": 0.05, "win": 43.3, "pf": 0.95, "payoff": 1.25, "exw20": -1.103, "t20": -10.43, "n_trade": 110243, "is_": -40.3, "oos": 6.9, "seg": [-40.3, -2.4, -1.1, 10.7]}, {"name": "6 +市场趋势(市场Close>MA60)", "n": 1019015, "cagr": 0.0, "mdd": -73.7, "sharpe": 0.14, "win": 43.9, "pf": 0.94, "payoff": 1.21, "exw20": -0.596, "t20": -10.2, "n_trade": 998233, "is_": -26.2, "oos": 35.5, "seg": [-26.2, 24.6, -6.5, 16.3]}, {"name": "7 +MACD改善+放量", "n": 279284, "cagr": 4.5, "mdd": -63.6, "sharpe": 0.3, "win": 50.3, "pf": 1.39, "payoff": 1.37, "exw20": -0.457, "t20": -5.63, "n_trade": 275337, "is_": -2.1, "oos": 68.8, "seg": [-2.1, 12.8, 7.6, 39.1]}, {"name": "8 +MACD改善+放量+市场趋势", "n": 191412, "cagr": -4.0, "mdd": -77.4, "sharpe": -0.0, "win": 49.2, "pf": 1.31, "payoff": 1.35, "exw20": -1.162, "t20": -12.88, "n_trade": 187930, "is_": -42.3, "oos": 8.3, "seg": [-42.3, 18.5, -14.5, 6.9]}, {"name": "9 [修正] 深度超跌+小市值30%", "n": 464041, "cagr": 24.2, "mdd": -48.1, "sharpe": 0.82, "win": 51.9, "pf": 1.55, "payoff": 1.44, "exw20": 1.161, "t20": 17.12, "n_trade": 459479, "is_": 221.6, "oos": 266.6, "seg": [221.6, 35.6, 53.8, 75.8]}, {"name": "10 [修正] 深度超跌+小市值10%", "n": 135513, "cagr": 29.7, "mdd": -47.4, "sharpe": 0.94, "win": 52.0, "pf": 1.64, "payoff": 1.52, "exw20": 1.572, "t20": 15.16, "n_trade": 134115, "is_": 319.1, "oos": 362.1, "seg": [319.1, 20.3, 118.5, 75.8]}, {"name": "11 [修正] 深度超跌+市场Close<MA60", "n": 718352, "cagr": 16.7, "mdd": -44.9, "sharpe": 0.66, "win": 54.6, "pf": 1.72, "payoff": 1.43, "exw20": 1.286, "t20": 14.1, "n_trade": 713421, "is_": 130.0, "oos": 152.6, "seg": [130.0, 20.1, 35.2, 55.6]}, {"name": "12 [修正] 深度超跌+市场高波动", "n": 807684, "cagr": 17.4, "mdd": -46.8, "sharpe": 0.68, "win": 52.6, "pf": 1.57, "payoff": 1.42, "exw20": 0.792, "t20": 9.05, "n_trade": 803730, "is_": 211.3, "oos": 100.3, "seg": [211.3, 24.2, 33.4, 20.9]}, {"name": "13 [修正] 深度超跌+rs_sz20弱", "n": 1132863, "cagr": 12.6, "mdd": -52.7, "sharpe": 0.52, "win": 49.1, "pf": 1.31, "payoff": 1.35, "exw20": 0.36, "t20": 6.13, "n_trade": 1119128, "is_": 80.7, "oos": 113.0, "seg": [80.7, 19.5, 20.3, 48.1]}, {"name": "14 [修正] 深度超跌+小市值+熊市", "n": 184872, "cagr": 22.2, "mdd": -39.5, "sharpe": 0.81, "win": 57.3, "pf": 2.03, "payoff": 1.51, "exw20": 1.87, "t20": 15.38, "n_trade": 183662, "is_": 200.5, "oos": 228.1, "seg": [200.5, 18.2, 73.7, 59.7]}, {"name": "15 [修正] 深度超跌+小市值+熊市+rs弱", "n": 135346, "cagr": 24.7, "mdd": -39.8, "sharpe": 0.87, "win": 58.1, "pf": 2.14, "payoff": 1.54, "exw20": 2.042, "t20": 15.79, "n_trade": 134401, "is_": 239.7, "oos": 262.7, "seg": [239.7, 21.2, 88.2, 59.0]}], "simple": [{"name": "K1 距MA60 D1", "ncond": 1, "n": 1045862, "cagr": 14.7, "mdd": -53.4, "sharpe": 0.58, "win": 49.0, "pf": 1.29, "exw20": 0.369, "t20": 5.85, "is_": 104.5, "oos": 132.8, "seg": [104.5, 20.7, 19.3, 61.8]}, {"name": "K2 距MA60 D1 + 小市值30%", "ncond": 2, "n": 253791, "cagr": 28.0, "mdd": -46.9, "sharpe": 0.9, "win": 52.9, "pf": 1.64, "exw20": 1.281, "t20": 16.49, "is_": 323.2, "oos": 293.8, "seg": [323.2, 41.9, 53.8, 80.5]}, {"name": "K3 距MA60 D1 + 小市值30% + 熊市", "ncond": 3, "n": 105908, "cagr": 29.9, "mdd": -41.3, "sharpe": 0.98, "win": 58.5, "pf": 2.19, "exw20": 2.189, "t20": 15.97, "is_": 409.9, "oos": 287.4, "seg": [409.9, 24.5, 80.9, 72.0]}, {"name": "K4 深度超跌 + 小市值30%", "ncond": 2, "n": 464041, "cagr": 24.2, "mdd": -48.1, "sharpe": 0.82, "win": 51.9, "pf": 1.55, "exw20": 1.161, "t20": 17.12, "is_": 221.6, "oos": 266.6, "seg": [221.6, 35.6, 53.8, 75.8]}, {"name": "K5 深度超跌 + 小市值30% + 熊市", "ncond": 3, "n": 184872, "cagr": 22.2, "mdd": -39.5, "sharpe": 0.81, "win": 57.3, "pf": 2.03, "exw20": 1.87, "t20": 15.38, "is_": 200.5, "oos": 228.1, "seg": [200.5, 18.2, 73.7, 59.7]}, {"name": "K6 深度超跌 + 小市值30% + 熊市 + rs弱", "ncond": 4, "n": 135346, "cagr": 24.7, "mdd": -39.8, "sharpe": 0.87, "win": 58.1, "pf": 2.14, "exw20": 2.042, "t20": 15.79, "is_": 239.7, "oos": 262.7, "seg": [239.7, 21.2, 88.2, 59.0]}, {"name": "K7 深度超跌 + 小市值10% + 熊市 + rs弱", "ncond": 4, "n": 37385, "cagr": 25.9, "mdd": -41.3, "sharpe": 0.87, "win": 58.0, "pf": 2.27, "exw20": 2.173, "t20": 11.85, "is_": 242.9, "oos": 301.5, "seg": [242.9, -0.9, 156.9, 57.7]}, {"name": "K8 深度超跌 + 小市值10% + 熊市 + rs弱 + 高波动", "ncond": 5, "n": 23547, "cagr": 22.8, "mdd": -39.2, "sharpe": 0.88, "win": 63.7, "pf": 2.83, "exw20": 2.344, "t20": 12.35, "is_": 397.1, "oos": 109.4, "seg": [397.1, 19.4, 5.3, 66.6]}, {"name": "K9 距MA60 D1 + 熊市 + rs弱", "ncond": 3, "n": 378845, "cagr": 23.5, "mdd": -42.9, "sharpe": 0.83, "win": 56.1, "pf": 1.87, "exw20": 1.592, "t20": 14.68, "is_": 260.2, "oos": 207.0, "seg": [260.2, 27.8, 45.2, 65.4]}, {"name": "K10 深度超跌 + 熊市", "ncond": 2, "n": 718352, "cagr": 16.7, "mdd": -44.9, "sharpe": 0.66, "win": 54.6, "pf": 1.72, "exw20": 1.286, "t20": 14.1, "is_": 130.0, "oos": 152.6, "seg": [130.0, 20.1, 35.2, 55.6]}, {"name": "K11 ret20 D1~D3 + 小市值30% + 熊市", "ncond": 3, "n": 368132, "cagr": 24.6, "mdd": -42.8, "sharpe": 0.9, "win": 57.5, "pf": 1.97, "exw20": 1.444, "t20": 15.29, "is_": 301.3, "oos": 206.1, "seg": [299.0, 18.7, 76.9, 45.9]}, {"name": "K12 距MA120 D1 + 小市值30% + 熊市", "ncond": 3, "n": 131641, "cagr": 24.5, "mdd": -39.3, "sharpe": 0.86, "win": 57.5, "pf": 1.99, "exw20": 1.951, "t20": 15.33, "is_": 293.9, "oos": 207.8, "seg": [293.9, 17.1, 85.9, 41.4]}], "robust": [{"th": 1, "size": "10%", "mkt": "熊市", "n": 63051, "cagr": 31.5, "mdd": -42.3, "sharpe": 1.01, "win": 59.1, "pf": 2.31, "is_": 463.0, "oos": 303.4, "neg": 0}, {"th": 1, "size": "10%", "mkt": "不限", "n": 155233, "cagr": 30.1, "mdd": -47.6, "sharpe": 0.95, "win": 53.2, "pf": 1.7, "is_": 394.4, "oos": 305.2, "neg": 0}, {"th": 1, "size": "20%", "mkt": "熊市", "n": 105908, "cagr": 29.9, "mdd": -41.3, "sharpe": 0.98, "win": 58.5, "pf": 2.19, "is_": 409.9, "oos": 287.4, "neg": 0}, {"th": 1, "size": "20%", "mkt": "不限", "n": 253791, "cagr": 28.0, "mdd": -46.9, "sharpe": 0.9, "win": 52.9, "pf": 1.64, "is_": 323.2, "oos": 293.8, "neg": 0}, {"th": 1, "size": "30%", "mkt": "熊市", "n": 153597, "cagr": 28.8, "mdd": -40.5, "sharpe": 0.96, "win": 57.8, "pf": 2.1, "is_": 390.3, "oos": 264.6, "neg": 0}, {"th": 1, "size": "30%", "mkt": "不限", "n": 362272, "cagr": 25.9, "mdd": -47.1, "sharpe": 0.85, "win": 52.1, "pf": 1.57, "is_": 284.5, "oos": 258.3, "neg": 0}, {"th": 2, "size": "10%", "mkt": "熊市", "n": 159362, "cagr": 27.0, "mdd": -41.8, "sharpe": 0.93, "win": 57.8, "pf": 2.08, "is_": 351.3, "oos": 238.2, "neg": 0}, {"th": 2, "size": "10%", "mkt": "不限", "n": 390662, "cagr": 27.2, "mdd": -48.2, "sharpe": 0.9, "win": 53.0, "pf": 1.64, "is_": 320.6, "oos": 267.2, "neg": 0}, {"th": 2, "size": "20%", "mkt": "熊市", "n": 254100, "cagr": 26.0, "mdd": -41.2, "sharpe": 0.91, "win": 57.6, "pf": 2.02, "is_": 334.4, "oos": 219.4, "neg": 0}, {"th": 2, "size": "20%", "mkt": "不限", "n": 611551, "cagr": 25.5, "mdd": -47.6, "sharpe": 0.86, "win": 52.8, "pf": 1.59, "is_": 285.9, "oos": 246.1, "neg": 0}, {"th": 2, "size": "30%", "mkt": "熊市", "n": 353341, "cagr": 25.0, "mdd": -41.2, "sharpe": 0.89, "win": 57.1, "pf": 1.96, "is_": 311.5, "oos": 208.8, "neg": 0}, {"th": 2, "size": "30%", "mkt": "不限", "n": 839678, "cagr": 23.8, "mdd": -47.7, "sharpe": 0.82, "win": 52.1, "pf": 1.53, "is_": 249.7, "oos": 224.2, "neg": 0}, {"th": 3, "size": "10%", "mkt": "熊市", "n": 272818, "cagr": 23.9, "mdd": -42.9, "sharpe": 0.87, "win": 57.0, "pf": 1.92, "is_": 291.3, "oos": 193.1, "neg": 0}, {"th": 3, "size": "10%", "mkt": "不限", "n": 667818, "cagr": 25.2, "mdd": -49.1, "sharpe": 0.87, "win": 53.0, "pf": 1.59, "is_": 274.5, "oos": 245.4, "neg": 0}, {"th": 3, "size": "20%", "mkt": "熊市", "n": 421701, "cagr": 23.1, "mdd": -43.7, "sharpe": 0.85, "win": 57.0, "pf": 1.89, "is_": 281.3, "oos": 179.7, "neg": 0}, {"th": 3, "size": "20%", "mkt": "不限", "n": 1017131, "cagr": 23.8, "mdd": -49.0, "sharpe": 0.83, "win": 52.7, "pf": 1.55, "is_": 248.6, "oos": 227.1, "neg": 0}, {"th": 3, "size": "30%", "mkt": "熊市", "n": 572354, "cagr": 22.0, "mdd": -43.7, "sharpe": 0.82, "win": 56.6, "pf": 1.86, "is_": 263.5, "oos": 164.0, "neg": 0}, {"th": 3, "size": "30%", "mkt": "不限", "n": 1364136, "cagr": 22.2, "mdd": -49.1, "sharpe": 0.79, "win": 52.1, "pf": 1.5, "is_": 219.4, "oos": 207.9, "neg": 0}], "robust_year": [{"name": "距MA60 D1 + 小市值30%", "n": 253791, "cagr": 28.0, "mdd": -46.9, "sharpe": 0.9, "win": 52.9, "pf": 1.64, "pos": "9/12", "is_": 323.2, "oos": 293.8, "y": [195.0, 32.0, -16.0, -17.0, 41.0, 10.0, 50.0, -6.0, 20.0, 28.0, 79.0, 1.0], "seg": [323.2, 41.9, 53.8, 80.5]}, {"name": "距MA60 D1~D2 + 小市值30% + 熊市", "n": 254100, "cagr": 26.0, "mdd": -41.2, "sharpe": 0.91, "win": 57.6, "pf": 2.02, "pos": "10/12", "is_": 334.4, "oos": 219.4, "y": [128.0, 51.0, -12.0, -17.0, 44.0, 19.0, 18.0, 1.0, 42.0, 19.0, 51.0, 4.0], "seg": [334.4, 19.9, 68.7, 57.8]}, {"name": "距MA60 D1~D3 + 小市值30% + 熊市", "n": 421701, "cagr": 23.1, "mdd": -43.7, "sharpe": 0.85, "win": 57.0, "pf": 1.89, "pos": "10/12", "is_": 281.3, "oos": 179.7, "y": [119.0, 47.0, -13.0, -20.0, 41.0, 21.0, 17.0, 1.0, 39.0, 15.0, 45.0, 2.0], "seg": [281.3, 17.9, 59.5, 48.7]}, {"name": "距MA120 D1 + 小市值30% + 熊市", "n": 131641, "cagr": 24.5, "mdd": -39.3, "sharpe": 0.86, "win": 57.5, "pf": 1.99, "pos": "10/12", "is_": 293.9, "oos": 207.8, "y": [87.0, 60.0, -12.0, -13.0, 49.0, 16.0, 15.0, 2.0, 44.0, 29.0, 35.0, 4.0], "seg": [293.9, 17.1, 85.9, 41.4]}, {"name": "[对照] 距MA60 D1 剔除最小10%", "n": 974173, "cagr": 13.0, "mdd": -55.0, "sharpe": 0.53, "win": 48.7, "pf": 1.26, "pos": "8/12", "is_": 87.3, "oos": 115.6, "y": [104.0, 5.0, -20.0, -29.0, 38.0, 11.0, 28.0, -7.0, -1.0, 14.0, 54.0, 4.0], "seg": [87.3, 19.2, 12.9, 60.1]}, {"name": "[对照] 距MA60 D1 全市值", "n": 1045862, "cagr": 14.7, "mdd": -53.4, "sharpe": 0.58, "win": 49.0, "pf": 1.29, "pos": "9/12", "is_": 104.5, "oos": 132.8, "y": [112.0, 7.0, -19.0, -28.0, 40.0, 12.0, 30.0, -7.0, 1.0, 18.0, 57.0, 3.0], "seg": [104.5, 20.7, 19.3, 61.8]}, {"name": "[对照] 全A等权(市场)", "n": 10535057, "cagr": 7.5, "mdd": -65.1, "sharpe": 0.39, "win": 47.6, "pf": 1.18, "pos": "8/12", "is_": 38.2, "oos": 65.3, "y": [60.0, 4.0, -18.0, -32.0, 30.0, 17.0, 24.0, -11.0, 6.0, 3.0, 42.0, -4.0], "seg": [41.1, 10.3, 9.5, 36.9]}], "years": [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026], "attr": [{"name": "A 全市场(等权)", "n": 10535057, "cagr": 7.5, "mdd": -65.1, "sharpe": 0.39, "win": 47.6, "pf": 1.18, "mean": 0.81, "n_trade": 10380688, "y": [60.0, 4.0, -18.0, -32.0, 30.0, 17.0, 24.0, -11.0, 6.0, 3.0, 42.0, -4.0]}, {"name": "B 小市值30% 单独(无超跌)", "n": 3146576, "cagr": 21.7, "mdd": -50.8, "sharpe": 0.81, "win": 51.7, "pf": 1.47, "mean": 1.74, "n_trade": 3098553, "y": [122.0, 27.0, -19.0, -25.0, 36.0, 20.0, 41.0, 3.0, 30.0, 10.0, 62.0, 1.0]}, {"name": "C 小市值10% 单独(无超跌)", "n": 1047817, "cagr": 26.5, "mdd": -50.5, "sharpe": 0.93, "win": 52.4, "pf": 1.59, "mean": 2.1, "n_trade": 1031119, "y": [150.0, 34.0, -19.0, -23.0, 38.0, 18.0, 47.0, -2.0, 50.0, 21.0, 70.0, -3.0]}, {"name": "D 距MA60 D1 单独(全市值)", "n": 1045862, "cagr": 14.7, "mdd": -53.4, "sharpe": 0.58, "win": 49.0, "pf": 1.29, "mean": 1.31, "n_trade": 1031236, "y": [112.0, 7.0, -19.0, -28.0, 40.0, 12.0, 30.0, -7.0, 1.0, 18.0, 57.0, 3.0]}, {"name": "E 距MA60 D1 + 小市值30%", "n": 253791, "cagr": 28.0, "mdd": -46.9, "sharpe": 0.9, "win": 52.9, "pf": 1.64, "mean": 2.52, "n_trade": 251367, "y": [195.0, 32.0, -16.0, -17.0, 41.0, 10.0, 50.0, -6.0, 20.0, 28.0, 79.0, 1.0]}, {"name": "F E + 熊市", "n": 105908, "cagr": 29.9, "mdd": -41.3, "sharpe": 0.98, "win": 58.5, "pf": 2.19, "mean": 4.52, "n_trade": 105146, "y": [139.0, 54.0, -7.0, -17.0, 48.0, 21.0, 21.0, 3.0, 44.0, 26.0, 61.0, 7.0]}, {"name": "G 小市值30% + 熊市(无超跌)", "n": 1344752, "cagr": 17.9, "mdd": -45.7, "sharpe": 0.75, "win": 55.0, "pf": 1.66, "mean": 2.39, "n_trade": 1335659, "y": [87.0, 39.0, -13.0, -25.0, 37.0, 24.0, 11.0, 4.0, 37.0, 7.0, 32.0, 3.0]}, {"name": "H 距MA60 D1 + 中市值(30-70%)", "n": 454635, "cagr": 15.0, "mdd": -51.9, "sharpe": 0.58, "win": 48.9, "pf": 1.28, "mean": 1.25, "n_trade": 449715, "y": [119.0, 9.0, -18.0, -26.0, 36.0, 8.0, 32.0, -8.0, 4.0, 12.0, 55.0, 6.0]}, {"name": "I 距MA60 D1 + 大市值(70-90%)", "n": 230799, "cagr": 2.9, "mdd": -69.6, "sharpe": 0.26, "win": 46.4, "pf": 1.12, "mean": 0.58, "n_trade": 226431, "y": [72.0, -6.0, -29.0, -35.0, 35.0, 9.0, 12.0, -11.0, -8.0, 2.0, 42.0, -5.0]}, {"name": "J 距MA120 D1 + 小市值30% + 熊市", "n": 131641, "cagr": 24.5, "mdd": -39.3, "sharpe": 0.86, "win": 57.5, "pf": 1.99, "mean": 3.74, "n_trade": 130708, "y": [87.0, 60.0, -12.0, -13.0, 49.0, 16.0, 15.0, 2.0, 44.0, 29.0, 35.0, 4.0]}]};
+
+function C(){return{
+  bg:'#0f1115',panel:'#161a21',line:'#2a3140',fg:'#e6e9ef',fg2:'#a8b2c4',fg3:'#6b7689',
+  up:'#ff5c5c',dn:'#31c48d',acc:'#5b9dff',acc2:'#c084fc',warn:'#fbbf24'
+};}
+var T=C();
+var BASE={backgroundColor:'transparent',textStyle:{color:T.fg2,fontSize:11},
+  grid:{left:64,right:26,top:44,bottom:44},
+  tooltip:{trigger:'axis',backgroundColor:T.panel,borderColor:T.line,
+    textStyle:{color:T.fg,fontSize:12}}};
+
+function mk(id,opt){
+  var el=document.getElementById(id);
+  if(!el) return null;
+  var ch=echarts.init(el);
+  ch.setOption(opt);
+  window.addEventListener('resize',function(){ch.resize();});
+  return ch;
+}
+function col(v){return v>0?T.up:T.dn;}
+function barOpt(cats,vals,title,rot){
+  return {backgroundColor:'transparent',
+    title:{text:title,left:'center',top:6,textStyle:{color:T.fg2,fontSize:12.5,fontWeight:600}},
+    grid:{left:64,right:26,top:48,bottom:rot?72:44},
+    tooltip:{trigger:'axis',backgroundColor:T.panel,borderColor:T.line,
+      textStyle:{color:T.fg,fontSize:12},valueFormatter:function(v){return v+'%';}},
+    xAxis:{type:'category',data:cats,axisLabel:{color:T.fg3,fontSize:10.5,rotate:rot||0},
+      axisLine:{lineStyle:{color:T.line}}},
+    yAxis:{type:'value',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+      splitLine:{lineStyle:{color:'#1e242e'}}},
+    series:[{type:'bar',data:vals.map(function(v){return {value:v,
+      itemStyle:{color:col(v),borderRadius:[3,3,0,0]}};}),
+      barMaxWidth:34,
+      label:{show:true,position:'top',color:T.fg3,fontSize:10,
+        formatter:function(p){return p.value.toFixed(1);}}}]};
+}
+
+/* ---------- 图1 十分位结构 ---------- */
+(function(){
+  var dims=D.decile.dims, exw=D.decile.exw, t=D.decile.t;
+  var cats=[]; for(var k=1;k<=10;k++) cats.push('D'+k);
+  var series=dims.map(function(nm,i){
+    return {name:nm,type:'line',data:exw[i],smooth:true,symbolSize:5,
+      lineStyle:{width:2},emphasis:{focus:'series'},
+      connectNulls:true};
+  });
+  mk('c-decile',{
+    backgroundColor:'transparent',
+    color:[T.acc,T.acc2,'#4dd9a3','#fbbf24','#f472b6','#38bdf8','#fb923c','#a3e635'],
+    title:{text:'H=20 日超额收益 · 十分位结构（%）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:13,fontWeight:600}},
+    legend:{data:dims,bottom:2,textStyle:{color:T.fg2,fontSize:11.5},
+      itemWidth:16,itemHeight:8},
+    grid:{left:66,right:30,top:46,bottom:52},
+    tooltip:{trigger:'axis',backgroundColor:T.panel,borderColor:T.line,
+      textStyle:{color:T.fg,fontSize:12},
+      valueFormatter:function(v){return v===null?'-':v.toFixed(3)+'%';}},
+    xAxis:{type:'category',data:cats,boundaryGap:false,
+      axisLabel:{color:T.fg3,fontSize:11},axisLine:{lineStyle:{color:T.line}}},
+    yAxis:{type:'value',axisLabel:{color:T.fg3,fontSize:11,formatter:'{value}%'},
+      splitLine:{lineStyle:{color:'#1e242e'}}},
+    series:series.concat([{type:'line',data:[],markLine:{silent:true,
+      symbol:'none',lineStyle:{color:T.fg3,type:'dashed',width:1},
+      data:[{yAxis:0}],label:{show:false}}}])
+  });
+})();
+
+/* ---------- 图2 最优分位 vs 窗口 ---------- */
+(function(){
+  var names=['过去5日','过去10日','过去20日','过去40日','过去60日','距MA20','距MA60','距MA120'];
+  var best=[],d1=[];
+  for(var i=0;i<8;i++){
+    var a=D.decile.exw[i];
+    var bi=0,bv=-1e9;
+    for(var k=0;k<10;k++){if(a[k]!==null&&a[k]>bv){bv=a[k];bi=k;}}
+    best.push(bi+1); d1.push(a[0]);
+  }
+  mk('c-shape',{
+    backgroundColor:'transparent',
+    title:{text:'最优分位（柱）与 D1 超额（折线，%）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:12.5,fontWeight:600}},
+    grid:{left:64,right:62,top:48,bottom:62},
+    tooltip:{trigger:'axis',backgroundColor:T.panel,borderColor:T.line,
+      textStyle:{color:T.fg,fontSize:12}},
+    legend:{data:['最优分位','D1 超额'],bottom:2,textStyle:{color:T.fg2,fontSize:11.5},
+      itemWidth:16,itemHeight:8},
+    xAxis:{type:'category',data:names,axisLabel:{color:T.fg3,fontSize:10.5,rotate:20},
+      axisLine:{lineStyle:{color:T.line}}},
+    yAxis:[
+      {type:'value',name:'分位',min:0,max:10,axisLabel:{color:T.fg3,fontSize:10.5},
+        splitLine:{lineStyle:{color:'#1e242e'}},nameTextStyle:{color:T.fg3,fontSize:10}},
+      {type:'value',name:'超额%',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+        splitLine:{show:false},nameTextStyle:{color:T.fg3,fontSize:10}}],
+    series:[
+      {name:'最优分位',type:'bar',data:best,barMaxWidth:30,
+        itemStyle:{color:T.acc,borderRadius:[3,3,0,0]},
+        label:{show:true,position:'top',color:T.fg2,fontSize:10.5,
+          formatter:function(p){return 'D'+p.value;}}},
+      {name:'D1 超额',type:'line',yAxisIndex:1,data:d1,smooth:true,symbolSize:7,
+        lineStyle:{color:T.warn,width:2.5},itemStyle:{color:T.warn},
+        label:{show:true,position:'bottom',color:T.warn,fontSize:10,
+          formatter:function(p){return p.value.toFixed(2);}}}]
+  });
+})();
+
+/* ---------- 图3 组合 ---------- */
+(function(){
+  var c=D.combos.slice().sort(function(a,b){return b.exw20-a.exw20;});
+  mk('c-combo',{
+    backgroundColor:'transparent',
+    title:{text:'21 个组合 H=20 超额（%）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:13,fontWeight:600}},
+    grid:{left:74,right:40,top:48,bottom:26,containLabel:true},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:T.panel,
+      borderColor:T.line,textStyle:{color:T.fg,fontSize:12},
+      formatter:function(ps){var p=ps[0];var r=c[p.dataIndex];
+        return r.name+'<br/>超额 '+r.exw20.toFixed(3)+'%  (t'+r.t20+')<br/>n='+
+          r.n.toLocaleString()+'<br/>CAGR '+r.cagr+'%  MDD '+r.mdd+'%';}},
+    xAxis:{type:'value',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+      splitLine:{lineStyle:{color:'#1e242e'}}},
+    yAxis:{type:'category',data:c.map(function(r){return r.name;}),
+      inverse:true,axisLabel:{color:T.fg2,fontSize:10.5},
+      axisLine:{lineStyle:{color:T.line}}},
+    series:[{type:'bar',data:c.map(function(r){return {value:r.exw20,
+      itemStyle:{color:col(r.exw20),borderRadius:[0,3,3,0]}};}),
+      barMaxWidth:16,
+      label:{show:true,position:'right',color:T.fg3,fontSize:10,
+        formatter:function(p){return p.value.toFixed(3)+'%';}}}]
+  });
+})();
+
+/* ---------- 图4 确认信号 ---------- */
+(function(){
+  var rows=D.confirm;
+  var S=rows.filter(function(r){return r.tag.indexOf('S ret20')===0;});
+  var L=rows.filter(function(r){return r.tag.indexOf('L 深度')===0;});
+  function delta(arr){
+    var b=arr.filter(function(r){return r.tag.indexOf('无确认')>=0;})[0];
+    var out=[];
+    arr.forEach(function(r){
+      if(r.tag.indexOf('无确认')>=0) return;
+      out.push({nm:r.tag.split('|')[1].trim(),v:+(r.exw20-b.exw20).toFixed(3),
+        raw:r.exw20,tt:r.t20});
+    });
+    return {base:b.exw20,list:out};
+  }
+  var ds=delta(S), dl=delta(L);
+  var cats=ds.list.map(function(o){return o.nm;});
+  mk('c-confirm',{
+    backgroundColor:'transparent',
+    title:{text:'确认信号相对基线的超额变化（H=20，%）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:13,fontWeight:600}},
+    grid:{left:74,right:40,top:52,bottom:62,containLabel:true},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:T.panel,
+      borderColor:T.line,textStyle:{color:T.fg,fontSize:12},
+      valueFormatter:function(v){return v.toFixed(3)+'%';}},
+    legend:{data:['基线 S (ret20 D2~D6)','基线 L (深度超跌)'],bottom:2,
+      textStyle:{color:T.fg2,fontSize:11.5},itemWidth:16,itemHeight:8},
+    xAxis:{type:'category',data:cats,axisLabel:{color:T.fg2,fontSize:10.5,rotate:26},
+      axisLine:{lineStyle:{color:T.line}}},
+    yAxis:{type:'value',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+      splitLine:{lineStyle:{color:'#1e242e'}}},
+    series:[
+      {name:'基线 S (ret20 D2~D6)',type:'bar',
+        data:ds.list.map(function(o){return {value:o.v,
+          itemStyle:{color:col(o.v),borderRadius:[3,3,0,0]}};}),
+        barMaxWidth:26,
+        label:{show:true,position:'bottom',color:T.fg3,fontSize:9.5,
+          formatter:function(p){return p.value.toFixed(2);}}},
+      {name:'基线 L (深度超跌)',type:'bar',
+        data:dl.list.map(function(o){return {value:o.v,
+          itemStyle:{color:col(o.v),opacity:0.55,borderRadius:[3,3,0,0]}};}),
+        barMaxWidth:26,
+        label:{show:true,position:'top',color:T.fg3,fontSize:9.5,
+          formatter:function(p){return p.value.toFixed(2);}}}]
+  });
+})();
+
+/* ---------- 图5 量能 ---------- */
+(function(){
+  var rows=D.vol.filter(function(r){return r.tag.indexOf('L 深度')===0;});
+  var ge=[],le=[],cats=[],thr=['0.5','0.7','0.9','1.0','1.1','1.2','1.5','2.0','2.5'];
+  var base=null;
+  rows.forEach(function(r){
+    if(r.tag.indexOf('基线')>=0){base=r.exw20;return;}
+    var m=r.tag.match(/量比(>=|<=)([\d.]+)/);
+    if(m){ if(m[1]==='>=') ge.push({t:m[2],v:r.exw20}); else le.push({t:m[2],v:r.exw20}); }
+  });
+  function getv(arr,t){for(var i=0;i<arr.length;i++){if(arr[i].t===t)return arr[i].v;}return null;}
+  mk('c-vol',{
+    backgroundColor:'transparent',
+    title:{text:'量比阈值网格（基线 L，H=20 超额 %）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:12.5,fontWeight:600}},
+    grid:{left:64,right:30,top:50,bottom:52},
+    tooltip:{trigger:'axis',backgroundColor:T.panel,borderColor:T.line,
+      textStyle:{color:T.fg,fontSize:12},
+      valueFormatter:function(v){return v===null?'-':v.toFixed(3)+'%';}},
+    legend:{data:['量比 ≥ 阈值','量比 ≤ 阈值','基线(无过滤)'],bottom:2,
+      textStyle:{color:T.fg2,fontSize:11.5},itemWidth:16,itemHeight:8},
+    xAxis:{type:'category',data:thr,axisLabel:{color:T.fg3,fontSize:11},
+      axisLine:{lineStyle:{color:T.line}}},
+    yAxis:{type:'value',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+      splitLine:{lineStyle:{color:'#1e242e'}}},
+    series:[
+      {name:'量比 ≥ 阈值',type:'line',data:thr.map(function(t){return getv(ge,t);}),
+        smooth:true,symbolSize:7,lineStyle:{color:T.acc,width:2.5},itemStyle:{color:T.acc}},
+      {name:'量比 ≤ 阈值',type:'line',data:thr.map(function(t){return getv(le,t);}),
+        smooth:true,symbolSize:7,lineStyle:{color:T.acc2,width:2.5},itemStyle:{color:T.acc2}},
+      {name:'基线(无过滤)',type:'line',data:thr.map(function(){return base;}),
+        symbol:'none',lineStyle:{color:T.warn,width:1.8,type:'dashed'}}]
+  });
+})();
+
+/* ---------- 图6 市场环境 ---------- */
+(function(){
+  var rows=D.market.filter(function(r){return r.tag.indexOf('L 深度')===0;});
+  var keep=['全环境','市场 Close>MA60','市场 Close<MA60','市场 MA20>MA60','市场 MA20<MA60',
+            '市场 HV20 > 中位','市场 HV20 < 中位','Breadth > 中位','Breadth < 中位'];
+  var cats=[],vals=[];
+  keep.forEach(function(k){
+    for(var i=0;i<rows.length;i++){
+      if(rows[i].tag.split('|')[1].trim()===k){cats.push(k);vals.push(rows[i].exw20);break;}
+    }
+  });
+  mk('c-market',{
+    backgroundColor:'transparent',
+    title:{text:'市场环境过滤 · H=20 超额（%）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:12.5,fontWeight:600}},
+    grid:{left:140,right:46,top:48,bottom:30,containLabel:true},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:T.panel,
+      borderColor:T.line,textStyle:{color:T.fg,fontSize:12},
+      valueFormatter:function(v){return v.toFixed(3)+'%';}},
+    xAxis:{type:'value',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+      splitLine:{lineStyle:{color:'#1e242e'}}},
+    yAxis:{type:'category',data:cats,inverse:true,
+      axisLabel:{color:T.fg2,fontSize:11},axisLine:{lineStyle:{color:T.line}}},
+    series:[{type:'bar',data:vals.map(function(v){return {value:v,
+      itemStyle:{color:col(v),borderRadius:[0,3,3,0]}};}),barMaxWidth:18,
+      label:{show:true,position:'right',color:T.fg3,fontSize:10.5,
+        formatter:function(p){return p.value.toFixed(3)+'%';}}}]
+  });
+})();
+
+/* ---------- 图7 相对强弱 ---------- */
+(function(){
+  var rows=D.rs.filter(function(r){
+    return r.tag.indexOf('L 深度')===0 && r.tag.indexOf('rs_sz20')>=0 &&
+      r.tag.indexOf('基线')<0;});
+  var order=['D1 最弱','D1~D3 弱','D4~D7 中','D8~D10 强'];
+  var cats=[],vals=[],tt=[];
+  order.forEach(function(k){
+    for(var i=0;i<rows.length;i++){
+      if(rows[i].tag.indexOf(k)>=0){cats.push('rs_sz20 '+k);vals.push(rows[i].exw20);
+        tt.push(rows[i].t20);break;}
+    }
+  });
+  mk('c-rs',{
+    backgroundColor:'transparent',
+    title:{text:'相对同规模强弱（rs_sz20）各分位 · H=20 超额（%）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:12.5,fontWeight:600}},
+    grid:{left:64,right:30,top:50,bottom:56},
+    tooltip:{trigger:'axis',backgroundColor:T.panel,borderColor:T.line,
+      textStyle:{color:T.fg,fontSize:12},
+      formatter:function(ps){var i=ps[0].dataIndex;
+        return cats[i]+'<br/>超额 '+vals[i].toFixed(3)+'%  (t'+tt[i]+')';}},
+    xAxis:{type:'category',data:cats,axisLabel:{color:T.fg3,fontSize:11},
+      axisLine:{lineStyle:{color:T.line}}},
+    yAxis:{type:'value',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+      splitLine:{lineStyle:{color:'#1e242e'}}},
+    series:[{type:'bar',data:vals.map(function(v){return {value:v,
+      itemStyle:{color:col(v),borderRadius:[3,3,0,0]}};}),barMaxWidth:56,
+      label:{show:true,position:'top',color:T.fg3,fontSize:11,
+        formatter:function(p){return p.value.toFixed(3)+'%';}}}]
+  });
+})();
+
+/* ---------- 图8 市值 ---------- */
+(function(){
+  var rows=D.size.filter(function(r){return r.tag.indexOf('L 深度')===0;});
+  var order=['最小10%','10-30%','30-70%','70-90%','最大10%'];
+  var cats=[],vals=[],cg=[];
+  order.forEach(function(k){
+    for(var i=0;i<rows.length;i++){
+      if(rows[i].tag.split('|')[1].trim()===k){cats.push(k);vals.push(rows[i].exw20);
+        cg.push(rows[i].cagr);break;}
+    }
+  });
+  mk('c-size',{
+    backgroundColor:'transparent',
+    title:{text:'市值分组 · H=20 超额（柱，%）与年化（折线，%）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:12.5,fontWeight:600}},
+    grid:{left:64,right:64,top:50,bottom:48},
+    tooltip:{trigger:'axis',backgroundColor:T.panel,borderColor:T.line,
+      textStyle:{color:T.fg,fontSize:12}},
+    legend:{data:['H=20 超额','CAGR'],bottom:2,textStyle:{color:T.fg2,fontSize:11.5},
+      itemWidth:16,itemHeight:8},
+    xAxis:{type:'category',data:cats,axisLabel:{color:T.fg2,fontSize:11.5},
+      axisLine:{lineStyle:{color:T.line}}},
+    yAxis:[
+      {type:'value',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+        splitLine:{lineStyle:{color:'#1e242e'}}},
+      {type:'value',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+        splitLine:{show:false}}],
+    series:[
+      {name:'H=20 超额',type:'bar',data:vals.map(function(v){return {value:v,
+        itemStyle:{color:col(v),borderRadius:[3,3,0,0]}};}),barMaxWidth:62,
+        label:{show:true,position:'top',color:T.fg3,fontSize:11,
+          formatter:function(p){return p.value.toFixed(3)+'%';}}},
+      {name:'CAGR',type:'line',yAxisIndex:1,data:cg,smooth:true,symbolSize:8,
+        lineStyle:{color:T.warn,width:2.5},itemStyle:{color:T.warn},
+        label:{show:true,position:'bottom',color:T.warn,fontSize:10.5,
+          formatter:function(p){return p.value.toFixed(1);}}}]
+  });
+})();
+
+/* ---------- 图9 因子分位形状 ---------- */
+(function(){
+  var rows=D.ic_shape;
+  var cats=[]; for(var k=1;k<=10;k++) cats.push('D'+k);
+  mk('c-icshape',{
+    backgroundColor:'transparent',
+    color:[T.acc,T.warn,'#4dd9a3',T.acc2,'#f472b6','#38bdf8','#fb923c','#a3e635'],
+    title:{text:'8 个代表性因子的十分位结构（H=20 超额 %）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:13,fontWeight:600}},
+    legend:{data:rows.map(function(r){return r.cn;}),bottom:2,
+      textStyle:{color:T.fg2,fontSize:11.5},itemWidth:16,itemHeight:8},
+    grid:{left:64,right:30,top:46,bottom:52},
+    tooltip:{trigger:'axis',backgroundColor:T.panel,borderColor:T.line,
+      textStyle:{color:T.fg,fontSize:12},
+      valueFormatter:function(v){return v===null?'-':v.toFixed(3)+'%';}},
+    xAxis:{type:'category',data:cats,boundaryGap:false,
+      axisLabel:{color:T.fg3,fontSize:11},axisLine:{lineStyle:{color:T.line}}},
+    yAxis:{type:'value',axisLabel:{color:T.fg3,fontSize:11,formatter:'{value}%'},
+      splitLine:{lineStyle:{color:'#1e242e'}}},
+    series:rows.map(function(r){
+      return {name:r.cn,type:'line',data:r.exw,smooth:true,symbolSize:5,
+        lineStyle:{width:2}};})
+  });
+})();
+
+/* ---------- 图10 FMB ---------- */
+(function(){
+  var rows=D.fmb.slice(0,13);
+  mk('c-fmb',{
+    backgroundColor:'transparent',
+    title:{text:'Fama-MacBeth 标准化系数（超跌子样本内，H=20）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:12.5,fontWeight:600}},
+    grid:{left:150,right:56,top:48,bottom:30,containLabel:true},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:T.panel,
+      borderColor:T.line,textStyle:{color:T.fg,fontSize:12},
+      formatter:function(ps){var i=ps[0].dataIndex;
+        return rows[i].cn+'<br/>系数 '+rows[i].coef+'  (t'+rows[i].t+')';}},
+    xAxis:{type:'value',axisLabel:{color:T.fg3,fontSize:10.5},
+      splitLine:{lineStyle:{color:'#1e242e'}}},
+    yAxis:{type:'category',data:rows.map(function(r){return r.cn;}).reverse(),
+      axisLabel:{color:T.fg2,fontSize:11},axisLine:{lineStyle:{color:T.line}}},
+    series:[{type:'bar',
+      data:rows.map(function(r){return {value:r.coef,
+        itemStyle:{color:col(r.coef),borderRadius:r.coef>0?[0,3,3,0]:[3,0,0,3]}};}).reverse(),
+      barMaxWidth:18,
+      label:{show:true,position:'right',color:T.fg3,fontSize:10,
+        formatter:function(p){return p.value.toFixed(4);}}}]
+  });
+})();
+
+/* ---------- 图11 8策略 ---------- */
+(function(){
+  var rows=D.strat8;
+  mk('c-strat8',{
+    backgroundColor:'transparent',
+    title:{text:'15 个策略 · 年化（柱，%）与最大回撤（点，%）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:13,fontWeight:600}},
+    grid:{left:74,right:66,top:52,bottom:96,containLabel:true},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:T.panel,
+      borderColor:T.line,textStyle:{color:T.fg,fontSize:12},
+      formatter:function(ps){var i=ps[0].dataIndex;var r=rows[i];
+        return r.name+'<br/>年化 '+r.cagr+'%  MDD '+r.mdd+'%<br/>Sharpe '+r.sharpe+
+          '  胜率 '+r.win+'%  PF '+r.pf+'<br/>样本外 '+r.oos+'%';}},
+    legend:{data:['年化','最大回撤'],bottom:74,textStyle:{color:T.fg2,fontSize:11.5},
+      itemWidth:16,itemHeight:8},
+    xAxis:{type:'category',data:rows.map(function(r){return r.name;}),
+      axisLabel:{color:T.fg2,fontSize:10,rotate:38,interval:0},
+      axisLine:{lineStyle:{color:T.line}}},
+    yAxis:[
+      {type:'value',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+        splitLine:{lineStyle:{color:'#1e242e'}}},
+      {type:'value',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+        splitLine:{show:false},max:0}],
+    series:[
+      {name:'年化',type:'bar',data:rows.map(function(r){return {value:r.cagr,
+        itemStyle:{color:col(r.cagr),borderRadius:r.cagr>0?[3,3,0,0]:[0,0,3,3]}};}),
+        barMaxWidth:30,
+        label:{show:true,position:'top',color:T.fg3,fontSize:9.5,
+          formatter:function(p){return p.value.toFixed(0);}}},
+      {name:'最大回撤',type:'line',yAxisIndex:1,data:rows.map(function(r){return r.mdd;}),
+        symbolSize:7,lineStyle:{color:T.warn,width:1.6,type:'dashed'},
+        itemStyle:{color:T.warn}}]
+  });
+})();
+
+/* ---------- 图12 简单策略 ---------- */
+(function(){
+  var rows=D.simple.slice().sort(function(a,b){return b.sharpe-a.sharpe;});
+  mk('c-simple',{
+    backgroundColor:'transparent',
+    title:{text:'简单策略网格 · 年化（%）· 颜色 = 条件数',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:13,fontWeight:600}},
+    grid:{left:74,right:40,top:52,bottom:92,containLabel:true},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:T.panel,
+      borderColor:T.line,textStyle:{color:T.fg,fontSize:12},
+      formatter:function(ps){var i=ps[0].dataIndex;var r=rows[i];
+        return r.name+'<br/>条件数 '+r.ncond+'<br/>年化 '+r.cagr+'%  MDD '+r.mdd+
+          '%<br/>Sharpe '+r.sharpe+'  胜率 '+r.win+'%  PF '+r.pf+
+          '<br/>样本外 '+r.oos+'%';}},
+    xAxis:{type:'category',data:rows.map(function(r){return r.name;}),
+      axisLabel:{color:T.fg2,fontSize:10,rotate:36,interval:0},
+      axisLine:{lineStyle:{color:T.line}}},
+    yAxis:{type:'value',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+      splitLine:{lineStyle:{color:'#1e242e'}}},
+    series:[{type:'bar',data:rows.map(function(r){
+      var cs=['#4dd9a3',T.acc,T.acc2,'#fbbf24','#f472b6','#fb923c'];
+      return {value:r.cagr,itemStyle:{color:cs[Math.min(r.ncond-1,5)],
+        borderRadius:[3,3,0,0]}};}),barMaxWidth:42,
+      label:{show:true,position:'top',color:T.fg3,fontSize:10,
+        formatter:function(p){return p.value.toFixed(1);}}}]
+  });
+})();
+
+/* ---------- 图13 参数邻域 ---------- */
+(function(){
+  var rows=D.robust;
+  var cats=[],vals=[];
+  rows.forEach(function(r){
+    cats.push('D1~D'+r.th+' / '+r.size+' / '+r.mkt);
+    vals.push(r.cagr);
+  });
+  mk('c-robust',{
+    backgroundColor:'transparent',
+    title:{text:'18 个参数邻域组合 · 年化（%）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:12.5,fontWeight:600}},
+    grid:{left:74,right:40,top:48,bottom:112,containLabel:true},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:T.panel,
+      borderColor:T.line,textStyle:{color:T.fg,fontSize:12},
+      formatter:function(ps){var i=ps[0].dataIndex;var r=rows[i];
+        return cats[i]+'<br/>年化 '+r.cagr+'%  MDD '+r.mdd+'%<br/>Sharpe '+r.sharpe+
+          '  胜率 '+r.win+'%  PF '+r.pf+'<br/>负分段数 '+r.neg;}},
+    xAxis:{type:'category',data:cats,axisLabel:{color:T.fg2,fontSize:9,rotate:44,interval:0},
+      axisLine:{lineStyle:{color:T.line}}},
+    yAxis:{type:'value',min:15,axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+      splitLine:{lineStyle:{color:'#1e242e'}}},
+    series:[{type:'bar',data:vals.map(function(v){return {value:v,
+      itemStyle:{color:T.acc,borderRadius:[3,3,0,0]}};}),barMaxWidth:30,
+      label:{show:true,position:'top',color:T.fg3,fontSize:9.5,
+        formatter:function(p){return p.value.toFixed(1);}}}]
+  });
+})();
+
+/* ---------- 图14 逐年 ---------- */
+(function(){
+  var rows=D.robust_year;
+  var yrs=D.years;
+  mk('c-year',{
+    backgroundColor:'transparent',
+    color:[T.acc,'#4dd9a3',T.acc2,T.warn,'#f472b6','#38bdf8','#fb923c'],
+    title:{text:'候选策略与对照组 · 逐年收益（%，含 0.3% 成本）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:13,fontWeight:600}},
+    legend:{data:rows.map(function(r){return r.name;}),bottom:2,
+      textStyle:{color:T.fg2,fontSize:11},itemWidth:16,itemHeight:8},
+    grid:{left:66,right:30,top:46,bottom:62},
+    tooltip:{trigger:'axis',backgroundColor:T.panel,borderColor:T.line,
+      textStyle:{color:T.fg,fontSize:12},
+      valueFormatter:function(v){return v===null?'-':v.toFixed(0)+'%';}},
+    xAxis:{type:'category',data:yrs.map(String),boundaryGap:false,
+      axisLabel:{color:T.fg3,fontSize:10.5},axisLine:{lineStyle:{color:T.line}}},
+    yAxis:{type:'value',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+      splitLine:{lineStyle:{color:'#1e242e'}}},
+    series:rows.map(function(r){
+      return {name:r.name,type:'line',data:r.y,smooth:true,symbolSize:5,
+        lineStyle:{width:r.name.indexOf('全A')>=0?1.6:2.2,
+          type:r.name.indexOf('全A')>=0?'dashed':'solid'}};})
+  });
+})();
+
+/* ---------- 图15 归因 ---------- */
+(function(){
+  var rows=D.attr;
+  mk('c-attr',{
+    backgroundColor:'transparent',
+    title:{text:'归因对照 · 年化（柱，%）与 Sharpe（折线）',left:'center',top:4,
+      textStyle:{color:T.fg,fontSize:13,fontWeight:600}},
+    grid:{left:74,right:62,top:52,bottom:110,containLabel:true},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:T.panel,
+      borderColor:T.line,textStyle:{color:T.fg,fontSize:12},
+      formatter:function(ps){var i=ps[0].dataIndex;var r=rows[i];
+        return r.name+'<br/>年化 '+r.cagr+'%  MDD '+r.mdd+'%<br/>Sharpe '+r.sharpe+
+          '  胜率 '+r.win+'%  PF '+r.pf+'<br/>单笔均值 '+r.mean+'%';}},
+    legend:{data:['年化','Sharpe'],bottom:86,textStyle:{color:T.fg2,fontSize:11.5},
+      itemWidth:16,itemHeight:8},
+    xAxis:{type:'category',data:rows.map(function(r){return r.name;}),
+      axisLabel:{color:T.fg2,fontSize:9.5,rotate:38,interval:0},
+      axisLine:{lineStyle:{color:T.line}}},
+    yAxis:[
+      {type:'value',axisLabel:{color:T.fg3,fontSize:10.5,formatter:'{value}%'},
+        splitLine:{lineStyle:{color:'#1e242e'}}},
+      {type:'value',axisLabel:{color:T.fg3,fontSize:10.5},splitLine:{show:false}}],
+    series:[
+      {name:'年化',type:'bar',data:rows.map(function(r){return {value:r.cagr,
+        itemStyle:{color:col(r.cagr),borderRadius:r.cagr>0?[3,3,0,0]:[0,0,3,3]}};}),
+        barMaxWidth:42,
+        label:{show:true,position:'top',color:T.fg3,fontSize:9.5,
+          formatter:function(p){return p.value.toFixed(0);}}},
+      {name:'Sharpe',type:'line',yAxisIndex:1,data:rows.map(function(r){return r.sharpe;}),
+        symbolSize:8,lineStyle:{color:T.warn,width:2},itemStyle:{color:T.warn},
+        label:{show:true,position:'top',color:T.warn,fontSize:9.5,
+          formatter:function(p){return p.value.toFixed(2);}}}]
+  });
+})();
+
+/* ================= 表格 ================= */
+function tbl(id,head,rows,fmts){
+  var el=document.getElementById(id);
+  if(!el) return;
+  var h='<thead><tr>'+head.map(function(x){return '<th>'+x+'</th>';}).join('')+'</tr></thead><tbody>';
+  rows.forEach(function(r){
+    h+='<tr>'+r.map(function(v,i){
+      var cls='';
+      if(typeof v==='number'&&fmts&&fmts[i]==='pct') cls=v>0?'pos':(v<0?'neg':'dim');
+      var s=(v===null||v===undefined)?'-':(typeof v==='number'?v.toLocaleString():v);
+      if(fmts&&fmts[i]==='pct'&&typeof v==='number') s=(v>0?'+':'')+v.toFixed(3)+'%';
+      if(fmts&&fmts[i]==='p1'&&typeof v==='number') s=(v>0?'+':'')+v.toFixed(1)+'%';
+      if(fmts&&fmts[i]==='p2'&&typeof v==='number') s=(v>0?'+':'')+v.toFixed(2);
+      if(fmts&&fmts[i]==='f2'&&typeof v==='number') s=v.toFixed(2);
+      if(fmts&&fmts[i]==='f1'&&typeof v==='number') s=v.toFixed(1);
+      if(fmts&&fmts[i]==='f4'&&typeof v==='number') s=v.toFixed(4);
+      if(fmts&&fmts[i]==='f5'&&typeof v==='number') s=(v>0?'+':'')+v.toFixed(5);
+      return '<td class="'+cls+'">'+s+'</td>';
+    }).join('')+'</tr>';
+  });
+  el.innerHTML=h+'</tbody>';
+}
+
+/* 表1 */
+(function(){
+  var head=['维度'].concat(D.decile.dims);
+  var rows=[];
+  rows.push(['超额% (H=20)'].concat(D.decile.dims.map(function(_,i){return null;})));
+  var r1=['超额% (H=20)'],r2=['t 值'],r3=['胜率%'],r4=['PF'];
+  D.decile.dims.forEach(function(nm,i){
+    var a=D.decile.exw[i];
+    var best=0; for(var k=1;k<10;k++){if(a[k]!==null&&a[k]>a[best])best=k;}
+    r1.push(a[best]);
+    r2.push(D.decile.t[i][best]);
+    r3.push(D.decile.win[i][best]);
+    r4.push(D.decile.pf[i][best]);
+  });
+  tbl('t-decile',head,[r1,r2,r3,r4],['','pct','p2','f1','f2']);
+})();
+
+/* 表2 */
+(function(){
+  var rows=[];
+  [1,5,10,20].forEach(function(H){
+    var a=['H='+H+' 超额%'],b=['H='+H+' t'];
+    D.decile.dims.forEach(function(_,i){a.push(D.d1_by_h[H][D.decile.cols[i]]);
+      b.push(D.d1_by_h['t'+H][D.decile.cols[i]]);});
+    rows.push(a); rows.push(b);
+  });
+  tbl('t-d1h',['D1 分位'].concat(D.decile.dims),rows,['','pct','pct','pct','pct','pct','pct','pct','pct']);
+})();
+
+/* 表3 */
+(function(){
+  var rows=D.combos.map(function(r){
+    return [r.name,r.n,r.cagr,r.arith,r.mdd,r.sharpe,r.exw20,r.t20,r.win,r.pf];
+  });
+  tbl('t-combo',['组合','n','CAGR%','算术年化%','MDD%','Sharpe','exw20%','t20','胜率%','PF'],
+      rows,['','','f1','f1','f1','f2','pct','p2','f1','f2']);
+})();
+
+/* 表4 */
+(function(){
+  var rows=D.confirm.map(function(r){
+    return [r.tag,r.n,r.exw5,r.t5,r.exw20,r.t20,r.exw60,r.t60,r.win,r.pf];
+  });
+  tbl('t-confirm',['基线 | 确认信号','n','exw5%','t5','exw20%','t20','exw60%','t60','胜率%','PF'],
+      rows,['','','pct','p2','pct','p2','pct','p2','f1','f2']);
+})();
+
+/* 表5 */
+(function(){
+  var keep=D.vol.filter(function(r){
+    return /量比|缩量|放量|渐降|基线/.test(r.tag);});
+  var rows=keep.map(function(r){
+    return [r.tag,r.n,r.exw5,r.t5,r.exw10,r.t10,r.exw20,r.t20];
+  });
+  tbl('t-vol',['变体','n','exw5%','t5','exw10%','t10','exw20%','t20'],
+      rows,['','','pct','p2','pct','p2','pct','p2']);
+})();
+
+/* 表6 */
+(function(){
+  var rows=D.stage.map(function(r){
+    return [r.tag,r.n,r.exw5,r.t5,r.exw20,r.t20,r.exw60,r.t60,r.win,r.pf];
+  });
+  tbl('t-stage',['变体','n','exw5%','t5','exw20%','t20','exw60%','t60','胜率%','PF'],
+      rows,['','','pct','p2','pct','p2','pct','p2','f1','f2']);
+})();
+
+/* 表7 */
+(function(){
+  var rows=D.market.map(function(r){
+    return [r.tag,r.n,r.exw5,r.t5,r.exw20,r.t20,r.cagr,r.mdd];
+  });
+  tbl('t-market',['基线 | 市场环境','n','exw5%','t5','exw20%','t20','CAGR%','MDD%'],
+      rows,['','','pct','p2','pct','p2','f1','f1']);
+})();
+
+/* 表8 */
+(function(){
+  var rows=D.rs.map(function(r){
+    return [r.tag,r.n,r.exw5,r.t5,r.exw20,r.t20,r.exw60,r.t60];
+  });
+  tbl('t-rs',['基线 | 相对强弱','n','exw5%','t5','exw20%','t20','exw60%','t60'],
+      rows,['','','pct','p2','pct','p2','pct','p2']);
+})();
+
+/* 表9 */
+(function(){
+  var rows=D.size.map(function(r){
+    return [r.tag,r.n,r.exw5,r.t5,r.exw20,r.t20,r.cagr,r.mdd,r.sharpe];
+  });
+  tbl('t-size',['基线 | 市值','n','exw5%','t5','exw20%','t20','CAGR%','MDD%','Sharpe'],
+      rows,['','','pct','p2','pct','p2','f1','f1','f2']);
+})();
+
+/* 表10 */
+(function(){
+  var rows=D.ic.map(function(r){
+    return [r.cn,r.g,r.ic,r.icir,r.t,r.pos,r.nd];
+  });
+  tbl('t-ic',['因子','类别','Rank IC','ICIR','t','IC>0 占比%','有效天数'],
+      rows,['','','f4','f2','f2','f1','']);
+})();
+
+/* 表11 */
+(function(){
+  var rows=D.fmb.map(function(r){return [r.cn,r.coef,r.t];});
+  tbl('t-fmb',['因子','标准化系数','t'],rows,['','f5','f2']);
+})();
+
+/* 表12 */
+(function(){
+  var rows=D.strat8.map(function(r){
+    return [r.name,r.ncond||'',r.n,r.cagr,r.mdd,r.sharpe,r.win,r.payoff,r.pf,
+            r.exw20,r.t20,r.is_,r.oos];
+  });
+  tbl('t-strat8',['策略','n','CAGR%','MDD%','Sharpe','胜率%','盈亏比','PF','exw20%','t20','IS%','OOS%'],
+      rows,['','','','f1','f1','f2','f1','f2','f2','pct','p2','p1','p1']);
+})();
+
+/* 表13 */
+(function(){
+  var rows=D.simple.map(function(r){
+    return [r.name,r.ncond,r.n,r.cagr,r.mdd,r.sharpe,r.win,r.pf,r.exw20,r.t20,r.is_,r.oos];
+  });
+  tbl('t-simple',['策略','条件数','n','CAGR%','MDD%','Sharpe','胜率%','PF','exw20%','t20','IS%','OOS%'],
+      rows,['','','','f1','f1','f2','f1','f2','pct','p2','p1','p1']);
+})();
+
+/* 表14 */
+(function(){
+  var rows=D.robust.map(function(r){
+    return ['D1~D'+r.th,r.size,r.mkt,r.n,r.cagr,r.mdd,r.sharpe,r.win,r.pf,r.is_,r.oos,r.neg];
+  });
+  tbl('t-robust',['MA60阈值','市值','市场','n','CAGR%','MDD%','Sharpe','胜率%','PF','IS%','OOS%','负分段数'],
+      rows,['','','','','f1','f1','f2','f1','f2','p1','p1','']);
+})();
+
+/* 表15 敏感性 */
+(function(){
+  var el=document.getElementById('t-sens');
+  if(!el) return;
+  var h='<thead><tr><th>成本 / 持有期</th><th>CAGR%</th><th>MDD%</th><th>Sharpe</th>'+
+        '<th>单笔均值%</th><th>PF</th></tr></thead><tbody>';
+  var c=[[0.0,29.3,-40.3,1.00,4.05,2.14],[0.15,27.6,-40.4,0.95,3.90,2.08],
+         [0.30,26.0,-41.2,0.91,3.75,2.02],[0.50,23.8,-43.2,0.85,3.55,1.94],
+         [1.00,18.5,-47.8,0.71,3.05,1.77]];
+  c.forEach(function(r){
+    h+='<tr><td>双边成本 '+r[0].toFixed(2)+'%</td><td>'+(r[1]>0?'+':'')+r[1].toFixed(1)+'%</td>'+
+       '<td>'+r[2].toFixed(1)+'%</td><td>'+r[3].toFixed(2)+'</td>'+
+       '<td class="pos">+'+r[4].toFixed(2)+'%</td><td>'+r[5].toFixed(2)+'</td></tr>';
+  });
+  var hs=[[5,17.1,-46.3,0.68,0.86,1.38],[10,17.3,-42.1,0.68,1.77,1.61],
+          [20,26.0,-41.2,0.91,3.75,2.02],[40,29.1,-43.2,0.97,6.45,2.47],
+          [60,28.6,-49.1,0.95,8.30,2.57]];
+  hs.forEach(function(r){
+    h+='<tr><td>持有 '+r[0]+' 日</td><td class="pos">+'+r[1].toFixed(1)+'%</td>'+
+       '<td>'+r[2].toFixed(1)+'%</td><td>'+r[3].toFixed(2)+'</td>'+
+       '<td class="pos">+'+r[4].toFixed(2)+'%</td><td>'+r[5].toFixed(2)+'</td></tr>';
+  });
+  el.innerHTML=h+'</tbody>';
+})();
+
+/* 表16 逐年 */
+(function(){
+  var head=['策略','n','CAGR%','MDD%','Sharpe','胜率%','PF','正年数']
+    .concat(D.years.map(String)).concat(['IS%','OOS%']);
+  var rows=D.robust_year.map(function(r){
+    return [r.name,r.n,r.cagr,r.mdd,r.sharpe,r.win,r.pf,r.pos]
+      .concat(r.y).concat([r.is_,r.oos]);
+  });
+  var fmts=['','','f1','f1','f2','f1','f2',''].concat(D.years.map(function(){return 'f0';})).concat(['p1','p1']);
+  tbl('t-year',head,rows,fmts);
+})();
+
+/* 表17 归因 */
+(function(){
+  var head=['变体','n','CAGR%','MDD%','Sharpe','胜率%','PF','单笔均值%','交易数']
+    .concat(D.years.map(String));
+  var rows=D.attr.map(function(r){
+    return [r.name,r.n,r.cagr,r.mdd,r.sharpe,r.win,r.pf,r.mean,r.n_trade].concat(r.y);
+  });
+  var fmts=['','','f1','f1','f2','f1','f2','p2',''].concat(D.years.map(function(){return 'f0';}));
+  tbl('t-attr',head,rows,fmts);
+})();
+</script>
+</body>
+</html>

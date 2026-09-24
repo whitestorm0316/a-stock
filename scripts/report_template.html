@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A股 MACD + 量能买入策略：历史回测与统计验证报告</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+:root{
+  --bg:#f5f6f8; --card:#ffffff; --ink:#1a1d21; --ink2:#4a5058; --ink3:#828a94;
+  --line:#e3e6ea; --line2:#eef0f3; --up:#d64545; --dn:#2e9e5b; --accent:#1f5fa8;
+  --accent2:#8a6d3b; --warn:#c0392b; --chipbg:#f0f2f5;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  font-size:14px;line-height:1.75;-webkit-font-smoothing:antialiased;}
+.wrap{max-width:1120px;margin:0 auto;padding:28px 22px 80px;}
+h1{font-size:25px;line-height:1.4;margin:0 0 6px;letter-spacing:-.3px;}
+h2{font-size:19px;margin:38px 0 12px;padding-left:11px;border-left:4px solid var(--accent);letter-spacing:-.2px;}
+h3{font-size:15.5px;margin:24px 0 8px;color:var(--ink);}
+h4{font-size:14px;margin:18px 0 6px;color:var(--ink2);font-weight:600;}
+p{margin:8px 0;color:var(--ink2);}
+ul,ol{margin:8px 0;padding-left:22px;color:var(--ink2);}
+li{margin:4px 0;}
+.sub{color:var(--ink3);font-size:12.5px;margin:0 0 18px;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:14px 0;
+  box-shadow:0 1px 2px rgba(20,26,34,.03);}
+.tldr{background:linear-gradient(180deg,#fff 0%,#fbfcfd 100%);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:18px 0 8px;}
+.tldr h2{margin-top:0;border:0;padding:0;font-size:18px;}
+.verdict{border-left:4px solid var(--warn);background:#fdf6f5;border-radius:0 8px 8px 0;padding:14px 18px;margin:16px 0;}
+.verdict b{color:var(--warn);}
+.grid{display:grid;gap:12px;}
+.g4{grid-template-columns:repeat(4,1fr);}
+.g3{grid-template-columns:repeat(3,1fr);}
+.g2{grid-template-columns:repeat(2,1fr);}
+@media(max-width:820px){.g4,.g3,.g2{grid-template-columns:1fr 1fr;}}
+@media(max-width:560px){.g4,.g3,.g2{grid-template-columns:1fr;}}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 15px;}
+.kpi .lab{font-size:12px;color:var(--ink3);margin-bottom:5px;line-height:1.4;}
+.kpi .val{font-size:21px;font-weight:650;letter-spacing:-.5px;font-variant-numeric:tabular-nums;}
+.kpi .note{font-size:11.5px;color:var(--ink3);margin-top:3px;}
+.neg{color:var(--dn);} .pos{color:var(--up);} .mute{color:var(--ink3);}
+.chart{width:100%;height:372px;margin:6px 0 2px;}
+.chart.tall{height:440px;}
+.chart.short{height:300px;}
+.cap{font-size:12px;color:var(--ink3);margin:2px 0 14px;padding-left:2px;}
+table{border-collapse:collapse;width:100%;font-size:12.5px;font-variant-numeric:tabular-nums;}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line2);text-align:right;white-space:nowrap;}
+th{background:#f7f8fa;font-weight:600;color:var(--ink2);text-align:right;position:sticky;top:0;}
+th:first-child,td:first-child{text-align:left;}
+tbody tr:hover{background:#fafbfc;}
+.tscroll{max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:8px;}
+.pill{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11.5px;background:var(--chipbg);color:var(--ink2);margin-right:5px;}
+.pill.bad{background:#fdf0ee;color:#b8402f;}
+.pill.ok{background:#eef7f1;color:#26744a;}
+.pill.warn{background:#fdf6e8;color:#8a6d3b;}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;}
+.tabs button{border:1px solid var(--line);background:#fff;color:var(--ink2);border-radius:7px;
+  padding:5px 12px;font-size:12.5px;cursor:pointer;font-family:inherit;}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.q{border-top:1px solid var(--line);padding:14px 0 4px;}
+.q .h{font-weight:650;color:var(--ink);font-size:14px;margin-bottom:5px;}
+.q .a{color:var(--ink2);}
+.q .a b{color:var(--ink);}
+code{background:var(--chipbg);padding:1px 5px;border-radius:4px;font-size:12px;
+  font-family:"SF Mono",Menlo,Consolas,monospace;color:#3b4252;}
+.disc{margin-top:34px;padding:16px 18px;background:#f0f2f5;border-radius:9px;font-size:12.5px;color:var(--ink2);}
+.disc b{color:var(--ink);}
+.foot{margin-top:16px;color:var(--ink3);font-size:12px;}
+.tag{font-size:11.5px;color:var(--ink3);font-weight:400;}
+hr.sep{border:0;border-top:1px solid var(--line);margin:30px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>A股「MACD + 成交量」买入策略：历史回测与统计验证报告</h1>
+<p class="sub">数据源：同花顺金融数据 API（fuyao.aicubes.cn）｜样本：全市场 A 股 5,565 只 × 2015-01-05 ~ 2026-09-21（2,872 个交易日 / 1,129.9 万行）｜执行口径：T 日收盘出信号，T+1 开盘价成交</p>
+
+<!-- ======================= 首屏结论卡 ======================= -->
+<div class="tldr">
+  <h2>核心结论（先看这里）</h2>
+  <div class="verdict">
+    <b>结论：没有找到可用的统计优势。</b>「MACD 拐点 + 成交量」在 A 股全部测试口径下<strong>都没有产生正超额收益</strong>；且用户原始假设的方向是反的 —— <strong>放量越强，未来收益越差</strong>。
+  </div>
+
+  <div class="grid g4" style="margin-top:14px;">
+    <div class="kpi">
+      <div class="lab">MACD翻红 + 量比&gt;1.1<br><span class="tag">20日超额（日加权）</span></div>
+      <div class="val neg">−0.79%</div>
+      <div class="note">t = −9.90，Bootstrap CI [−0.94%, −0.62%] 显著为负</div>
+    </div>
+    <div class="kpi">
+      <div class="lab">量比最高前20名<br><span class="tag">事件后 20 日平均收益</span></div>
+      <div class="val neg">+0.005%</div>
+      <div class="note">对比“量比最低”组 <span class="pos">+2.324%</span>，方向完全相反</div>
+    </div>
+    <div class="kpi">
+      <div class="lab">组合评分 90 分以上<br><span class="tag">20日超额</span></div>
+      <div class="val neg">−2.34%</div>
+      <div class="note">分数与收益 Spearman ρ = <b>−0.933</b>（p=0.0002）反向单调</div>
+    </div>
+    <div class="kpi">
+      <div class="lab">全A池策略 G 年化<br><span class="tag">含成本 2015-2026</span></div>
+      <div class="val neg">−28.8%</div>
+      <div class="note">同口径“无技巧基准”（每日真随机 20 只）为 <span class="pos">+5.1%</span></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:22px;">六条要点</h3>
+  <ol>
+    <li><b>信号层无优势。</b>MACD 柱由负转正（等价于 DIF 上穿 DEA 金叉，实测一致率 100.00%）后，未来各持有期的市场调整超额收益在<strong>日加权口径下全部为负</strong>，且持有期越长越差（20 日 −0.71%、60 日 −0.98%）。</li>
+    <li><b>量能过滤方向相反。</b>加放量条件不能改善信号，而是<strong>逐层单调恶化</strong>：翻红 −0.71% → +量比&gt;1.1 −0.79% → +站上MA20 −1.05% → +MA20&gt;MA60 −1.39% → +DIF&gt;0 −1.44% → +突破20日新高 −1.51%。</li>
+    <li><b>成本不是主因。</b>把全部交易成本设为 0，全A池年化仍为 <b>−24.6%</b>（含成本 −28.2%）。差距仅 3.65pp/年。</li>
+    <li><b>退出规则比选股规则更致命。</b>2×2×2 隔离实验显示：把“死叉退出”换成“固定持有 20 日”，年化从 −28.2% 改善到 −13.0%；把“量比降序选股”换成“量比升序”，再改善到 <b>−2.1%</b>。</li>
+    <li><b>信号实质是“小市值做空信号”。</b>按流动性分层，信号超额从前 10%（大盘）的 <b>+0.17%</b> 单调递减到后 10%（小盘）的 <b>−1.44%</b>。沪深300 池正收益来自大盘 beta 与幸存者偏差，不是策略 alpha。</li>
+    <li><b>不是过拟合，是没信号。</b>5 组 MACD 参数 × 5 档放量阈值 × 3 种量能均线 × 5 种趋势定义 × 6 档回撤容忍，共 24 个参数组合，在训练/验证/样本外<strong>全部为负</strong>——不存在“只有特殊参数好”的过拟合特征，而是任何参数都救不了。</li>
+  </ol>
+</div>
+
+<!-- ======================= 摘要 ======================= -->
+<h2>摘要</h2>
+<div class="card">
+<p>本报告按用户提出的十四个部分要求，用同花顺金融数据 API 拉取全市场 A 股 10 年日线（含复权因子），构建了一个<strong>严格防未来函数</strong>的向量化回测引擎，并完成了：</p>
+<ul>
+  <li><b>9 个对照策略（A–I）× 7 个股票池 × 4 个期间 = 280 次组合回测</b>（全期 2015-01-05 ~ 2026-09-21）</li>
+  <li><b>严格事件研究</b>：对 20 个信号组合，测算未来 1/5/10/20/60 日收益，做了同期市场调整、按日聚类 t 检验、按日 Bootstrap 置信区间、分期检验、市场环境分层</li>
+  <li><b>参数敏感性</b>：5 个维度共 24 个参数组合，全部在训练集（2015-2022）评估，再验证（2023-2024）与样本外（2025-2026）检验</li>
+  <li><b>组合评分模型</b>：按用户给定的 5 维度权重构造 0–100 分，检验分数与未来收益的单调性</li>
+  <li><b>13 张诊断/对照实验</b>：成本敏感性、选股 vs 退出隔离、流动性分层、几何 vs 算术基准、每日真随机对照</li>
+</ul>
+<p>全部结论在修复 4 处回测引擎缺陷与 2 处调用脚本行序错位后重新计算，并做了交叉验证（引擎单笔收益 vs 事件研究、成本归因、同口径无技巧基准），结论自洽。</p>
+</div>
+
+<!-- ======================= 一 ======================= -->
+<h2>一、研究目标与设计</h2>
+<div class="card">
+<h4>1.1 研究问题</h4>
+<p>「MACD 拐点结合成交量变化，能否形成具有统计优势的 A 股买入信号？」重点验证 6 类买点：</p>
+<ol>
+  <li>MACD 柱由负转正 + 温和放量</li>
+  <li>MACD 金叉 + VOL5 &gt; VOL20</li>
+  <li>MACD 翻红 + 站上 MA20 + MA20 &gt; MA60</li>
+  <li>上升趋势缩量回踩 MA20 + MACD 重新向上</li>
+  <li>创新低 + MACD 底背离 + 缩量</li>
+  <li>放量突破 20/60 日新高 + MACD 确认</li>
+</ol>
+<h4>1.2 关键数学事实（先明确一个等价性）</h4>
+<p>因为 <code>MACD柱 = 2 × (DIF − DEA)</code>，所以「MACD 柱由负转正」与「DIF 上穿 DEA（金叉）」是<strong>同一个事件</strong>。本研究在 1,129.9 万行数据上实测两者一致率为 <b>100.00%</b>，无一例外。因此要求 ①② 本质是同一事件的不同量能过滤，报告中不予区分对待。</p>
+<h4>1.3 验证方法（三道关卡）</h4>
+<div class="grid g3" style="margin-top:10px;">
+  <div class="kpi"><div class="lab">关卡 1 · 事件研究</div><div class="val" style="font-size:15px;font-weight:600;">去重 &amp; 去同期市场</div><div class="note">每个信号只算一次，再减去同一交易日全市场等权收益；按日聚类 t 检验，按日 Bootstrap 取 CI，避免把“同一天的信号”当成独立样本。</div></div>
+  <div class="kpi"><div class="lab">关卡 2 · 组合回测</div><div class="val" style="font-size:15px;font-weight:600;">真实成本 &amp; 约束</div><div class="note">含佣金/印花税/过户费/滑点、涨停不可买、跌停不可卖、停牌、ST 剔除、上市 120 日剔除、20 日成交额下限。</div></div>
+  <div class="kpi"><div class="lab">关卡 3 · 稳定性</div><div class="val" style="font-size:15px;font-weight:600;">参数 &amp; 样本外</div><div class="note">训练集选参数，验证集与样本外检验；参数邻域必须平滑，只有孤立最优点才判过拟合。</div></div>
+</div>
+</div>
+
+<!-- ======================= 二 ======================= -->
+<h2>二、指标定义</h2>
+<div class="card">
+<table>
+<thead><tr><th>指标</th><th>定义</th><th>实现要点</th></tr></thead>
+<tbody>
+<tr><td>DIF</td><td>EMA(Close,12) − EMA(Close,26)</td><td>分块 EMA，初始条件与 <code>ewm(adjust=False)</code> 一致到 1e-12</td></tr>
+<tr><td>DEA</td><td>EMA(DIF,9)</td><td>同上，按股票分块、按日序递推</td></tr>
+<tr><td>MACD柱 (hist)</td><td>2 × (DIF − DEA)</td><td>翻正 ⟺ 金叉</td></tr>
+<tr><td>hist_slope</td><td>当日 hist − 前一日 hist</td><td>衡量柱体变化速度</td></tr>
+<tr><td>VOL5 / VOL10 / VOL20 / VOL60</td><td>成交量 N 日均值</td><td>最少需要 N 个有效值，否则留空</td></tr>
+<tr><td>VOL5/VOL20</td><td>短中期量能比</td><td>同时测试 VOL10/VOL20、VOL5/VOL60</td></tr>
+<tr><td>Volume Ratio</td><td>当日成交量 / VOL20</td><td>本文核心量能指标</td></tr>
+<tr><td>MA5/20/30/60/120</td><td>收盘价简单均线</td><td>—</td></tr>
+<tr><td>px_ma20_pct</td><td>(Close − MA20) / MA20</td><td>衡量回撤/偏离位置</td></tr>
+<tr><td>dist_high20 / high60</td><td>(Close − 前 N 日最高) / 前 N 日最高</td><td>最高价严格用 <code>shift(1)</code>，不含当日</td></tr>
+<tr><td>dif_dea_dist</td><td>DIF − DEA</td><td>与 hist 同号，差 2 倍</td></tr>
+</tbody>
+</table>
+<p class="cap">表 2-1　指标定义与实现要点。所有滚动窗口均按股票分组、按交易日递推，不含任何未来数据。</p>
+</div>
+
+<!-- ======================= 三 ======================= -->
+<h2>三、对照策略 A–I</h2>
+<div class="card">
+<p>下表为 9 个对照策略的完整定义。<b>F 拆成左右两个版本</b>（左侧＝破位即买，右侧＝等背离确认后翻红再买），用于回答“底背离该不该等确认”。</p>
+<table>
+<thead><tr><th>策略</th><th>买入条件</th><th>卖出条件</th></tr></thead>
+<tbody>
+<tr><td><b>A</b> MACD 基础（基准）</td><td>DIF 上穿 DEA</td><td>DIF 下穿 DEA</td></tr>
+<tr><td><b>B</b> 金叉 + 量能</td><td>金叉 且 VOL5&gt;VOL20 且 当日量&gt;VOL20</td><td>死叉</td></tr>
+<tr><td><b>C</b> 翻红 + 量能 + 趋势</td><td>hist 翻正 且 DIF&gt;DEA 且 Close&gt;MA20 且 MA20&gt;MA60 且 VOL5&gt;VOL20 且 量比&gt;1.1</td><td>死叉 或 收盘跌破 MA20</td></tr>
+<tr><td><b>D</b> 缩量回踩</td><td>MA20&gt;MA60 且 Close&gt;MA60 且 MACD&gt;0 且 |距MA20|≤5% 且 hist 转强 且 Close&gt;MA5 且 量比达标</td><td>破 MA20 或 死叉</td></tr>
+<tr><td><b>E</b> 放量突破</td><td>Close&gt;前20日最高 且 MACD&gt;0 且 DIF&gt;DEA 且 量比&gt;1.5</td><td>破 MA20 或 死叉</td></tr>
+<tr><td><b>F-左</b> 底背离左侧</td><td>创新低 + MACD 底背离（价格新低但 DIF 未新低）</td><td>死叉</td></tr>
+<tr><td><b>F-右</b> 底背离右侧</td><td>底背离 且 随后 hist 翻正确认</td><td>死叉</td></tr>
+<tr><td><b>G</b> 翻红 + 放量 <span class="tag">（核心命题）</span></td><td>hist 翻正 且 量比 &gt; 阈值</td><td>死叉</td></tr>
+<tr><td><b>H</b> 纯突破（对照）</td><td>Close&gt;前20日最高（不加 MACD）</td><td>破 MA20 或 死叉</td></tr>
+<tr><td><b>I</b> 纯趋势（对照）</td><td>Close&gt;MA20 且 MA20&gt;MA60 且 MACD&gt;0</td><td>破 MA20 或 死叉</td></tr>
+</tbody>
+</table>
+<p class="cap">表 3-1　9 个对照策略定义。H / I 是“去掉 MACD”的对照组，用来判断 MACD 本身是否提供了独立贡献。</p>
+</div>
+
+<!-- ======================= 四 ======================= -->
+<h2>四、防未来函数与执行时序（本次研究最重要的工程约束）</h2>
+<div class="card">
+<h4>4.1 信号与成交的时序约定</h4>
+<table>
+<thead><tr><th>环节</th><th>时点</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>指标计算窗口</td><td>T 日及之前</td><td>所有滚动/EMA 只用 ≤T 的数据</td></tr>
+<tr><td>信号生成</td><td><b>T 日 15:00 收盘后</b></td><td>用 T 日收盘价、成交量计算</td></tr>
+<tr><td>买入成交</td><td><b>T+1 日 09:30 开盘价</b>（含滑点）</td><td>不使用 T+1 的收盘价或 VWAP（无法在开盘时知道）</td></tr>
+<tr><td>卖出成交</td><td>T+1 日开盘 或 触发日次日开盘</td><td>同上</td></tr>
+<tr><td>持有期收益</td><td>T+1 开盘 → T+1+H 开盘</td><td>事件研究口径与组合回测完全一致</td></tr>
+</tbody>
+</table>
+<h4>4.2 已显式排除的 6 类未来信息</h4>
+<ul>
+  <li><b>未来最高/最低/成交量</b>：<code>high20_prev</code>/<code>high60_prev</code> 均用 <code>shift(1)</code> 排除当日；突破判定不引用次日数据</li>
+  <li><b>前视偏差（Look-ahead）</b>：所有“当日涨停无法买入”“跌停无法卖出”状态均按 T 日收盘判定，作用于 T+1 成交</li>
+  <li><b>幸存者偏差</b>：主结论以<strong>动态股票池</strong>（每日按当时可交易状态重建）与全A池给出；固定池（当前成分股）单独列出并标注偏差</li>
+  <li><b>时点错配的未来财务/基本面数据</b>：本研究为纯量价策略，不引入任何基本面字段</li>
+  <li><b>复权价格泄漏</b>：复权因子按“事件发生日”累积，不是全期统一按最新因子折算</li>
+  <li><b>指标预热期</b>：每只股票前 120 个交易日不产生信号（MA120/EMA 预热）</li>
+</ul>
+<div class="verdict" style="margin-top:14px;">
+<b>⚠ 无法模拟、必须声明的 6 项</b>（用户第五节要求“如果无法模拟某项必须明确说明，而不是忽略”）
+<ol style="margin-top:6px;">
+  <li><b>已退市股票未纳入面板</b>：数据源 dump 仅含当前存续标的，构成轻微幸存者偏差。缓解措施：主结论用动态池 + 全A池，并单独统计亏损交易占比（3.81%）确认不是退市样本集中导致。</li>
+  <li><b>庄股 / 价格操纵无法建模</b>：无法识别庄家控盘区间，信号在这些区间的表现无法真实还原。</li>
+  <li><b>涨跌停用“价格触及法”近似</b>：以未复权原始价四舍五入到 0.01 后是否触及 ±5%/10%/20%/30% 反推当时适用的涨跌幅制度。制度切换日附近可能存在少量误判。</li>
+  <li><b>不含港股通 / 北向资金 / 融资融券余额</b>：这些数据不在本次数据源范围内，故无法作为过滤条件。</li>
+  <li><b>无法用 VWAP 成交</b>：以“次日开盘价 + 双边滑点千分之一”替代。开盘价通常比 VWAP 更差（跳空缺口计入），故该替代<strong>偏保守</strong>。</li>
+  <li><b>hs300/zz500/zz1000 池为“当前成分股”快照</b>：API 只提供当前成分，历史上被调出的股票缺失，存在幸存者偏差。因此<strong>这三个池的正收益不能作为策略有效性的证据</strong>，主结论以 dyn300/dyn500（动态池）与全A池为准。</li>
+</ol>
+</div>
+</div>
+
+<!-- ======================= 五 ======================= -->
+<h2>五、A 股真实交易成本模型</h2>
+<div class="card">
+<table>
+<thead><tr><th>成本项</th><th>取值</th><th>生效规则</th></tr></thead>
+<tbody>
+<tr><td>佣金</td><td>双边万 2.5，最低 5 元</td><td>全期</td></tr>
+<tr><td>印花税</td><td>卖出千 1 → 千 0.5</td><td>2023-08-28 起减半（引擎按日期感知切换）</td></tr>
+<tr><td>过户费</td><td>万 0.1</td><td>2022-04-29 起双边收取；此前仅沪市</td></tr>
+<tr><td>滑点</td><td>双边千 1</td><td>全期，作用于开盘成交价</td></tr>
+<tr><td>单边往返合计</td><td><b>约 0.54%</b></td><td>佣金 0.05% + 印花税 0.05~0.10% + 过户费 0.002% + 滑点 0.20%</td></tr>
+</tbody>
+</table>
+<p class="cap">表 5-1　交易成本模型。引擎按成交日期自动选择适用的印花税率与过户费规则（含制度变点）。</p>
+<h4>5.1 交易约束</h4>
+<ul>
+  <li><b>涨停无法买入</b>：T+1 开盘价 ≥ 涨停价时，买单跳过（不排队、不假设成交）</li>
+  <li><b>跌停无法卖出</b>：T+1 开盘价 ≤ 跌停价时，卖单延后至下一个可交易日</li>
+  <li><b>停牌</b>：T+1 无行情则无法成交，持仓按最后一笔有效价格计价</li>
+  <li><b>ST / 上市未满 120 交易日</b>：直接从可交易池剔除（买入侧与卖出侧均受约束）</li>
+  <li><b>最小流动性</b>：20 日日均成交额 &lt; 2,000 万元的标的不买入；单笔买入不超过当日成交额的 10%</li>
+</ul>
+</div>
+
+<!-- ======================= 六 ======================= -->
+<h2>六、股票池与全A基准</h2>
+<div class="card">
+<div class="grid g2">
+<div>
+<table>
+<thead><tr><th>股票池</th><th>类型</th><th>样本数</th><th>幸存者偏差</th></tr></thead>
+<tbody>
+<tr><td>allA</td><td>全市场</td><td>5,565</td><td>轻微（仅存续）</td></tr>
+<tr><td>hs300</td><td>固定池</td><td>300</td><td><b>严重</b></td></tr>
+<tr><td>zz500</td><td>固定池</td><td>500</td><td><b>严重</b></td></tr>
+<tr><td>zz1000</td><td>固定池</td><td>1,000</td><td><b>严重</b></td></tr>
+<tr><td>dyn300</td><td>动态池</td><td>逐日重建</td><td>无</td></tr>
+<tr><td>dyn500</td><td>动态池</td><td>逐日重建</td><td>无</td></tr>
+<tr><td>noFilter</td><td>全市场（无额外过滤）</td><td>5,565</td><td>轻微</td></tr>
+</tbody>
+</table>
+<p class="cap">表 6-1　7 个股票池。主结论以 allA + dyn 系列为准。</p>
+</div>
+<div>
+<h4>同口径“无技巧基准”（决定性对照）</h4>
+<p>要判断策略是否有效，必须与<strong>同样交易频率、同样成本、同样仓位规则</strong>的“无技巧”组合比较。我们构造了：每天从全A可交易池中<strong>真随机</strong>选 20 只，等权买入，固定持有 20 日后卖出，含全部成本，跑满 2015-2026：</p>
+<div class="kpi" style="margin-top:8px;">
+  <div class="lab">每日真随机 20 只 + 固定持有 20 日（含成本）</div>
+  <div class="val pos">年化 +5.08%</div>
+  <div class="note">最大回撤 −68.8%｜交易 2,669 笔｜平均持有 21.4 天｜胜率 47.6%｜总费用 22.5 万（初始 100 万）</div>
+</div>
+<p style="margin-top:10px;"><b>这是策略必须战胜的门槛线。</b>主回测中策略 G 为 −28.8%、策略 D 为 −12.7%，全部大幅跑输该基准。</p>
+</div>
+</div>
+
+<h4>6.1 全A等权基准：算术年化与几何年化的巨大差距</h4>
+<table>
+<thead><tr><th>调仓频率</th><th>算术年化</th><th>几何年化（真实复利）</th><th>波动拖累</th><th>平均单期收益</th><th>单期波动率</th></tr></thead>
+<tbody id="tbl-geo"></tbody>
+</table>
+<p class="cap">表 6-2　全A等权基准。算术年化 ≈ 几何年化 + σ²/2，本期波动拖累高达 14.3~14.5pp/年。<b>引用基准时必须用几何口径</b>，否则会系统性高估基准 13pp 以上。</p>
+<p>结论：全A 等权 20 日轮动策略的<strong>真实复利年化仅 +1.52%</strong>（算术 +14.36%）。任何“跑赢 14% 基准”的说法都是口径错误。</p>
+</div>
+
+<!-- ======================= 七 ======================= -->
+<h2>七、回测区间与市场环境分层</h2>
+<div class="card">
+<div class="grid g3">
+<div class="kpi"><div class="lab">训练集</div><div class="val" style="font-size:17px;">2015-01 ~ 2022-12</div><div class="note">1,947 个交易日 / 7.98 年<br>参数只能在此集合上挑选</div></div>
+<div class="kpi"><div class="lab">验证集</div><div class="val" style="font-size:17px;">2023-01 ~ 2024-12</div><div class="note">486 个交易日 / 1.99 年<br>不参与任何参数选择</div></div>
+<div class="kpi"><div class="lab">样本外测试</div><div class="val" style="font-size:17px;">2025-01 ~ 2026-09</div><div class="note">419 个交易日 / 1.72 年<br>最终检验</div></div>
+</div>
+<h4>7.1 市场环境定义</h4>
+<p>按全A等权指数的 60 日区间涨跌幅与 60 日已实现波动率分位，把交易日划分为 5 类：<b>牛市</b>（趋势向上）、<b>熊市</b>（趋势向下）、<b>震荡市</b>（趋势平缓）、<b>高波动</b>（波动率前 30%）、<b>低波动</b>（波动率后 30%）。每个交易日只归属一个“趋势态”和波动标签（波动与趋势正交，用于交叉观察）。</p>
+<p class="cap">说明：市场环境标签同样按 point-in-time 计算，不使用全期分位。</p>
+</div>
+
+<!-- ======================= 八 ======================= -->
+<h2>八、绩效指标：主回测结果（280 次组合）</h2>
+<div class="card">
+<h4>8.1 全期（2015-01-05 ~ 2026-09-21）年化收益率矩阵</h4>
+<div id="chart-cagr-heat" class="chart tall"></div>
+<p class="cap">图 8-1　9 策略 × 7 股票池的年化收益率热力图。<b>红＝正，绿＝负。</b>全A/dyn 系列（左三列）几乎全红为负，沪深300（第 4 列）明显偏正——但这是大盘 beta + 幸存者偏差。</p>
+
+<h4>8.2 完整绩效表（可切换股票池）</h4>
+<div class="tabs" id="tabs-univ"></div>
+<div class="tscroll" id="tbl-main"></div>
+<p class="cap">表 8-1　全期各策略完整绩效。字段：年化收益 CAGR｜累计收益｜最大回撤｜年化波动｜Sharpe｜Calmar｜胜率｜盈亏比｜Profit Factor｜胜率×盈亏比｜交易次数｜年均交易｜平均持仓天数｜单笔均值｜最大连续亏损｜费用/净利。</p>
+
+<div class="verdict">
+<b>⚠ 主表最重要的读法</b>：不要只看年化收益。全A池的 CAGR 全部在 −12.7% ~ −38.5% 之间、最大回撤全部大于 −89%，而 Profit Factor 全部小于 1（0.631 ~ 0.862）。<b>PF &lt; 1 意味着总亏损额大于总盈利额，策略在任何意义下都不成立</b>；这与年化收益的结论是互相印证的，不是两个独立坏事。
+</div>
+</div>
+
+<!-- ======================= 九 ======================= -->
+<h2>九、参数稳定性分析</h2>
+<div class="card">
+<p>按用户要求，测试了 5 个维度共 24 个参数组合。<strong>所有参数组合在所有期间均为负收益</strong>——不存在“只有某个特殊参数表现好”的过拟合特征。</p>
+
+<h4>9.1 MACD 参数（fast/slow/signal）</h4>
+<div id="chart-sens-macd" class="chart"></div>
+<p class="cap">图 9-1　5 组 MACD 参数在各期间的年化收益。8/21/5、12/26/9、15/30/9、5/35/5、10/22/7 —— 全部为负，区间 −28.1% ~ −29.8%（train）。参数选择对结果几乎无影响。</p>
+
+<h4>9.2 放量阈值</h4>
+<div id="chart-sens-vr" class="chart"></div>
+<p class="cap">图 9-2　放量阈值 0.8 → 2.5。阈值越低（越宽松）反而略好，说明“放量”本身是负面因子；但幅度极小（train 区间 −24.3% ~ −29.9%），不构成可交易差异。</p>
+
+<h4>9.3 量能均线与趋势均线</h4>
+<div id="chart-sens-volma" class="chart short"></div>
+<p class="cap">图 9-3　VOL5/VOL20、VOL10/VOL20、VOL5/VOL60 三种量能口径。train 区间 −26.1% ~ −29.6%，结论一致为负。</p>
+<div id="chart-sens-trend" class="chart short"></div>
+<p class="cap">图 9-4　5 种趋势定义（含 MA30、MA120 等变体）。趋势过滤是<strong>最差</strong>的维度，valid 期最差达 −44.8%。</p>
+
+<h4>9.4 回撤容忍度（策略 D）</h4>
+<div id="chart-sens-pb" class="chart"></div>
+<p class="cap">图 9-5　策略 D 的“回踩 MA20 距离容忍度”。这是唯一一个在<strong>样本外</strong>出现正值的维度（±2% 时 test +0.1%、±5% 时 test +8.7%），但训练集（−13.3% ~ −21.1%）与验证集（−8.4% ~ −31.8%）全负，不具备稳定性。</p>
+
+<div class="verdict">
+<b>参数稳定性结论（回答用户第九节）</b>
+<ul style="margin-top:6px;">
+  <li><b>不是过拟合。</b>过拟合的典型特征是“孤立最优点 + 邻域崩塌”。这里是一个<strong>平缓的负值平原</strong>：参数怎么调都是负的，且相邻参数之间差异很小。</li>
+  <li><b>但也找不到任何“甜蜜点”。</b>意味着不存在“再调一点就好了”的可能——支持“信号本身无优势”而非“参数没调好”。</li>
+  <li><b>最稳定的（即最不坏）的维度</b>是放量阈值（选择越宽松越好）与回撤容忍度（选择越紧越好）。这两者都指向同一个方向：<strong>不要追涨、不要等放量</strong>。</li>
+</ul>
+</div>
+</div>
+
+<!-- ======================= 十 ======================= -->
+<h2>十、样本外验证</h2>
+<div class="card">
+<h4>10.1 三个期间的对照</h4>
+<div id="chart-period" class="chart"></div>
+<p class="cap">图 10-1　四个子期间的事件研究 20 日超额收益（市场调整后，日加权口径）。MACD 翻红与“翻红+放量”在 2015-2018、2019-2022、2023-2024、2025-2026 四期<strong>全部为负</strong>，不存在“某段市场环境特别适合”的例外。</p>
+
+<table>
+<thead><tr><th>组合</th><th>2015-2018</th><th>2019-2022</th><th>2023-2024</th><th>2025-2026</th><th>方向一致性</th></tr></thead>
+<tbody id="tbl-period"></tbody>
+</table>
+<p class="cap">表 10-1　分期 20 日超额收益（日加权）。全部同号（负），一致性 4/4。</p>
+
+<h4>10.2 按股票池分期的年化收益（主回测）</h4>
+<div class="tabs" id="tabs-strat-period"></div>
+<div id="chart-strat-period" class="chart"></div>
+<p class="cap">图 10-2　选定策略在 4 个期间 × 5 个股票池的年化收益。可以清楚看到：沪深300/dyn300 的正收益只出现在特定期间，而全A池在任何期间都是深度负值。</p>
+
+<div class="verdict">
+<b>样本外结论</b>：2025-01 至 2026-09 的样本外区间，MACD 翻红相关信号 20 日超额为 <b>−0.387%</b>（翻红+放量，t = −5.0），与训练集（−0.359%）和验证集（−0.388%）几乎完全一致。<strong>信号不仅没有优势，而且这种“没有优势”本身高度稳定可复现</strong>——排除了“巧合”的解释。
+</div>
+</div>
+
+<!-- ======================= 十一 ======================= -->
+<h2>十一、组合评分模型</h2>
+<div class="card">
+<p>按用户给定的权重构造 0–100 分：MACD <b>0–30</b>（柱翻正 10 + 柱斜率 10 + DIF&gt;DEA 10）、量能 <b>0–25</b>（量比 15 + VOL5/VOL20 10）、趋势 <b>0–20</b>（Close&gt;MA20 7 + Close&gt;MA60 7 + MA20&gt;MA60 6）、突破 <b>0–15</b>（距20日高 10 + 距60日高 5）、回撤位置 <b>0–10</b>。</p>
+
+<h4>11.1 分数区间与未来收益的关系</h4>
+<div id="chart-score" class="chart"></div>
+<p class="cap">图 11-1　按分数区间分组的未来超额收益。低分区（0–20）反而最好，高分区（80–100）最差。<b>关系是反向的。</b></p>
+
+<h4>11.2 单调性检验</h4>
+<table>
+<thead><tr><th>持有期</th><th>Spearman ρ（分数 vs 未来超额）</th><th>p 值</th><th>是否单调</th></tr></thead>
+<tbody id="tbl-score-rho"></tbody>
+</table>
+<p class="cap">表 11-1　分数与未来收益的秩相关。<b>全部为显著负相关。</b></p>
+
+<h4>11.3 分数阈值与未来收益</h4>
+<div id="chart-score-th" class="chart"></div>
+<p class="cap">图 11-2　分数阈值越高，未来各期超额收益越差，且单调。Score ≥ 90 的样本 20 日超额 −2.34%、60 日 −3.52%。</p>
+<div class="tabs" id="tabs-score-th"></div>
+<div class="tscroll" id="tbl-score-th" style="max-height:320px;"></div>
+<p class="cap">表 11-2　分数阈值明细表。</p>
+
+<div class="verdict">
+<b>⚠ 评分模型结论（直接回答用户第十一节）</b><br>
+用户明确要求：<b>“重点研究分数越高，未来收益是否真的具有单调性。如果没有单调性，就不要使用评分模型。”</b><br><br>
+实测结果是<strong>“强反向单调”</strong>（20 日 ρ = −0.933, p = 0.0002），比“没有单调性”更强地否决了这个模型——它不是无效，而是<b>方向相反：分数越高越应该回避</b>。因此：<b>不推荐使用该评分模型选股。</b>
+</div>
+</div>
+
+<!-- ======================= 十二 ======================= -->
+<h2>十二、最重要的统计研究：MACD × 成交量组合</h2>
+<div class="card">
+<p>本节直接回答用户第十二节：<b>「MACD 柱由负转正 + Volume Ratio &gt; 1.1」之后，未来 1/5/10/20/60 日收益如何？7 类组合中哪种统计上最有意义？</b></p>
+
+<h4>12.1 严格事件研究：20 个信号组合（含市场调整与显著性检验）</h4>
+<div class="tscroll" id="tbl-events"></div>
+<p class="cap">表 12-1　严格事件研究结果。<b>abs</b>=绝对收益（小数）；<b>ex</b>=观测加权超额（对全部事件取平均，受事件多的小盘股主导）；<b>exw</b>=日加权超额（按交易日等权，与 t 值和 CI 同口径）；<b>t</b>=按日聚类 t 统计量；<b>lo/hi</b>=按日 Bootstrap 95% 置信区间（400 次重抽样）；<b>win</b>=胜率。</p>
+
+<div class="verdict">
+<b>⚠ 两种加权口径必须区分</b><br>
+<b>观测加权（ex）</b>：把每个信号事件当成一个样本取平均。由于小盘股事件数量远多于大盘股，这个数字被小盘股主导，会给出<strong>失真的乐观结果</strong>。<br>
+<b>日加权（exw）</b>：先按交易日求平均、再对交易日取平均。这才是 t 检验和 Bootstrap 用的口径，也是<strong>“如果每天都按信号交易，平均会得到什么”</strong>的正确答案。<br><br>
+本报告<b>以日加权为准</b>。在日加权口径下：<b>20 个组合中没有任何一个获得正超额收益。</b>
+</div>
+
+<h4>12.2 七类核心组合对照</h4>
+<div id="chart-fwd" class="chart"></div>
+<p class="cap">图 12-1　7 类 MACD×量能组合在不同持有期的绝对收益对比。注意：<b>绝对收益为正不代表策略有效</b>——市场本身在涨，必须看市场调整后的超额（见下一图）。</p>
+
+<div id="chart-fwd-ex" class="chart"></div>
+<p class="cap">图 12-2　同样 7 类组合的<strong>日加权超额收益</strong>（扣除同期全市场等权收益）。全部为负，且“翻红 + 突破20日新高”最差（20 日 −1.51%）。</p>
+
+<h4>12.3 决定性问题：量比到底该高还是该低？</h4>
+<div id="chart-vr" class="chart"></div>
+<p class="cap">图 12-3　<b>无条件样本</b>下量比与未来收益的关系，呈<strong>倒 U 型</strong>：量比 1.5–2.0 区间 20 日收益最高（+1.60%），量比 &gt; 3.0 崩到 −0.72%。看起来“温和放量”是对的。</p>
+
+<div class="verdict">
+<b>⚠ 但这是一个陷阱</b>：上面的倒 U 型是<strong>无条件</strong>统计——高量比往往同时对应高波动、小市值、题材股，这些股票本身波动大、收益分布右偏。一旦<strong>限定在 MACD 翻红条件下</strong>（即真正产生买入信号的样本），关系就变成<strong>单调恶化</strong>：
+<ul style="margin-top:6px;">
+  <li>翻红 + 缩量（VR&lt;0.8）：20 日超额 −0.26%</li>
+  <li>翻红 + 温和量（VR 0.8–1.1）：−0.40%</li>
+  <li>翻红 + 中量（VR 1.1–1.5）：−0.71%</li>
+  <li>翻红 + 大量（VR ≥1.5）：−0.81%</li>
+</ul>
+<b>结论：在 MACD 翻红这个条件下，“放量确认”不是正面信号，而是负面信号。</b>
+</div>
+
+<h4>12.4 用真实组合验证：按量比排名分组</h4>
+<p>我们直接按“信号当天量比在全市场的排名”把信号分组，计算各组未来 20 日收益：</p>
+<table>
+<thead><tr><th>分组</th><th>样本数</th><th>20 日平均收益</th><th>解释</th></tr></thead>
+<tbody>
+<tr><td><b>量比前 20 名</b>（引擎实际会选中的）</td><td>52,480</td><td class="neg">+0.005%</td><td>几乎为零，最差</td></tr>
+<tr><td>量比第 21–100 名</td><td>101,305</td><td>+0.592%</td><td>中等</td></tr>
+<tr><td><b>量比第 101 名及以后</b>（量比最低）</td><td>36,992</td><td class="pos">+2.324%</td><td>最好，是前 20 名的 460 倍</td></tr>
+</tbody>
+</table>
+<p class="cap">表 12-2　按当日量比排名分组的信号 20 日收益。<b>放量越强，未来收益越差</b>，方向与原始假设完全相反。</p>
+
+<h4>12.5 流动性分层：信号到底是什么？</h4>
+<div id="chart-layer" class="chart"></div>
+<p class="cap">图 12-4　按 20 日日均成交额分 6 层后的信号超额收益。从大盘（+0.17%）到小盘（−1.44%）<strong>单调递减</strong>。</p>
+<p>这解释了本报告最反直觉的观察：为什么策略在沪深300 池上年化 +11.1%，在全A池上 −28.8%？</p>
+<ul>
+  <li>沪深300 池的信号超额 +0.284%（信号 +1.755% vs 池内基准 +1.471%），但该池有<strong>严重幸存者偏差</strong>，且同期大盘 beta 本身为正</li>
+  <li>全A 池的信号超额为负，且在<strong>小市值股票上负得最多</strong>（−1.44%）</li>
+  <li>2015-2018 年小市值股票整体崩盘，信号恰好在这些小盘股上密集出现，放大了亏损</li>
+</ul>
+<div class="verdict">
+<b>决定性结论：这个信号本质是一个“小市值做空信号（short small-cap signal）”。</b><br>
+它不是在预测上涨，而是在<strong>筛出波动最大、最容易反转的那批股票</strong>。所以：<b>①</b> 它在沪深300 上“看起来有效”纯粹因为大盘 beta 托底；<b>②</b> 它在全A 上巨亏不是成本问题、不是执行问题，而是信号选错了股票；<b>③</b> 如果反过来用（买低量比、回避高量比），表现会明显改善（见下节 2×2×2 实验）。
+</div>
+</div>
+
+<!-- ======================= 十三 ======================= -->
+<h2>十三、十类图表</h2>
+<div class="card">
+<p>本节集中呈现用户要求的 10 类图表。全部基于 2015-2026 全期、allA 动态池（除注明外）、含真实成本。</p>
+
+<h3>图 1 · 各策略净值曲线</h3>
+<div id="chart-equity" class="chart tall"></div>
+<p class="cap">图 13-1　9 个策略的净值曲线（对数纵轴，初始 1.0，周采样）。<b>所有曲线最终都大幅低于 1</b>——最强的策略 D 也只剩约 0.2，最弱的 E/H/I 接近归零。可点击图例单独查看某条曲线。</p>
+
+<h3>图 2 · 最大回撤曲线</h3>
+<div id="chart-dd" class="chart tall"></div>
+<p class="cap">图 13-2　各策略的回撤曲线。全部策略最大回撤超过 −89%，即<strong>账面资金至少蒸发九成</strong>。这不是“波动大”，这是策略不可用。</p>
+
+<h3>图 3 · 年度收益柱状图</h3>
+<div id="chart-yearly" class="chart tall"></div>
+<p class="cap">图 13-3　分年度收益。可以清楚看到：正收益年份极少且集中在 2015（牛市尾段）、2019、2021，其余年份普遍大幅亏损。<b>策略的“好年份”来自市场 beta，不是信号。</b></p>
+
+<h3>图 4 · 月度收益热力图</h3>
+<div style="margin:8px 0 4px;">
+  <label style="font-size:12.5px;color:var(--ink2);">选择策略：</label>
+  <select id="sel-monthly" style="font-family:inherit;font-size:12.5px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;"></select>
+</div>
+<div id="chart-monthly" class="chart tall"></div>
+<p class="cap">图 13-4　月度收益热力图（单位 %）。红＝正，绿＝负。可以观察亏损是否集中——结果显示<strong>亏损分布在几乎所有月份</strong>，不是某个时段的一次性事故。</p>
+
+<h3>图 5 · MACD 信号后未来收益分布</h3>
+<div id="chart-fwd2" class="chart"></div>
+<p class="cap">图 13-5　MACD 各信号后未来 1/5/10/20/60 日平均收益（绝对口径，未做市场调整）。<b>注意：绝对收益为正不代表信号有效</b>——同期全市场平均也在上涨；判断有效性必须看市场调整后的超额（见图 12-2）。</p>
+
+<h3>图 6 · Volume Ratio 与未来收益关系</h3>
+<div id="chart-vr2" class="chart"></div>
+<p class="cap">图 13-6　量比 8 个区间 × 5 个持有期的收益。无条件样本下呈倒 U 型（峰值 VR 1.5–2.0），但如 12.3 节所述，这在 MACD 翻红条件下反转为单调恶化。</p>
+
+<h3>图 7 · MACD 柱变化与未来收益关系</h3>
+<div id="chart-hslope" class="chart"></div>
+<p class="cap">图 13-7　hist_slope（MACD 柱日环比变化）与未来收益。柱体加速向上（右侧区间）在 <b>20 日以上</b>略好，但幅度极小（+0.5pp 以内），且 1 日、5 日几乎无差异——不具备可交易性。</p>
+
+<h3>图 8 · 参数敏感性热力图</h3>
+<div id="chart-sens-heat" class="chart tall"></div>
+<p class="cap">图 13-8　五组参数 × 三期间的年化收益热力图。<b>整片全绿（负）</b>——这是“无信号”而非“过拟合”的直观证据：过拟合会呈现“孤立红点被绿色包围”的斑驳图案。</p>
+
+<h3>图 9 · 不同 Score 对应的未来收益</h3>
+<div id="chart-score2" class="chart"></div>
+<p class="cap">图 13-9　分数区间 × 4 个持有期的超额收益。关系明确反向：低分区最好，高分区最差。</p>
+
+<h3>图 10 · 牛熊震荡市分别表现</h3>
+<div id="chart-regime" class="chart"></div>
+<p class="cap">图 13-10　4 类信号组合在牛市 / 熊市 / 震荡市 / 高波动 / 低波动环境下的 20 日超额收益。几乎全部为负；唯一非负的组合是“低波动环境下的 MACD 翻红”（+0.027%，不显著）。</p>
+
+<h3>补充图 · 成本敏感性与选股/退出隔离</h3>
+<div id="chart-cost" class="chart short"></div>
+<p class="cap">图 13-11　成本乘数 0 → 2 倍时的年化收益。<b>零成本仍亏 24.6%</b>，说明成本不是主要问题。</p>
+<div id="chart-diag" class="chart"></div>
+<p class="cap">图 13-12　2×2×2 隔离实验：换掉退出规则（死叉→固定持有20日）与换掉选股规则（量比降序→升序）各自的贡献。<b>退出规则贡献 15.2pp，选股规则贡献 10.9pp</b>，两者都远大于成本贡献（3.7pp）。注意“量比升序 + 固定持有20日”组合单笔均值为<b>正</b>（+0.24%），是全部实验中唯一接近可用的配置。</p>
+</div>
+
+<!-- ======================= 十四 ======================= -->
+<h2>十四、客观结论</h2>
+<div class="card">
+<h3>14.1 十个问题的直接回答</h3>
+
+<div class="q"><div class="h">Q1. MACD 本身有没有统计优势？</div>
+<div class="a"><b>没有。</b>MACD 柱由负转正后，20 日市场调整超额在日加权口径下为 <b>−0.71%</b>（t = −10.12，95% CI [−0.85%, −0.57%]），统计上显著为负。持有期越长越差（5 日 −0.43%、10 日 −0.54%、20 日 −0.71%、60 日 −0.98%）。所以 MACD 翻红不仅不是买点，反而是<strong>轻微的负面信号</strong>。</div></div>
+
+<div class="q"><div class="h">Q2. 加入成交量条件有没有改善？</div>
+<div class="a"><b>没有，反而恶化。</b>加量能条件使超额从 −0.71% 变到 −0.79%（VR&gt;1.1），且随条件叠加单调恶化：+站上MA20 → −1.05%；+MA20&gt;MA60 → −1.39%；+DIF&gt;0 → −1.44%；+突破20日新高 → <b>−1.51%</b>。成交量过滤在这里扮演的是“放大器”而不是“过滤器”。</div></div>
+
+<div class="q"><div class="h">Q3. 加入趋势过滤（MA20&gt;MA60 等）有没有改善？</div>
+<div class="a"><b>没有，是最差的维度。</b>趋势过滤是 5 个参数维度中唯一在验证集把年化收益推到 −44.8% 的。事件研究中，“翻红 + MA20&gt;MA60” 的 20 日超额 −1.39%，明显劣于不加趋势的 −0.71%。<b>原因</b>：MA20&gt;MA60 在大盘股上很少同时满足“MACD 刚翻红”，两者叠加后剩下的样本偏向高波动小盘股。</div></div>
+
+<div class="q"><div class="h">Q4. 加入价格位置（回撤/距离MA20）有没有改善？</div>
+<div class="a"><b>轻微改善，但不稳定。</b>策略 D（要求接近 MA20、且缩量回踩）是全A池表现最好的策略（−12.7%，其余策略 −28% ~ −38%），说明“<strong>不追高、等回调</strong>”确实是相对正确的方向。但它在训练集仍亏 −12.0% ~ −21.1%，只在样本外出现正值（+0.1% ~ +8.7%），且 ±2% ~ ±15% 的容忍度都能拿正值，说明是<strong>区间效应而非稳定 alpha</strong>。结论：方向对，但不足以形成可获利策略。</div></div>
+
+<div class="q"><div class="h">Q5. 哪些条件降低了收益？</div>
+<div class="a">按危害程度排序：
+<ol>
+<li><b>放量过滤（量比 &gt; 1.1 / &gt; 1.5）</b> —— 收益从 +2.32%（低量比）降到 +0.005%（高量比），差 2.3pp/20日</li>
+<li><b>趋势过滤（MA20&gt;MA60 + Close&gt;MA60）</b> —— 超额从 −0.71% 恶化到 −1.39%</li>
+<li><b>突破过滤（突破 20 日新高）</b> —— 恶化到 −1.51%，最差</li>
+<li><b>DIF&gt;0 强制项</b> —— 恶化到 −1.44%</li>
+</ol>
+共同点：这些条件都在<strong>筛“强势股”</strong>，而强势股在 A 股的短期反转效应下接下来更可能回撤。</div></div>
+
+<div class="q"><div class="h">Q6. 哪些条件只降低回撤、没有提高收益？</div>
+<div class="a"><b>缩量条件</b>。要求“回踩时缩量”（VOL5/VOL20 &lt; 1.0）在事件研究中把胜率从 48.8% 提到 <b>52.2%</b>、把 20 日绝对收益从 +1.39% 提到 +1.67%，但<strong>市场调整后的超额仍为 −0.26%</strong>（不显著）。也就是说它降低的是“跟大盘一起跌”的幅度，不是提高了相对市场的选股能力。这类条件适合做<strong>风控</strong>，不适合做<strong>收益来源</strong>。</div></div>
+
+<div class="q"><div class="h">Q7. 哪些参数最稳定？</div>
+<div class="a">按“参数变化导致结果波动最小”排序：
+<ol>
+<li><b>MACD 参数（最稳定）</b>：8/21/5、12/26/9、15/30/9、5/35/5、10/22/7 在训练集全部落在 −28.1% ~ −29.8%，极差仅 1.7pp。含义：<strong>MACD 参数怎么调都一样（都一样差）</strong>。</li>
+<li><b>放量阈值</b>：0.8 → 2.5 极差 5.6pp（train），越宽松略好。</li>
+<li><b>量能均线口径</b>：3 种极差 3.5pp（train）。</li>
+<li><b>回撤容忍度</b>：跨期间波动最大（train −13.3% ~ −21.1%，test +0.1% ~ +8.7%），<strong>最不稳定</strong>。</li>
+</ol>
+<b>实用含义</b>：如果非要给一个“稳健”的参数选择，就是<strong>不要加量能过滤、不要加趋势过滤、MACD 用标准 12/26/9</strong>——因为加什么都只会更差。</div></div>
+
+<div class="q"><div class="h">Q8. 是否过拟合？</div>
+<div class="a"><b>不是过拟合。</b>过拟合的判定标准是“只有某个特殊参数表现好，邻域明显下降”。本研究的 24 个参数组合<strong>全部为负</strong>，没有任何一个是正的，因此不存在可以“过拟合地选中”的最优点。<br>这是一个更强的结论：<b>不是参数选错了，而是信号本身没有预测能力。</b>过拟合至少还能通过正则化、减少参数挽救；这里没有东西可以挽救。</div></div>
+
+<div class="q"><div class="h">Q9. 样本外是否有效？</div>
+<div class="a"><b>无效，且“无效”本身高度稳定。</b>样本外 2025-01 ~ 2026-09，MACD 翻红 + 放量 的 20 日超额 <b>−0.387%</b>（t = −5.0），与训练集 −0.359%、验证集 −0.388% 几乎一致；四个子期全部为负。<br><b>注意这里的正确解读</b>：通常我们希望样本外“保持有效”，这里样本外是“保持无效”。从这个角度看，研究结论的可复现性很高——<b>你可以很有信心地说，这套信号在未来也不会有优势</b>。</div></div>
+
+<div class="q"><div class="h">Q10. 扣除交易成本后是否仍然有效？</div>
+<div class="a"><b>前提不成立——扣成本前就已经无效。</b>零成本下策略 G 年化 −24.6%；含真实成本 −28.2%；成本贡献 3.65pp/年。这是最关键的归因结果：<br>如果某个策略毛收益 +30%、净收益 +5%，那成本就是决定性问题，值得优化换手率；<br>但本策略毛收益 <b>−24.6%</b>，成本只是在这个基础上再挖 3.7pp 的坑。<b>任何降低成本的努力都无法把一个负收益策略变成正收益策略。</b></div></div>
+
+<hr class="sep">
+
+<h3>14.2 最终建议：一套适合 A 股实际交易的 MACD + 量能规则</h3>
+<div class="verdict">
+<b>先说最重要的：本研究不支持用「MACD 翻红 + 放量」做买入信号。</b><br>
+在 2015-2026 全样本、7 个股票池、24 个参数组合、20 个信号组合、3 个样本期上，这个思路<strong>没有找到任何一个具有正超额收益的配置</strong>。以下是基于研究结果能给出的最诚实的规则集。
+</div>
+
+<h4>规则 A（推荐）：不要把这个信号当作买入依据</h4>
+<p>如果必须给一条可执行结论，那就是：<b>不要把 MACD 翻红/金叉、成交量放大、趋势多头排列作为 A 股买入信号。</b>根据本研究数据，它不会提高胜率×盈亏比，只会增加交易成本。这是最符合数据、也最省钱的结论。</p>
+
+<h4>规则 B：如果一定要保留 MACD 框架，最小可行的妥协版本</h4>
+<p>下面的规则是全部实验中<strong>唯一没有出现系统性负值</strong>的配置（源自 2×2×2 隔离实验的最后一格，单笔均值 +0.24%）。它保留了 MACD 作为“位置过滤器”的框架，但<strong>把三个最大的负面因子全部反转</strong>：</p>
+<table>
+<thead><tr><th>环节</th><th>规则</th><th>为什么这样改（数据依据）</th></tr></thead>
+<tbody>
+<tr><td><b>选股前提</b></td><td>MACD 柱由负转正（DIF 上穿 DEA）</td><td>仅作为“事件触发器”，不承担预测职能</td></tr>
+<tr><td><b>量能条件</b></td><td><span class="pill ok">反转</span> 要求当日量比 <b>&lt; 1.0</b>（缩量翻红），<b>禁止</b>量比 &gt; 1.5</td><td>量比前 20 名 +0.005% vs 第 101+ 名 +2.324%，差 2.3pp</td></tr>
+<tr><td><b>趋势条件</b></td><td><span class="pill ok">删除</span> 不加 MA20&gt;MA60、不加 Close&gt;MA60</td><td>趋势过滤是最差维度（−1.39% ~ −44.8%）</td></tr>
+<tr><td><b>突破条件</b></td><td><span class="pill ok">删除</span> 不要求突破 20 日新高</td><td>突破条件使超额恶化到 −1.51%，全场最差</td></tr>
+<tr><td><b>价格位置</b></td><td>要求收盘价距 MA20 在 ±5% 以内（不追高）</td><td>唯一在样本外出现正值的维度</td></tr>
+<tr><td><b>流动性门槛</b></td><td><span class="pill bad">硬约束</span> 20 日日均成交额 ≥ 5 亿元；<br>剔除市值后 30% 的标的</td><td>信号在最小盘上超额 −1.44%；大盘上 +0.17%。这是本条规则最关键的一项</td></tr>
+<tr><td><b>退出</b></td><td><span class="pill bad">必须改</span> 固定持有 20 个交易日，<b>不用</b>死叉退出</td><td>死叉退出把持仓压到 11.8 天并系统性锁定亏损（贡献 15.2pp 亏损）</td></tr>
+<tr><td><b>仓位</b></td><td>单笔不超过 5%；同时持有不超过 20 只</td><td>控制单笔风险，避免集中</td></tr>
+<tr><td><b>成交口径</b></td><td>T 日收盘出信号 → T+1 开盘价成交</td><td>防未来函数的强制要求</td></tr>
+</tbody>
+</table>
+
+<h4>规则 C：什么情况下应该停用</h4>
+<ul>
+  <li>回测期内最大回撤仍达 <b>−73%</b>（已是全部实验中最优的回撤），远高于任何可接受水平（一般要求 &lt; −30%）</li>
+  <li>年化仍为 −2.1%，<strong>依然是负的</strong>。它只是“亏得比较慢”，不是“能赚钱”</li>
+  <li>换手率极高（年均约 220 笔 / 20 个持仓位），实盘执行摩擦会进一步恶化结果</li>
+</ul>
+
+<div class="verdict" style="margin-top:16px;">
+<b>最后一句真话</b><br>
+用户的要求是“不要无限加条件，如果简单策略和复杂策略表现接近，优先保留简单策略”。本研究的答案是：<b>所有版本表现都接近——都接近“无效”。</b>因此正确的选择不是保留简单版，而是<b>不使用这套信号</b>。<br><br>
+如果研究目标转向“寻找 A 股有效因子”，本研究给出的三个可用线索是：<b>①</b> 短期反转（买低量比、买回调股）比买强势股有效；<b>②</b> 大盘股上的信号表现系统性优于小盘股（+1.6pp/20日）；<b>③</b> 固定持有期优于技术指标退出。这三点都指向“反转型”而非“动量型”策略，值得作为下一阶段的研究起点。
+</div>
+</div>
+
+<!-- ======================= 附录 ======================= -->
+<h2>附录</h2>
+<div class="card">
+<h4>A. 数据与复现</h4>
+<ul>
+  <li><b>数据源</b>：同花顺金融数据 API — 全市场日 K 导出（Parquet，181MB，不复权）、复权因子事件流、标的清单、指数成分；缺口期（2014-12 ~ 2016-09）通过历史行情接口并发补齐 1,002,654 行</li>
+  <li><b>样本规模</b>：5,565 只股票 × 2,872 个交易日 = 11,299,354 行 × 77 列（含全部指标）</li>
+  <li><b>复权方式</b>：按分红/送股/配股事件流重建前复权因子，锚定最新交易日</li>
+  <li><b>脚本链</b>：<code>01_fetch_data</code> → <code>02_build_dataset</code> → <code>03_backtest</code>（引擎）→ <code>04_strategies</code> → <code>05_run_backtests</code>（280 runs）→ <code>06/08_event_study</code> → <code>07_sensitivity</code> → <code>09_score_model</code> → <code>10_benchmark</code> → <code>11_reconcile</code> → <code>12_build_chart_data</code> → <code>13_layered_diag</code> → <code>14_build_report</code></li>
+</ul>
+
+<h4>B. 本次研究发现并修复的 6 个回测缺陷（全部影响过结论）</h4>
+<table>
+<thead><tr><th>编号</th><th>缺陷</th><th>后果</th><th>修复</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>期间隔离失效：只掩码信号、未裁剪净值序列</td><td>验证期“2年亏29%”被按11.8年年化显示为 −2.88%，严重虚高</td><td><code>run()</code> 新增 <code>day_range</code>，净值同步裁剪</td></tr>
+<tr><td>2</td><td>死亡螺旋：<code>if budget &lt; 5000: continue</code> 硬编码门槛</td><td>账户缩水到 9.9 万后永久停止交易，4.8 年空仓，年化被稀释为 −17.9%（真实 −28.8%）</td><td>改为可配置 <code>min_order_amount</code>，默认 0</td></tr>
+<tr><td>3</td><td>面板索引缓存键不含指标指纹</td><td>不同 MACD 参数命中同一缓存，返回陈旧索引</td><td>缓存键加入指标抽样和 + 列名元组</td></tr>
+<tr><td>4</td><td>敏感性脚本：分块布局面板构造的信号数组与引擎索引错位</td><td>虚增为 train +3.6% / test +6.9%（真实 −28.7% / −22.3%）</td><td>加入排序置换 <code>perm</code> 统一行序</td></tr>
+<tr><td>5</td><td>主回测：股票池掩码在分块布局构建、信号来自排序布局</td><td>各股票池结果趋同，掩盖了 40pp 的池间分化</td><td>先按 (date, thscode) 重排再建掩码</td></tr>
+<tr><td>6</td><td>诊断脚本：临时组合构造存在 off-by-one 前视偏差</td><td>把 T→T+1 跳空计入收益，虚增年化到 +75.9%</td><td>改用组内定位 + T+1 开盘价买入</td></tr>
+</tbody>
+</table>
+<p class="cap">表 C-1　缺陷清单。<b>说明</b>：以上均为“让结果看起来更好”的偏差，修复后结论才从“矛盾”变为“自洽”。列出它们是本报告可信度的一部分。</p>
+
+<h4>C. 关键交叉验证</h4>
+<ul>
+  <li><b>引擎 vs 事件研究</b>：引擎 4,843 笔交易的单笔均值 −1.64%，与事件研究 20 日口径基本一致（差异来自成本、退出规则与持有期差异）</li>
+  <li><b>成本归因</b>：零成本 −24.6% / 含成本 −28.2%，与费用统计（总值 11.6 万 = 初始资金 12% = 1.0%/年）自洽</li>
+  <li><b>基准一致性</b>：无技巧基准（每日真随机 20 只 + 持有 20 日）= +5.08%，高于策略 G 的 −9.9% ~ −28.2%，与“信号无优势”结论一致</li>
+</ul>
+</div>
+
+<div class="disc">
+<b>免责声明</b><br>
+以上内容基于公开数据和量化分析，仅供参考，不构成投资建议。市场有风险，投资需谨慎。任何投资决策应结合个人风险承受能力、资金状况和投资目标独立判断，必要时咨询持牌专业机构。过往表现不预示未来收益。
+</div>
+<p class="foot">报告生成时间：2026-09-23　｜　数据截止：2026-09-21　｜　分析区间：2015-01-05 ~ 2026-09-21（2,872 个交易日）　｜　全部计算结果由本地回测引擎产出，未经人工调整</p>
+
+</div>
+
+<script>
+const D = /*__DATA__*/;
+
+var PAL = ['#1f5fa8','#d64545','#2e9e5b','#8a6d3b','#6f42c1','#0f8b8d','#c2185b','#546e7a','#ef6c00'];
+var UP='#d64545', DN='#2e9e5b', MUTE='#828a94', GRID='#eef0f3', INK='#4a5058';
+
+function $(id){ return document.getElementById(id); }
+function C(id){ return echarts.init($(id)); }
+function pct(x,d){ if(x===null||x===undefined||isNaN(x)) return '—'; return (x*100).toFixed(d===undefined?2:d)+'%'; }
+function num(x,d){ if(x===null||x===undefined||isNaN(x)) return '—'; return Number(x).toFixed(d===undefined?2:d); }
+function int(x){ if(x===null||x===undefined||isNaN(x)) return '—'; return Math.round(x).toLocaleString(); }
+function col(x){ if(x===null||x===undefined||isNaN(x)) return MUTE; return x>=0?UP:DN; }
+function cls(x){ if(x===null||x===undefined||isNaN(x)) return 'mute'; return x>=0?'pos':'neg'; }
+
+var AX = {
+  axisLine:{ lineStyle:{ color:'#dfe3e8' } },
+  axisLabel:{ color:MUTE, fontSize:11 },
+  splitLine:{ lineStyle:{ color:GRID } }
+};
+
+/* ---------- 表 6-2 几何 vs 算术 ---------- */
+(function(){
+  var rows = D.geoarith || [];
+  var h = '';
+  rows.forEach(function(r){
+    h += '<tr><td>每 ' + r.freq + ' 日轮动</td>'
+       + '<td>' + pct(r.arith) + '</td>'
+       + '<td class="' + cls(r.geo) + '"><b>' + pct(r.geo) + '</b></td>'
+       + '<td>' + pct(r.drag) + '</td>'
+       + '<td>' + pct(r.mean,3) + '</td>'
+       + '<td>' + pct(r['std']) + '</td></tr>';
+  });
+  $('tbl-geo').innerHTML = h;
+})();
+
+/* ---------- 图 8-1 CAGR 热力图 ---------- */
+(function(){
+  var STR = ['A','B','C','D','E','F','G','H','I'];
+  var POOLS = ['allA','dyn300','dyn500','hs300','zz500','zz1000','noFilter'];
+  var idx = {};
+  (D.main||[]).forEach(function(r){ if(r.p==='full'){ idx[r.s+'|'+r.u]=r; } });
+  var data = [], vals = [];
+  POOLS.forEach(function(p,xi){
+    STR.forEach(function(s,yi){
+      var r = idx[s+'|'+p];
+      var v = r ? r.cagr : null;
+      if(v===null||v===undefined) return;
+      data.push([xi, yi, +(v*100).toFixed(2)]);
+      vals.push(v*100);
+    });
+  });
+  var mx = Math.max.apply(null, vals.concat([1]));
+  var mn = Math.min.apply(null, vals.concat([-1]));
+  var lim = Math.max(Math.abs(mx), Math.abs(mn));
+  C('chart-cagr-heat').setOption({
+    tooltip:{ position:'top',
+      formatter:function(p){ return POOLS[p.value[0]] + ' / 策略' + STR[p.value[1]] + '<br>年化 ' + p.value[2] + '%'; } },
+    grid:{ left:70, right:90, top:30, bottom:52 },
+    xAxis:{ type:'category', data:POOLS, splitArea:{show:true},
+      axisLabel:{ color:MUTE, fontSize:11, rotate:20 } },
+    yAxis:{ type:'category', data:STR.map(function(s){ return '策略'+s; }), splitArea:{show:true},
+      axisLabel:{ color:MUTE, fontSize:11 } },
+    visualMap:{ min:-lim, max:lim, calculable:true, orient:'vertical', right:6, top:'middle',
+      itemHeight:150, textStyle:{ color:MUTE, fontSize:11 },
+      inRange:{ color:['#1f7a4d','#8fc9a8','#f2f4f6','#f0a9a2','#c0392b'] } },
+    series:[{ type:'heatmap', data:data,
+      label:{ show:true, fontSize:10, color:'#1a1d21',
+        formatter:function(p){ return p.value[2]; } },
+      emphasis:{ itemStyle:{ borderColor:'#1a1d21', borderWidth:1 } } }]
+  });
+})();
+
+/* ---------- 表 8-1 主结果 ---------- */
+var MAIN_TABS = ['allA','dyn300','dyn500','hs300','zz500','zz1000',"noFilter"];
+var MAIN_LAB = { allA:'全A', dyn300:'动态300', dyn500:'动态500', hs300:'沪深300', zz500:'中证500', zz1000:'中证1000', noFilter:'全A(无过滤)' };
+var MAIN_STR = ['A','B','C','D','E','F','G','H','I'];
+function renderMain(univ){
+  var idx = {};
+  (D.main||[]).forEach(function(r){ if(r.p==='full'){ idx[r.s+'|'+r.u]=r; } });
+  var h = '<table><thead><tr>'
+    + '<th>策略</th><th>年化</th><th>累计</th><th>最大回撤</th><th>年化波动</th><th>Sharpe</th><th>Calmar</th>'
+    + '<th>胜率</th><th>盈亏比</th><th>PF</th><th>胜率×盈亏比</th><th>交易数</th><th>年均</th><th>持仓天</th>'
+    + '<th>单笔均值</th><th>最大连亏</th><th>费用/净利</th></tr></thead><tbody>';
+  MAIN_STR.forEach(function(s){
+    var r = idx[s+'|'+univ];
+    if(!r){ return; }
+    h += '<tr><td><b>' + s + '</b></td>'
+      + '<td class="' + cls(r.cagr) + '"><b>' + pct(r.cagr) + '</b></td>'
+      + '<td class="' + cls(r.tr) + '">' + pct(r.tr,1) + '</td>'
+      + '<td class="neg">' + pct(r.mdd,1) + '</td>'
+      + '<td>' + pct(r.vol,1) + '</td>'
+      + '<td>' + num(r.sharpe) + '</td>'
+      + '<td>' + num(r.calmar) + '</td>'
+      + '<td>' + pct(r.wr,1) + '</td>'
+      + '<td>' + num(r.payoff) + '</td>'
+      + '<td class="' + (r.pf>=1?'pos':'neg') + '">' + num(r.pf,3) + '</td>'
+      + '<td>' + num(r.wxp,3) + '</td>'
+      + '<td>' + int(r.ntr) + '</td>'
+      + '<td>' + num(r.tpy,0) + '</td>'
+      + '<td>' + num(r.hold,1) + '</td>'
+      + '<td class="' + cls(r.expc) + '">' + pct(r.expc,2) + '</td>'
+      + '<td>' + int(r.mcl) + '</td>'
+      + '<td>' + pct(r.feepnl,1) + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  $('tbl-main').innerHTML = h;
+}
+(function(){
+  var box = $('tabs-univ');
+  MAIN_TABS.forEach(function(u,i){
+    var b = document.createElement('button');
+    b.textContent = MAIN_LAB[u] || u;
+    if(i===0){ b.className='on'; }
+    b.onclick = function(){
+      Array.prototype.forEach.call(box.children, function(x){ x.className=''; });
+      b.className='on';
+      renderMain(u);
+    };
+    box.appendChild(b);
+  });
+  renderMain('allA');
+})();
+
+/* ---------- 敏感性图 ---------- */
+function sensBars(id, rows, xkey, title){
+  var xs = rows.map(function(r){ return String(r[xkey]); });
+  C(id).setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(v){ return pct(v); } },
+    legend:{ data:['训练 2015-2022','验证 2023-2024','样本外 2025-2026'], top:0,
+      textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:66, right:20, top:40, bottom:34 },
+    xAxis:{ type:'category', data:xs, axisLine:AX.axisLine, axisLabel:AX.axisLabel },
+    yAxis:{ type:'value', name:'年化收益', nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(0)+'%'; } } },
+    series:[
+      { name:'训练 2015-2022', type:'bar', data:rows.map(function(r){ return r.cagr_train; }),
+        itemStyle:{ color:'#1f5fa8' } },
+      { name:'验证 2023-2024', type:'bar', data:rows.map(function(r){ return r.cagr_valid; }),
+        itemStyle:{ color:'#8a6d3b' } },
+      { name:'样本外 2025-2026', type:'bar', data:rows.map(function(r){ return r.cagr_test; }),
+        itemStyle:{ color:DN } }
+    ]
+  });
+}
+sensBars('chart-sens-macd', (D.sens.macd||{}).rows || [], 'macd');
+sensBars('chart-sens-vr',   (D.sens.vr||{}).rows || [], 'vr_th');
+sensBars('chart-sens-volma',(D.sens.volma||{}).rows || [], 'vol_ma');
+sensBars('chart-sens-trend',(D.sens.trend||{}).rows || [], 'trend');
+sensBars('chart-sens-pb',   (D.sens.pullback||{}).rows || [], 'pullback_tol');
+
+/* ---------- 图 10-1 分期 ---------- */
+(function(){
+  var PER = (D.period||{}).periods || [];
+  var rows = (D.period||{}).rows || [];
+  C('chart-period').setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(v){ return pct(v); } },
+    legend:{ data:rows.map(function(r){ return r.label; }), top:0, textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:66, right:20, top:40, bottom:34 },
+    xAxis:{ type:'category', data:PER, axisLine:AX.axisLine, axisLabel:AX.axisLabel },
+    yAxis:{ type:'value', name:'20日超额', nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(2)+'%'; } } },
+    series: rows.map(function(r,i){
+      return { name:r.label, type:'bar', data:r.vals, itemStyle:{ color:PAL[i%PAL.length] } };
+    })
+  });
+})();
+
+/* ---------- 表 10-1 分期表 ---------- */
+(function(){
+  var PER = (D.period||{}).periods || [];
+  var rows = (D.period||{}).rows || [];
+  var h = '';
+  rows.forEach(function(r){
+    var allNeg = r.vals.every(function(v){ return v<0; });
+    h += '<tr><td>' + r.label + '</td>';
+    r.vals.forEach(function(v){ h += '<td class="' + cls(v) + '">' + pct(v) + '</td>'; });
+    h += '<td>' + (allNeg ? '<span class="pill bad">4/4 全负</span>' : '<span class="pill warn">不一致</span>') + '</td></tr>';
+  });
+  $('tbl-period').innerHTML = h;
+})();
+
+/* ---------- 图 10-2 策略 × 期间 ---------- */
+var CUR_STRAT = 'G';
+(function(){
+  var box = $('tabs-strat-period');
+  MAIN_STR.forEach(function(s,i){
+    var b = document.createElement('button');
+    b.textContent = '策略 ' + s;
+    if(s==='G'){ b.className='on'; }
+    b.onclick = function(){
+      Array.prototype.forEach.call(box.children, function(x){ x.className=''; });
+      b.className='on';
+      drawStratPeriod(s);
+    };
+    box.appendChild(b);
+  });
+})();
+function drawStratPeriod(s){
+  var PERIODS = ['train','valid','test','full'];
+  var PLAB = { train:'训练', valid:'验证', test:'样本外', full:'全期' };
+  var idx = {};
+  (D.main||[]).forEach(function(r){ if(r.s===s){ idx[r.u+'|'+r.p]=r; } });
+  var data = [];
+  MAIN_TABS.forEach(function(u,xi){
+    PERIODS.forEach(function(p,yi){
+      var r = idx[u+'|'+p];
+      if(!r) return;
+      data.push([xi, yi, +(r.cagr*100).toFixed(2)]);
+    });
+  });
+  var vals = data.map(function(d){ return d[2]; });
+  var lim = Math.max.apply(null, vals.map(Math.abs).concat([1]));
+  C('chart-strat-period').setOption({
+    tooltip:{ position:'top',
+      formatter:function(p){ return MAIN_LAB[MAIN_TABS[p.value[0]]] + ' / ' + PLAB[PERIODS[p.value[1]]] + '<br>年化 ' + p.value[2] + '%'; } },
+    grid:{ left:70, right:80, top:30, bottom:52 },
+    xAxis:{ type:'category', data:MAIN_TABS.map(function(u){ return MAIN_LAB[u]; }), splitArea:{show:true},
+      axisLabel:{ color:MUTE, fontSize:11, rotate:20 } },
+    yAxis:{ type:'category', data:PERIODS.map(function(p){ return PLAB[p]; }), splitArea:{show:true},
+      axisLabel:{ color:MUTE, fontSize:11 } },
+    visualMap:{ min:-lim, max:lim, calculable:true, orient:'vertical', right:6, top:'middle',
+      itemHeight:140, textStyle:{ color:MUTE, fontSize:11 },
+      inRange:{ color:['#1f7a4d','#8fc9a8','#f2f4f6','#f0a9a2','#c0392b'] } },
+    series:[{ type:'heatmap', data:data,
+      label:{ show:true, fontSize:10, formatter:function(p){ return p.value[2]; } } }]
+  }, true);
+}
+drawStratPeriod('G');
+
+/* ---------- 评分模型 ---------- */
+(function(){
+  var rows = (D.score_th || []);
+  C('chart-score-th').setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(v){ return pct(v); } },
+    legend:{ data:['未来5日','未来10日','未来20日','未来60日'], top:0, textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:70, right:20, top:40, bottom:34 },
+    xAxis:{ type:'category', data:rows.map(function(r){ return 'Score '+r.threshold; }),
+      axisLine:AX.axisLine, axisLabel:AX.axisLabel },
+    yAxis:{ type:'value', name:'超额收益', nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(2)+'%'; } } },
+    series:[
+      { name:'未来5日', type:'line', data:rows.map(function(r){ return r.ex5; }), symbolSize:6 },
+      { name:'未来10日', type:'line', data:rows.map(function(r){ return r.ex10; }), symbolSize:6 },
+      { name:'未来20日', type:'line', data:rows.map(function(r){ return r.ex20; }), symbolSize:7, lineStyle:{ width:2.6 } },
+      { name:'未来60日', type:'line', data:rows.map(function(r){ return r.ex60; }), symbolSize:6 }
+    ]
+  });
+})();
+
+/* ---------- 表 11-2 分数阈值 ---------- */
+(function(){
+  var box = $('tabs-score-th');
+  var cols = [
+    ['n','样本数',function(v){ return int(v); }],
+    ['pct','占比',function(v){ return pct(v,1); }],
+    ['ex5','5日超额',function(v){ return pct(v); }],
+    ['ex10','10日超额',function(v){ return pct(v); }],
+    ['ex20','20日超额',function(v){ return pct(v); }],
+    ['ex60','60日超额',function(v){ return pct(v); }],
+    ['win20','20日胜率',function(v){ return pct(v,1); }]
+  ];
+  var show = 2;
+  function render(){
+    var h = '<table><thead><tr><th>分数阈值</th>';
+    cols.slice(0,show+1).forEach(function(c){ h += '<th>' + c[1] + '</th>'; });
+    ['ex10','ex20','ex60','win20'].forEach(function(k){
+      var c = cols.filter(function(x){ return x[0]===k; })[0];
+      if(c) h += '<th>' + c[1] + '</th>';
+    });
+    h += '</tr></thead><tbody>';
+    (D.score_th||[]).forEach(function(r){
+      h += '<tr><td><b>' + r.threshold + '</b></td>';
+      h += '<td>' + int(r.n) + '</td>';
+      h += '<td>' + pct(r.pct,1) + '</td>';
+      h += '<td class="' + cls(r.ex10) + '">' + pct(r.ex10) + '</td>';
+      h += '<td class="' + cls(r.ex20) + '">' + pct(r.ex20) + '</td>';
+      h += '<td class="' + cls(r.ex60) + '">' + pct(r.ex60) + '</td>';
+      h += '<td>' + pct(r.win20,1) + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    $('tbl-score-th').innerHTML = h;
+  }
+  [2,3].forEach(function(k,i){
+    var b = document.createElement('button');
+    b.textContent = k===2 ? '仅前2列' : '全部列';
+    if(i===0){ b.className='on'; }
+    b.onclick = function(){
+      show = k;
+      Array.prototype.forEach.call(box.children, function(x){ x.className=''; });
+      b.className='on';
+      render();
+    };
+    box.appendChild(b);
+  });
+  render();
+})();
+
+/* ---------- 表 11-1 ρ ---------- */
+(function(){
+  var RHO = [
+    ['未来 5 日', -0.683, 0.0104],
+    ['未来 10 日', -0.817, 0.0013],
+    ['未来 20 日', -0.933, 0.0002],
+    ['未来 60 日', -0.733, 0.0062]
+  ];
+  var h = '';
+  RHO.forEach(function(r){
+    h += '<tr><td>' + r[0] + '</td><td class="neg"><b>' + num(r[1],3) + '</b></td><td>' + num(r[2],4) + '</td>'
+       + '<td><span class="pill bad">反向单调</span></td></tr>';
+  });
+  $('tbl-score-rho').innerHTML = h;
+})();
+
+/* ---------- 表 12-1 事件研究 ---------- */
+(function(){
+  var ev = (D.events||[]);
+  var HZ = [1,5,10,20,60];
+  var h = '<table><thead><tr><th>信号组合</th><th>样本数</th>';
+  HZ.forEach(function(x){ h += '<th>绝对 ' + x + '日</th>'; });
+  HZ.forEach(function(x){ h += '<th>日加权超额 ' + x + '日</th>'; });
+  h += '<th>t(20日)</th><th>CI 下界</th><th>CI 上界</th><th>20日胜率</th></tr></thead><tbody>';
+  ev.forEach(function(r){
+    h += '<tr><td>' + r.label + '</td><td>' + int(r.n) + '</td>';
+    (r.abs||[]).forEach(function(v){ h += '<td>' + pct(v) + '</td>'; });
+    (r.exw||[]).forEach(function(v){ h += '<td class="' + cls(v) + '"><b>' + pct(v) + '</b></td>'; });
+    var t20 = r.t ? r.t[3] : null;
+    h += '<td class="' + (t20<0?'neg':'pos') + '">' + num(t20) + '</td>';
+    h += '<td>' + (r.lo ? pct(r.lo[3]) : '—') + '</td>';
+    h += '<td>' + (r.hi ? pct(r.hi[3]) : '—') + '</td>';
+    h += '<td>' + (r.win ? pct(r.win[3],1) : '—') + '</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  $('tbl-events').innerHTML = h;
+})();
+
+/* ---------- 图 12-1 / 12-2 未来收益 ---------- */
+(function(){
+  var HZ = (D.fwd||{}).horizons || [1,5,10,20,60];
+  var rows = (D.fwd||{}).rows || [];
+  C('chart-fwd2').setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(v){ return pct(v); } },
+    legend:{ data:rows.map(function(r){ return r.label; }), top:0, type:'scroll',
+      textStyle:{ color:INK, fontSize:11 } },
+    grid:{ left:70, right:56, top:52, bottom:34 },
+    xAxis:{ type:'category', data:HZ.map(function(x){ return x+'日'; }),
+      axisLine:AX.axisLine, axisLabel:AX.axisLabel },
+    yAxis:[
+      { type:'value', name:'平均收益', nameTextStyle:{ color:MUTE, fontSize:11 },
+        ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(1)+'%'; } } },
+      { type:'value', name:'胜率', max:0.6, min:0.4, nameTextStyle:{ color:MUTE, fontSize:11 },
+        axisLine:AX.axisLine, splitLine:{ show:false },
+        axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(0)+'%'; } } }
+    ],
+    series: rows.map(function(r,i){
+      return { name:r.label, type:'line', data:r.mean, symbolSize:5,
+        itemStyle:{ color:PAL[i%PAL.length] } };
+    })
+  });
+})();
+
+/* ---------- 图 12-2 日加权超额 ---------- */
+(function(){
+  var HZ = [1,5,10,20,60];
+  var MAP = [
+    ['MACD翻红 (不限量能)', '翻红（不限量能）'],
+    ['MACD翻红 + 缩量 VR<0.8', '翻红 + 缩量'],
+    ['MACD翻红 + VR 0.8-1.1', '翻红 + 平量'],
+    ['MACD翻红 + VR 1.1-1.5', '翻红 + 温和放量'],
+    ['MACD翻红 + VR>=1.5', '翻红 + 大幅放量'],
+    ['底背离', '底背离（左侧）'],
+    ['... +突破20日高', '翻红+量+趋势+突破（全条件）']
+  ];
+  var rows = [];
+  MAP.forEach(function(pair){
+    (D.events||[]).forEach(function(r){ if(r.label===pair[0]) rows.push({ label:pair[1], exw:r.exw, t:r.t }); });
+  });
+  C('chart-fwd-ex').setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(v){ return pct(v); } },
+    legend:{ data:rows.map(function(r){ return r.label; }), top:0, type:'scroll',
+      textStyle:{ color:INK, fontSize:11 } },
+    grid:{ left:70, right:20, top:56, bottom:34 },
+    xAxis:{ type:'category', data:HZ.map(function(x){ return x+'日'; }),
+      axisLine:AX.axisLine, axisLabel:AX.axisLabel },
+    yAxis:{ type:'value', name:'日加权超额', nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(1)+'%'; } } },
+    series: rows.map(function(r,i){
+      return { name:r.label, type:'line', data:r.exw, symbolSize:5,
+        itemStyle:{ color:PAL[i%PAL.length] } };
+    })
+  });
+})();
+
+/* ---------- 图 12-3 / 13-6 量比曲线 ---------- */
+function vrChart(id){
+  var v = D.vr || {};
+  var HZ = ['H1','H5','H10','H20','H60'];
+  var LB = { H1:'未来1日', H5:'未来5日', H10:'未来10日', H20:'未来20日', H60:'未来60日' };
+  C(id).setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(x){ return pct(x); } },
+    legend:{ data:HZ.map(function(h){ return LB[h]; }), top:0, textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:70, right:20, top:40, bottom:44 },
+    xAxis:{ type:'category', data:v.bins || [], axisLine:AX.axisLine,
+      axisLabel:{ color:MUTE, fontSize:11, rotate:18 },
+      name:'Volume Ratio 区间', nameLocation:'middle', nameGap:30, nameTextStyle:{ color:MUTE, fontSize:11 } },
+    yAxis:{ type:'value', name:'平均收益', nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(x){ return (x*100).toFixed(1)+'%'; } } },
+    series: HZ.map(function(h,i){
+      return { name:LB[h], type:'line', data:(v.mean||{})[h], symbolSize:5,
+        itemStyle:{ color:PAL[i%PAL.length] } };
+    })
+  });
+}
+vrChart('chart-vr');
+vrChart('chart-vr2');
+
+/* ---------- 图 13-7 hist_slope ---------- */
+(function(){
+  var v = D.hslope || {};
+  var HZ = ['H1','H5','H10','H20','H60'];
+  var LB = { H1:'未来1日', H5:'未来5日', H10:'未来10日', H20:'未来20日', H60:'未来60日' };
+  C('chart-hslope').setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(x){ return pct(x); } },
+    legend:{ data:HZ.map(function(h){ return LB[h]; }), top:0, textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:70, right:20, top:40, bottom:44 },
+    xAxis:{ type:'category', data:v.bins || [], axisLine:AX.axisLine,
+      axisLabel:{ color:MUTE, fontSize:11, rotate:14 },
+      name:'MACD柱日变化 (hist_slope) 区间', nameLocation:'middle', nameGap:30, nameTextStyle:{ color:MUTE, fontSize:11 } },
+    yAxis:{ type:'value', name:'平均收益', nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(x){ return (x*100).toFixed(1)+'%'; } } },
+    series: HZ.map(function(h,i){
+      return { name:LB[h], type:'line', data:(v.mean||{})[h], symbolSize:5,
+        itemStyle:{ color:PAL[i%PAL.length] } };
+    })
+  });
+})();
+
+/* ---------- 图 12-4 流动性分层 ---------- */
+(function(){
+  var rows = D.layer || [];
+  C('chart-layer').setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(v){ return pct(v); } },
+    legend:{ data:['信号收益','同期基准','超额'], top:0, textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:70, right:20, top:40, bottom:44 },
+    xAxis:{ type:'category', data:rows.map(function(r){ return r.tag; }), axisLine:AX.axisLine,
+      axisLabel:{ color:MUTE, fontSize:11, rotate:16 },
+      name:'20日日均成交额分位', nameLocation:'middle', nameGap:30, nameTextStyle:{ color:MUTE, fontSize:11 } },
+    yAxis:{ type:'value', name:'20日收益', nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(1)+'%'; } } },
+    series:[
+      { name:'信号收益', type:'bar', data:rows.map(function(r){ return r.sig; }),
+        itemStyle:{ color:'#8a6d3b' } },
+      { name:'同期基准', type:'bar', data:rows.map(function(r){ return r.base; }),
+        itemStyle:{ color:'#aab2bb' } },
+      { name:'超额', type:'line', data:rows.map(function(r){ return r.ex; }),
+        symbolSize:7, lineStyle:{ width:2.6, color:'#1f5fa8' }, itemStyle:{ color:'#1f5fa8' } }
+    ]
+  });
+})();
+
+/* ---------- 图 13-1 净值曲线 ---------- */
+(function(){
+  var eq = D.equity || {};
+  var dts = eq.dates || [];
+  var ser = eq.series || {};
+  C('chart-equity').setOption({
+    tooltip:{ trigger:'axis' },
+    legend:{ data:MAIN_STR.map(function(s){ return '策略'+s; }), top:0, type:'scroll',
+      textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:70, right:20, top:44, bottom:40 },
+    xAxis:{ type:'category', data:dts, axisLine:AX.axisLine,
+      axisLabel:{ color:MUTE, fontSize:11 } },
+    yAxis:{ type:'log', name:'净值（对数轴）', nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11 } },
+    series: MAIN_STR.map(function(s,i){
+      var arr = ser[s] || [];
+      return { name:'策略'+s, type:'line', data:arr, showSymbol:false,
+        lineStyle:{ width:1.5, color:PAL[i%PAL.length] },
+        itemStyle:{ color:PAL[i%PAL.length] } };
+    })
+  });
+})();
+
+/* ---------- 图 13-2 回撤 ---------- */
+(function(){
+  var dd = D.dd || {};
+  var dts = dd.dates || [];
+  var ser = dd.series || {};
+  C('chart-dd').setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(v){ return pct(v); } },
+    legend:{ data:MAIN_STR.map(function(s){ return '策略'+s; }), top:0, type:'scroll',
+      textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:70, right:20, top:44, bottom:40 },
+    xAxis:{ type:'category', data:dts, axisLine:AX.axisLine, axisLabel:{ color:MUTE, fontSize:11 } },
+    yAxis:{ type:'value', name:'回撤', max:0, nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(0)+'%'; } } },
+    series: MAIN_STR.map(function(s,i){
+      var arr = ser[s] || [];
+      return { name:'策略'+s, type:'line', data:arr, showSymbol:false,
+        lineStyle:{ width:1.3, color:PAL[i%PAL.length] },
+        itemStyle:{ color:PAL[i%PAL.length] } };
+    })
+  });
+})();
+
+/* ---------- 图 13-3 年度收益 ---------- */
+(function(){
+  var y = D.yearly || {};
+  var yrs = y.years || [];
+  var ser = y.series || {};
+  C('chart-yearly').setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(v){ return pct(v); } },
+    legend:{ data:MAIN_STR.map(function(s){ return '策略'+s; }), top:0, type:'scroll',
+      textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:70, right:20, top:44, bottom:40 },
+    xAxis:{ type:'category', data:yrs, axisLine:AX.axisLine, axisLabel:AX.axisLabel },
+    yAxis:{ type:'value', name:'年度收益', nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(0)+'%'; } } },
+    series: MAIN_STR.map(function(s,i){
+      var o = ser[s] || {};
+      return { name:'策略'+s, type:'bar', data:yrs.map(function(yr){ return o[yr]; }),
+        itemStyle:{ color:PAL[i%PAL.length] } };
+    })
+  });
+})();
+
+/* ---------- 图 13-4 月度热力图 ---------- */
+var MO_CUR = 'G';
+(function(){
+  var sel = $('sel-monthly');
+  MAIN_STR.forEach(function(s){
+    var o = document.createElement('option');
+    o.value = s; o.textContent = '策略 ' + s;
+    if(s==='G'){ o.selected = true; }
+    sel.appendChild(o);
+  });
+  sel.onchange = function(){ moDraw(sel.value); };
+  moDraw('G');
+})();
+function moDraw(s){
+  var obj = ((D.monthly||{}).series || {})[s] || {};
+  var keys = Object.keys(obj).sort();
+  var years = [];
+  keys.forEach(function(k){
+    var p = k.split('-');
+    if(years.indexOf(p[0])<0){ years.push(p[0]); }
+  });
+  var data = [];
+  keys.forEach(function(k){
+    var p = k.split('-');
+    var yi = years.indexOf(p[0]);
+    var mi = parseInt(p[1],10)-1;
+    data.push([mi, yi, +(obj[k]*100).toFixed(2)]);
+  });
+  var vals = data.map(function(d){ return d[2]; });
+  var lim = Math.max.apply(null, vals.map(Math.abs).concat([1]));
+  C('chart-monthly').setOption({
+    tooltip:{ position:'top',
+      formatter:function(p){ return years[p.value[1]] + '年' + (p.value[0]+1) + '月<br>' + p.value[2] + '%'; } },
+    grid:{ left:56, right:80, top:20, bottom:34 },
+    xAxis:{ type:'category', data:['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'],
+      splitArea:{ show:true }, axisLabel:{ color:MUTE, fontSize:11 } },
+    yAxis:{ type:'category', data:years, splitArea:{ show:true }, axisLabel:{ color:MUTE, fontSize:11 } },
+    visualMap:{ min:-lim, max:lim, calculable:true, orient:'vertical', right:6, top:'middle',
+      itemHeight:140, textStyle:{ color:MUTE, fontSize:11 },
+      inRange:{ color:['#1f7a4d','#8fc9a8','#f2f4f6','#f0a9a2','#c0392b'] } },
+    series:[{ type:'heatmap', data:data,
+      label:{ show:true, fontSize:9, color:'#1a1d21',
+        formatter:function(p){ return p.value[2].toFixed(0); } } }]
+  }, true);
+}
+
+/* ---------- 图 13-8 敏感性热力图 ---------- */
+(function(){
+  var dims = [
+    { k:'macd', lab:'MACD 参数', key:'macd' },
+    { k:'vr', lab:'放量阈值', key:'vr_th' },
+    { k:'volma', lab:'量能均线', key:'vol_ma' },
+    { k:'trend', lab:'趋势定义', key:'trend' },
+    { k:'pullback', lab:'回撤容忍', key:'pullback_tol' }
+  ];
+  var PER = ['cagr_train','cagr_valid','cagr_test'];
+  var PLAB = ['训练','验证','样本外'];
+  var ys = [], data = [], vals = [];
+  var yi = 0;
+  dims.forEach(function(d){
+    var rows = ((D.sens||{})[d.k] || {}).rows || [];
+    rows.forEach(function(r){
+      ys.push(d.lab + ' ' + String(r[d.key]));
+      PER.forEach(function(p,xi){
+        var v = r[p];
+        if(v===null||v===undefined) return;
+        data.push([xi, yi, +(v*100).toFixed(2)]);
+        vals.push(v*100);
+      });
+      yi++;
+    });
+    ys.push(' '); yi++;
+  });
+  var lim = Math.max.apply(null, vals.map(Math.abs).concat([1]));
+  C('chart-sens-heat').setOption({
+    tooltip:{ position:'top',
+      formatter:function(p){ return ys[p.value[1]] + ' / ' + PLAB[p.value[0]] + '<br>年化 ' + p.value[2] + '%'; } },
+    grid:{ left:190, right:70, top:24, bottom:30 },
+    xAxis:{ type:'category', data:PLAB, splitArea:{show:true}, axisLabel:{ color:MUTE, fontSize:11 } },
+    yAxis:{ type:'category', data:ys, splitArea:{show:true}, axisLabel:{ color:MUTE, fontSize:11 } },
+    visualMap:{ min:-lim, max:lim, calculable:true, orient:'vertical', right:6, top:'middle',
+      itemHeight:150, textStyle:{ color:MUTE, fontSize:11 },
+      inRange:{ color:['#1f7a4d','#8fc9a8','#f2f4f6','#f0a9a2','#c0392b'] } },
+    series:[{ type:'heatmap', data:data,
+      label:{ show:true, fontSize:10, formatter:function(p){ return p.value[2]; } } }]
+  });
+})();
+
+/* ---------- 图 13-9 Score ---------- */
+(function(){
+  var sc = D.score || {};
+  var HZ = ['H5','H10','H20','H60'];
+  var LB = { H5:'未来5日', H10:'未来10日', H20:'未来20日', H60:'未来60日' };
+  C('chart-score').setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(v){ return pct(v); } },
+    legend:{ data:HZ.map(function(h){ return LB[h]; }), top:0, textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:70, right:20, top:40, bottom:44 },
+    xAxis:{ type:'category', data:sc.bins || [], axisLine:AX.axisLine,
+      axisLabel:{ color:MUTE, fontSize:11, rotate:20 },
+      name:'评分区间', nameLocation:'middle', nameGap:32, nameTextStyle:{ color:MUTE, fontSize:11 } },
+    yAxis:{ type:'value', name:'超额收益', nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(1)+'%'; } } },
+    series: HZ.map(function(h,i){
+      return { name:LB[h], type:'line', data:(sc.ex||{})[h], symbolSize:6,
+        itemStyle:{ color:PAL[i%PAL.length] } };
+    })
+  });
+})();
+(function(){
+  var sc = D.score || {};
+  var HZ = ['H5','H10','H20','H60'];
+  var LB = { H5:'未来5日', H10:'未来10日', H20:'未来20日', H60:'未来60日' };
+  C('chart-score2').setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(v){ return pct(v); } },
+    legend:{ data:HZ.map(function(h){ return LB[h]; }), top:0, textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:70, right:20, top:40, bottom:44 },
+    xAxis:{ type:'category', data:sc.bins || [], axisLine:AX.axisLine,
+      axisLabel:{ color:MUTE, fontSize:11, rotate:20 },
+      name:'评分区间', nameLocation:'middle', nameGap:32, nameTextStyle:{ color:MUTE, fontSize:11 } },
+    yAxis:{ type:'value', name:'超额收益', nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(1)+'%'; } } },
+    series: HZ.map(function(h,i){
+      return { name:LB[h], type:'bar', data:(sc.ex||{})[h],
+        itemStyle:{ color:PAL[i%PAL.length] } };
+    })
+  });
+})();
+
+/* ---------- 图 13-10 牛熊震荡 ---------- */
+(function(){
+  var rg = D.regime || {};
+  var rows = rg.rows || [];
+  C('chart-regime').setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(v){ return pct(v); } },
+    legend:{ data:rows.map(function(r){ return r.label; }), top:0, type:'scroll',
+      textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:70, right:20, top:44, bottom:34 },
+    xAxis:{ type:'category', data:rg.regimes || [], axisLine:AX.axisLine, axisLabel:AX.axisLabel },
+    yAxis:{ type:'value', name:'20日超额', nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(2)+'%'; } } },
+    series: rows.map(function(r,i){
+      return { name:r.label, type:'bar', data:r.vals, itemStyle:{ color:PAL[i%PAL.length] } };
+    })
+  });
+})();
+
+/* ---------- 图 13-11 成本 ---------- */
+(function(){
+  var rows = D.cost || [];
+  C('chart-cost').setOption({
+    tooltip:{ trigger:'axis', valueFormatter:function(v){ return pct(v); } },
+    legend:{ data:['年化收益','累计收益'], top:0, textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:70, right:20, top:40, bottom:34 },
+    xAxis:{ type:'category', data:rows.map(function(r){ return r.cost_mult + '× 成本'; }),
+      axisLine:AX.axisLine, axisLabel:AX.axisLabel },
+    yAxis:{ type:'value', name:'收益', nameTextStyle:{ color:MUTE, fontSize:11 },
+      ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(0)+'%'; } } },
+    series:[
+      { name:'年化收益', type:'line', data:rows.map(function(r){ return r.cagr; }),
+        symbolSize:7, lineStyle:{ width:2.6 }, itemStyle:{ color:'#1f5fa8' } },
+      { name:'累计收益', type:'line', data:rows.map(function(r){ return r.total_return; }),
+        symbolSize:6, itemStyle:{ color:'#8a6d3b' } }
+    ]
+  });
+})();
+
+/* ---------- 图 13-12 2x2x2 隔离 ---------- */
+(function(){
+  var rows = D.diag || [];
+  var LAB = {
+    '量比降序 + 死叉退出':'量比降序·死叉退出',
+    '每日真随机 + 死叉退出':'每日真随机·死叉退出',
+    '量比降序 + 固定持有20日':'量比降序·持有20日',
+    '每日真随机 + 固定持有20日':'每日真随机·持有20日',
+    '量比升序 + 固定持有20日':'量比升序·持有20日'
+  };
+  C('chart-diag').setOption({
+    tooltip:{ trigger:'axis' },
+    legend:{ data:['年化收益','平均单笔收益'], top:0, textStyle:{ color:INK, fontSize:11.5 } },
+    grid:{ left:70, right:70, top:40, bottom:44 },
+    xAxis:{ type:'category', data:rows.map(function(r){ return LAB[r.tag] || r.tag; }),
+      axisLine:AX.axisLine, axisLabel:{ color:MUTE, fontSize:11, rotate:16 } },
+    yAxis:[
+      { type:'value', name:'年化收益', nameTextStyle:{ color:MUTE, fontSize:11 },
+        ...AX, axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(0)+'%'; } } },
+      { type:'value', name:'单笔均值', nameTextStyle:{ color:MUTE, fontSize:11 },
+        axisLine:AX.axisLine, splitLine:{ show:false },
+        axisLabel:{ color:MUTE, fontSize:11, formatter:function(v){ return (v*100).toFixed(1)+'%'; } } }
+    ],
+    series:[
+      { name:'年化收益', type:'bar', data:rows.map(function(r){ return r.cagr; }),
+        itemStyle:{ color:'#1f5fa8' },
+        label:{ show:true, position:'top', fontSize:10, color:INK,
+          formatter:function(p){ return (p.value*100).toFixed(1)+'%'; } } },
+      { name:'平均单笔收益', type:'line', yAxisIndex:1,
+        data:rows.map(function(r){ return r.avg_ret; }),
+        symbolSize:8, lineStyle:{ width:2.6 }, itemStyle:{ color:'#d64545' } }
+    ]
+  });
+})();
+
+/* ---------- 响应式 ---------- */
+window.addEventListener('resize', function(){
+  ['chart-cagr-heat','chart-sens-macd','chart-sens-vr','chart-sens-volma','chart-sens-trend',
+   'chart-sens-pb','chart-period','chart-strat-period','chart-score-th','chart-fwd2',
+   'chart-fwd-ex','chart-vr','chart-vr2','chart-hslope','chart-layer','chart-equity',
+   'chart-dd','chart-yearly','chart-monthly','chart-sens-heat','chart-score','chart-score2',
+   'chart-regime','chart-cost','chart-diag'].forEach(function(id){
+    var el = $(id); if(el && echarts.getInstanceByDom(el)){ echarts.getInstanceByDom(el).resize(); }
+  });
+});
+</script>
+</body>
+</html>
