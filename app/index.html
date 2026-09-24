@@ -54,6 +54,14 @@ body{background:var(--bg);color:var(--tx);
 .seg button:last-child{border-right:0}
 .seg button:hover{background:#f2f4f7}
 .seg button.on{background:var(--blue);color:#fff;font-weight:500}
+/* 多选分段控件（板块）：换行成 2×2，避免 4 个长标签挤成一行 */
+.seg.wrap{flex-wrap:wrap;overflow:visible}
+.seg.wrap button{flex:1 1 calc(50% - 1px);border-bottom:1px solid var(--line)}
+.seg.wrap button:nth-child(2n){border-right:0}
+.seg.wrap button:nth-last-child(-n+2){border-bottom:0}
+/* 板块按钮内的数量小徽章 */
+.seg button .sbc{font-style:normal;font-size:10px;opacity:.72;margin-left:3px}
+.seg button.on .sbc{opacity:.9}
 select,input[type=text],input[type=number]{width:100%;padding:5px 8px;font-size:12.5px;
   border:1px solid var(--line2);border-radius:var(--rmd);background:#fff;color:var(--tx);
   font-family:inherit;outline:none}
@@ -152,6 +160,15 @@ tbody tr.top2{background:#fffdf7}
 .pill.d2{background:#fdf1e8;border-color:#f0d3bd;color:#a8622c}
 .pill.d3{background:#fbf7e6;border-color:#e8dfb8;color:#8a7420}
 .pill.dn{background:#f0f2f5;border-color:#e0e3e8;color:#6b7280}
+/* 板块徽章：主板灰 / 创业板蓝 / 科创板紫 / 北交所橙 */
+.pill.bdMAIN{background:#f0f2f5;border-color:#dfe3e9;color:#586070;
+  font-family:inherit;letter-spacing:.2px}
+.pill.bdCHINEXT{background:#eaf3fd;border-color:#c6ddf5;color:#25619e;
+  font-family:inherit;letter-spacing:.2px}
+.pill.bdSTAR{background:#f2eefc;border-color:#d9cff2;color:#5b3fa8;
+  font-family:inherit;letter-spacing:.2px}
+.pill.bdBJ{background:#fdf3e9;border-color:#f2dcc4;color:#a4632a;
+  font-family:inherit;letter-spacing:.2px}
 /* ---------- 图表 ---------- */
 .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:14px}
 .chart{position:relative;width:100%;height:290px}
@@ -327,7 +344,7 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
           <input type="range" id="size_max" min="0" max="9" step="1" value="2">
           <span class="vl" id="size_v">30%</span>
         </div>
-        <div class="cap">size_grp ≤ N。D0=最小10% · D2=最小30% · D9=全部。<br>
+        <div class="cap">市值组 ≤ M(N+1)。M1=最小10% · M3=最小30% · M10=全部。<br>
           报告第8节：超跌反转几乎全部来自小市值（最小10% vs 最大10% 差 2.5pp/日）。</div>
       </div>
     </div>
@@ -444,13 +461,30 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
           <button data-act="noneind">清空</button>
         </div>
         <div class="chks" id="inds" style="max-height:190px"></div>
+
+        <div style="font-size:12px;color:var(--tx2);margin:11px 0 5px">板块筛选
+          <span style="color:var(--tx3);font-size:11px" id="bdcnt">（0 选中 = 不限）</span></div>
+        <div class="poolcls">
+          <button data-act="allbd">全选</button>
+          <button data-act="nonebd">清空</button>
+        </div>
+        <div class="seg wrap" id="seg-board">
+          <button data-v="MAIN" class="on">主板<i class="sbc" id="sbc-MAIN"></i></button>
+          <button data-v="CHINEXT" class="on">创业板<i class="sbc" id="sbc-CHINEXT"></i></button>
+          <button data-v="STAR" class="on">科创板<i class="sbc" id="sbc-STAR"></i></button>
+          <button data-v="BJ">北交所<i class="sbc" id="sbc-BJ"></i></button>
+        </div>
+        <div class="cap">板块由证券代码号段判定，经涨跌停幅度交叉验证（主板 10% / 创业板·科创板 20% / 北交所 30%）。
+          北交所流动性与制度差异大，默认不选。</div>
+
         <div style="font-size:12px;color:var(--tx2);margin:11px 0 5px">交易所</div>
         <div class="seg" id="seg-ex">
           <button data-v="SH" class="on">沪市</button>
           <button data-v="SZ" class="on">深市</button>
           <button data-v="BJ">北交所</button>
         </div>
-        <div class="cap">北交所流动性弱、涨跌幅 30%，默认不选。</div>
+        <div class="cap">交易所与板块是两个独立维度：创业板都在深市，科创板都在沪市；
+          先按板块限量，再用交易所做二次细分。</div>
 
         <div class="finwrap">
           <div class="finhead">
@@ -602,6 +636,9 @@ const PCT = (v, n = 1) => (v === null || v === undefined || !isFinite(v)) ? '—
    两套单位混在同一个接口里，最容易写错 —— 改这里前先看 engine.trades() 的注释。 */
 const PCTN = (v, n = 2) => (v === null || v === undefined || !isFinite(v)) ? '—'
   : v.toFixed(n) + '%';
+/* 板块代码 → 中文短标签（后端 /api/meta 的 board_names 同源，此处硬编码便于表格快速渲染）*/
+const BD_MAP = { MAIN: '主板', CHINEXT: '创业板', STAR: '科创板', BJ: '北交所' };
+const BD = v => BD_MAP[v] || (v || '—');
 const cls = v => (v > 0 ? 'pos' : v < 0 ? 'neg' : 'neu');
 const NF = new Intl.NumberFormat('zh-CN');
 const NUM = v => (v === null || v === undefined) ? '—' : NF.format(Math.round(v));
@@ -615,7 +652,7 @@ const MONEY = v => {
 };
 
 let META = null, LAST = null, DEFAULT_PARAMS = {}, PRESETS = [];
-let POOL = { mode: 'all', codes_text: '', industries: [], exchanges: ['SH', 'SZ'] };
+let POOL = { mode: 'all', codes_text: '', industries: [], boards: ['MAIN', 'CHINEXT', 'STAR'], exchanges: ['SH', 'SZ'] };
 let CFG = {};          // 当前参数
 let SCAN = null;       // 最近一次扫描结果
 const charts = {};
@@ -844,6 +881,13 @@ async function init() {
     $('#inds').innerHTML = m.industries.map(n =>
       `<label class="chk"><input type="checkbox" value="${n}">
        <span><span class="t">${n}</span></span></label>`).join('');
+    // 板块数量徽章（来自 meta.board_counts，仅供提示；未连接时留空）
+    const bc = m.board_counts || {};
+    ['MAIN', 'CHINEXT', 'STAR', 'BJ'].forEach(k => {
+      const el = $('#sbc-' + k);
+      if (el && bc[k] != null) el.textContent = NUM(bc[k]);
+    });
+    syncBdCnt();
     $('#p-help').innerHTML = helpHTML();
     await runAll();
   } catch (e) {
@@ -857,6 +901,7 @@ function currentPool() {
   p.mode = segv('#seg-pool') || 'all';
   p.codes_text = $('#pool_codes').value;
   p.industries = $$('#inds input:checked').map(i => i.value);
+  p.boards = $$('#seg-board button.on').map(b => b.dataset.v);
   p.exchanges = $$('#seg-ex button.on').map(b => b.dataset.v);
   return p;
 }
@@ -940,6 +985,7 @@ function renderScan(r) {
       <th class="sorter" data-k="d_px60">距MA60分位</th>
       <th class="sorter" data-k="d_ret40">ret40分位</th>
       <th class="sorter" data-k="size_grp">市值组</th>
+      <th class="sorter" data-k="board">板块</th>
       <th class="sorter" data-k="hv20">HV20</th>
       <th class="sorter" data-k="rvol">量比</th>
       <th class="sorter" data-k="fin_rev">营收</th>
@@ -950,7 +996,8 @@ function renderScan(r) {
       <th class="sorter" data-k="score">得分</th>
       <th>次日可买</th>
     </tr></thead><tbody id="scanbody"></tbody></table></div>
-    <div class="cap">市值组：0 = 最小 10%，9 = 最大 10%。分位：1 = 最弱，10 = 最强。
+    <div class="cap">市值组 M1~M10：M1 = 最小 10%，M10 = 最大 10%。分位：1 = 最弱，10 = 最强。
+      板块经涨跌停幅度交叉验证（主板 10% / 创业板·科创板 20% / 北交所 30%）。
       「次日可买」= 信号次日开盘未涨停（可实际买入）。
       财务列为<b>该候选日当时已公告</b>的财报（累计口径，同比增长按去年同期对比），
       即回测中实际使用的数值。<span style="color:#0d7a3a">动态对齐已生效</span>。</div></div>`;
@@ -999,7 +1046,9 @@ function renderScanRows(items) {
       <td class="${cls(it.ret60)}">${F(it.ret60, 2, '%')}</td>
       <td><span class="pill ${pcls}">D${it.d_px60 ?? '—'}</span></td>
       <td>D${it.d_ret40 ?? '—'}</td>
-      <td>D${it.size_grp ?? '—'}</td>
+      <!-- 市值组 = 分位序号（0 起），用 M 前缀区别于 D 档位 -->
+      <td style="color:#5c6270">${it.size_grp == null ? '—' : 'M' + (it.size_grp + 1)}</td>
+      <td>${it.board ? `<span class="pill bd${it.board}">${BD(it.board)}</span>` : '—'}</td>
       <td>${F(it.hv20, 1, '%')}</td>
       <td>${F(it.rvol, 2)}</td>
       <td style="color:#5c6270">${MONEY(it.fin_rev)}</td>
@@ -1194,6 +1243,7 @@ const TCOLS = [
   ['code', '代码', 1, 'l'],
   ['name', '名称', 1, 'nm'],
   ['ind', '行业', 1, 'l'],
+  ['board', '板块', 0],
   ['signal_date', '信号日', 0],
   ['entry_date', '买入日', 0],
   ['exit_date', '卖出日', 0],
@@ -1403,6 +1453,7 @@ function renderTradeRows(rows) {
     <td class="l">${it.code}</td>
     <td class="nm">${it.name}</td>
     <td class="l" style="color:#5c6270">${it.ind}</td>
+    <td><span class="pill bd${it.board}">${BD(it.board)}</span></td>
     <td style="color:var(--tx3)">${it.signal_date || '—'}</td>
     <td>${it.entry_date || '—'}</td>
     <td>${it.exit_date || '—'}</td>
@@ -1413,7 +1464,9 @@ function renderTradeRows(rows) {
     <td class="${cls(it.ret)}">${PCTN(it.ret)}</td>
     <td class="${cls(it.bench)}">${PCTN(it.bench)}</td>
     <td class="${cls(it.excess)}">${PCTN(it.excess)}</td>
-    <td>D${it.size_grp ?? '—'}</td>
+    <!-- ⚠️ 市值组是分位序号（0 起 = 最小 10%），不是十分位档位编号；
+         直接展示成 M1~M10 以免与下方的「距MA60 D1~D10」混淆 -->
+    <td style="color:#5c6270">${it.size_grp == null ? '—' : 'M' + (it.size_grp + 1)}</td>
     <td><span class="pill ${it.d_px60 === 1 ? 'd1' : it.d_px60 === 2 ? 'd2' : 'dn'}">D${it.d_px60 ?? '—'}</span></td>
     <td style="color:#5c6270">${MONEY(it.fin_rev)}</td>
     <td class="${cls(it.fin_rev_yoy)}">${F(it.fin_rev_yoy, 1, '%')}</td>
@@ -1795,15 +1848,33 @@ $('#fin_period').addEventListener('change', updateFinBadge);
 $$('.finquick button').forEach(b => b.addEventListener('click', () => {
   setFinQuick(b.dataset.fin);
 }));
-$$('#inds input').forEach(i => i.addEventListener('change', () => {
+function syncIndCnt() {
   const n = $$('#inds input:checked').length;
   $('#indcnt').textContent = n ? `（选中 ${n} 个）` : '（0 选中 = 不限）';
-}));
+}
+function syncBdCnt() {
+  const n = $$('#seg-board button.on').length;
+  $('#bdcnt').textContent = n ? `（选中 ${n} 个）` : '（0 选中 = 不限）';
+}
+$$('#inds input').forEach(i => i.addEventListener('change', syncIndCnt));
+/* ⚠️ 这里挂的是所有 .poolcls 按钮（行业 全选/清空 与 板块 全选/清空 共用样式），
+   必须按 data-act 分流，否则板块按钮会去勾行业复选框。 */
 $$('.poolcls button').forEach(b => b.addEventListener('click', () => {
-  const on = b.dataset.act === 'allind';
+  const act = b.dataset.act;
+  if (act === 'allbd' || act === 'nonebd') {
+    const on = act === 'allbd';
+    $$('#seg-board button').forEach(x => x.classList.toggle('on', on));
+    syncBdCnt();
+    return;
+  }
+  const on = act === 'allind';
   $$('#inds input').forEach(i => i.checked = on);
-  const n = $$('#inds input:checked').length;
-  $('#indcnt').textContent = n ? `（选中 ${n} 个）` : '（0 选中 = 不限）';
+  syncIndCnt();
+}));
+/* 板块是多选：点击即切换，不是单选 */
+$$('#seg-board button').forEach(b => b.addEventListener('click', () => {
+  b.classList.toggle('on');
+  syncBdCnt();
 }));
 $$('#seg-pool button').forEach(b => b.addEventListener('click', () => {
   $('#poolcustom').style.display = segv('#seg-pool') === 'custom' ? 'block' : 'none';
@@ -1835,10 +1906,14 @@ $('#reset').addEventListener('click', () => {
   $('#preset').value = PRESETS[0].id;
   applyParams(PRESETS[0].params);
   $('#presetdesc').textContent = PRESETS[0].desc;
-  POOL = { mode: 'all', codes_text: '', industries: [], exchanges: ['SH', 'SZ'] };
+  POOL = { mode: 'all', codes_text: '', industries: [], boards: ['MAIN', 'CHINEXT', 'STAR'], exchanges: ['SH', 'SZ'] };
   $('#pool_codes').value = '';
   $$('#inds input').forEach(i => i.checked = false);
-  $('#indcnt').textContent = '（0 选中 = 不限）';
+  syncIndCnt();
+  // 板块恢复默认：主板 + 创业板 + 科创板（北交所不选）
+  $$('#seg-board button').forEach(b =>
+    b.classList.toggle('on', b.dataset.v !== 'BJ'));
+  syncBdCnt();
   $$('#seg-ex button').forEach(b => b.classList.toggle('on', b.dataset.v === 'SH' || b.dataset.v === 'SZ'));
   $$('#seg-pool button').forEach(b => b.classList.toggle('on', b.dataset.v === 'all'));
   $('#poolcustom').style.display = 'none';

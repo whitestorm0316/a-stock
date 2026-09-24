@@ -39,6 +39,25 @@ class Engine:
         self._build()
         self.build_ms = int((time.time() - t0) * 1000)
 
+    # ------------------------------------------------------------ 板块兜底
+    def _board_from_code(self):
+        """按证券代码号段推断板块（面板无 board 列时的兜底）。
+
+        号段规则（经全样本实证 + limit_pct 交叉验证）：
+          沪市主板 600/601/603/605      深市主板 000/001/002/003/302
+          创业板   300/301              科创板   688/689
+          北交所   920 / 8xxxxx / 4xxxxx（其余兜底）
+        ⚠️ 302 属深市主板而非创业板 —— 已用 limit_pct 验证（无 20% 涨停记录），
+           例如 302132.SZ 中航成飞。
+        """
+        c3 = np.char.slice(np.asarray(self.code, dtype=str), 0, 3)
+        return np.select(
+            [np.isin(c3, ["600", "601", "603", "605"]),
+             np.isin(c3, ["000", "001", "002", "003", "302"]),
+             np.isin(c3, ["300", "301"]),
+             np.isin(c3, ["688", "689"])],
+            ["MAIN", "MAIN", "CHINEXT", "STAR"], default="BJ")
+
     # ------------------------------------------------------------ 原始面板
     def _load(self):
         cols = [
@@ -46,6 +65,8 @@ class Engine:
             "open_price", "close_price", "high_price", "low_price",
             "can_buy_open", "can_sell_open", "size_grp", "limit_pct",
             "ind_code", "ind_name",
+            # ⚠️ board = 板块（MAIN/CHINEXT/STAR/BJ），由数据源直接给出
+            "board",
             # 价格型
             "ret5", "ret10", "ret20", "ret40", "ret60",
             "px_ma20_pct", "px_ma60_pct", "px_ma120_pct",
@@ -141,9 +162,41 @@ class Engine:
         self.ind_name = np.asarray(df["ind_name"].fillna("未知").values, dtype=str)
         self.stk_name = np.asarray(df["name"].fillna("").values, dtype=str)
         # 交易所：SH / SZ / BJ（北交所）
-        ex = np.where(np.char.endswith(self.code, ".SH"), "SH",
-                      np.where(np.char.endswith(self.code, ".BJ"), "BJ", "SZ"))
-        self.exchange = ex
+        # ⚠️ 优先用面板自带的 exchange 列（数据源权威），缺失时按代码后缀兜底
+        if "exchange" in df.columns:
+            self.exchange = np.asarray(df["exchange"].fillna("").values, dtype=str)
+            self.exchange[self.exchange == ""] = np.where(
+                np.char.endswith(self.code, ".SH"), "SH",
+                np.where(np.char.endswith(self.code, ".BJ"), "BJ", "SZ"))[self.exchange == ""]
+        else:
+            self.exchange = np.where(np.char.endswith(self.code, ".SH"), "SH",
+                                     np.where(np.char.endswith(self.code, ".BJ"), "BJ", "SZ"))
+
+        # ---- 板块（MAIN/CHINEXT/STAR/BJ）
+        # ⚠️ 优先用面板自带的 board 列 —— 这是数据源直接给出的官方分类，
+        #    比按代码号段猜更可靠。已用 limit_pct（涨跌停幅度）交叉验证：
+        #      MAIN    → 10%（沪深主板）
+        #      CHINEXT → 20%（创业板）/ STAR → 20%（科创板）
+        #      BJ      → 30%（北交所）
+        #    自检手法：若某板块出现 20% 涨停却不是创业板/科创板，说明分类错了。
+        #    兜底（面板无 board 列时）按号段推断：
+        #      600/601/603/605 → 沪市主板；000/001/002/003/302 → 深市主板
+        #      300/301 → 创业板；688/689 → 科创板；其余 → 北交所
+        if "board" in df.columns:
+            bd = np.char.upper(np.asarray(df["board"].fillna("").values, dtype=str))
+            # 容忍不同数据源的命名风格，统一到 MAIN/CHINEXT/STAR/BJ
+            bd = np.select(
+                [np.isin(bd, ["MAIN", "MAIN_SH", "MAIN_SZ", "主板", "沪市主板", "深市主板"]),
+                 np.isin(bd, ["CHINEXT", "GEM", "创业板"]),
+                 np.isin(bd, ["STAR", "STAR_MARKET", "科创板"]),
+                 np.isin(bd, ["BJ", "BSE", "北交所"])],
+                ["MAIN", "CHINEXT", "STAR", "BJ"], default="")
+            fb = self._board_from_code()
+            self.board = np.where(bd == "", fb, bd)
+        else:
+            self.board = self._board_from_code()
+        self.boards = ["MAIN", "CHINEXT", "STAR", "BJ"]
+
         # 股票池的行业清单
         self.industries = sorted(set(self.ind_name.tolist()))
 
@@ -448,7 +501,13 @@ class Engine:
     # ================================================================ 股票池
     def build_pool(self, spec):
         """spec = {mode, codes:[], codes_text:'', industries:[], exchanges:[],
-                   exclude_st:bool}"""
+                   boards:[], exclude_st:bool}
+
+        boards 取值（可多选）：
+          'MAIN'    主板（沪深主板，数据源 original 分类）
+          'CHINEXT' 创业板 / 'STAR' 科创板 / 'BJ' 北交所
+        大小写不敏感（会自动 upper），未知取值直接忽略。
+        """
         n = self.C["n"]
         mask = np.ones(n, bool)
         mode = (spec or {}).get("mode", "all")
@@ -477,6 +536,13 @@ class Engine:
         exs = set(spec.get("exchanges") or [])
         if exs:
             mask &= np.isin(self.exchange, list(exs))
+        # ---- 板块筛选（大小写不敏感；空列表 = 不限）
+        bds = [str(x).strip().upper() for x in (spec.get("boards") or []) if str(x).strip()]
+        if bds:
+            valid = [b for b in bds if b in self.boards]
+            if not valid:
+                return None, f"板块筛选无有效取值（{bds}），可选：{self.boards}"
+            mask &= np.isin(self.board, valid)
         if spec.get("exclude_st"):
             # load_clean 已剔除当前 ST，此处保留接口
             pass
@@ -651,6 +717,7 @@ class Engine:
                 seq=i + 1,
                 code=str(self.code[p_i]), name=str(self.stk_name[p_i]),
                 ind=str(self.ind_name[p_i]), ex=str(self.exchange[p_i]),
+                board=str(self.board[p_i]),
                 signal_date=str(self.day_str[s_i]),
                 entry_date=str(self.day_str[ent_d[i]]) if ent_d[i] < self.nd else None,
                 exit_date=str(self.day_str[ext_d[i]]) if ext_d[i] < self.nd else None,
@@ -830,6 +897,7 @@ class Engine:
             items.append(dict(
                 code=str(self.code[i]), name=str(self.stk_name[i]),
                 ind=str(self.ind_name[i]), ex=str(self.exchange[i]),
+                board=str(self.board[i]),
                 close=self._f(self.cl[i], 2),
                 dist60=self._f(dist60v[i] * 100, 2) if np.isfinite(dist60v[i]) else None,
                 dist20=self._f(dist20v[i] * 100, 2) if np.isfinite(dist20v[i]) else None,
@@ -887,6 +955,7 @@ class Engine:
         s = s[-250:]
         out = dict(
             code=code, name=str(self.stk_name[s[-1]]), ind=str(self.ind_name[s[-1]]),
+            board=str(self.board[s[-1]]), ex=str(self.exchange[s[-1]]),
             rows=[dict(
                 date=str(self.day_str[self.D[i]]),
                 close=round(float(self.cl[i]), 2),
@@ -953,9 +1022,12 @@ class Engine:
         m = self.D == last
         idx = np.flatnonzero(m)
         stocks = [dict(code=str(self.code[i]), name=str(self.stk_name[i]),
-                       ind=str(self.ind_name[i]), ex=str(self.exchange[i]))
+                       ind=str(self.ind_name[i]), ex=str(self.exchange[i]),
+                       board=str(self.board[i]))
                   for i in idx]
         stocks.sort(key=lambda x: x["code"])
+        # 各板块股票数（供前端提示）
+        _bc = {b: int((self.board == b).sum()) for b in self.boards}
         return dict(
             n_rows=int(self.C["n"]), n_stocks=int(len(self.C["starts"])),
             n_days=int(self.nd),
@@ -963,6 +1035,10 @@ class Engine:
             last_date=str(self.day_str[last]),
             build_ms=self.build_ms,
             industries=self.industries,
+            boards=self.boards,
+            board_names={"MAIN": "主板", "CHINEXT": "创业板", "STAR": "科创板",
+                         "BJ": "北交所"},
+            board_counts=_bc,
             n_industry_stocks=len(stocks),
             stocks=stocks,
             fin_avail=bool(getattr(self, "fin_avail", False)),
