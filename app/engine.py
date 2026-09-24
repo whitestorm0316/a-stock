@@ -91,6 +91,10 @@ class Engine:
         self.D = self.C["day_idx"]
         self.ud = self.C["ud"]
         self.nd = self.C["n_days"]
+        # 行 → 股票序号（同一只票的所有行同值）。喂给 plan_positions 做
+        # 「同一只票未平仓期间不得重复买入」的约束，见 v3b_lib.plan_positions。
+        self.sid = np.repeat(np.arange(self.C["starts"].size, dtype=np.int64),
+                             self.C["ends"] - self.C["starts"])
 
     # ------------------------------------------------------------ 预计算
     def _build(self):
@@ -621,7 +625,7 @@ class Engine:
 
     # ============================================================ 容量约束回测
     def capacity_plan(self, mask, hold=20, max_pos=10, max_new=3, pick="deep",
-                      seed0=42):
+                      seed0=42, dedupe=True):
         """只算「实际建仓计划」，不算净值 —— 供 `trades()` 复用。
 
         为什么单独抽出来
@@ -643,7 +647,8 @@ class Engine:
             pk = np.asarray(self.df[col].values, np.float64)
         pl = plan_positions(mask, self.D, self.nd, int(hold),
                             max_pos=max_pos, max_new=max_new,
-                            pick=pk, pick_asc=rule["asc"], rng_seed=seed0)
+                            pick=pk, pick_asc=rule["asc"], rng_seed=seed0,
+                            stock_of_row=self.sid, dedupe=dedupe)
         ns = max(pl["n_signal"], 1)
         pl.update(max_pos=int(max_pos), max_new=int(max_new),
                   pick=str(pick), pick_name=rule["name"],
@@ -651,8 +656,11 @@ class Engine:
         return pl
 
     def capacity(self, mask, hold=20, max_pos=10, max_new=3, pick="deep",
-                 n_sim=200, seed0=42):
+                 n_sim=200, seed0=42, dedupe=True):
         """在「同时持仓上限 + 每日新开仓上限」下模拟，回答「实盘真能这么干吗」。
+
+        `dedupe=True`（默认）：同一只票在**未平仓期间不得再次买入**，卖掉之后才
+        恢复可交易。传 False 可退回原先允许重复持有同一标的的口径。
 
         为什么必须做
         ------------
@@ -700,7 +708,8 @@ class Engine:
                 pk = np.asarray(self.df[pick_key].values, np.float64)
             pl = plan_positions(mask, self.D, self.nd, int(hold),
                                 max_pos=max_pos, max_new=max_new,
-                                pick=pk, pick_asc=asc, rng_seed=seed)
+                                pick=pk, pick_asc=asc, rng_seed=seed,
+                                stock_of_row=self.sid, dedupe=dedupe)
             netA, cnt = nav_from_holds(pl["holds"], self.D, self.nd,
                                        self.oret_sig, self.C, hold=int(hold))
             netB, _ = nav_from_holds(pl["holds"], self.D, self.nd,
@@ -724,6 +733,7 @@ class Engine:
             # ---- 容量诊断
             n_hold=int(cs["n_hold"]), n_signal=int(cs["n_signal"]),
             n_drop=int(cs["n_drop"]), drop_pct=float(cs["drop_pct"]),
+            n_drop_dup=int(cs["n_drop_dup"]),  # 因「已持有未平仓」被跳过
             fill_pct=float(cs["fill_pct"]),
             avg_pos=float(cs["avg_pos"]), max_pos_seen=int(cs["max_pos_seen"]),
             empty_pct=float(cs["empty_pct"]), active_pct=float(cs["active_pct"]),
@@ -860,6 +870,7 @@ class Engine:
                 n_signal=int(plan.get("n_signal") or 0),
                 n_drop=int(plan.get("n_drop") or 0),
                 drop_pct=float(plan.get("drop_pct") or 0.0),
+                n_drop_dup=int(plan.get("n_drop_dup") or 0),  # 重复持仓被跳过
                 n_plan=int(len(held_rows)),      # 计划建仓数
                 n_open=n_open,                   # 期末仍未平仓（数据边界所致）
             )

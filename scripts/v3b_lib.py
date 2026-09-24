@@ -356,7 +356,8 @@ def portfolio_nav(sig, day_idx, n_days, oret_sig, s_days, C, rt_cost=RT_COST):
 
 # ================================================================ 容量约束组合
 def plan_positions(mask, day_idx, n_days, hold, max_pos=10, max_new=3,
-                   pick=None, pick_asc=True, rng_seed=42):
+                   pick=None, pick_asc=True, rng_seed=42,
+                   stock_of_row=None, dedupe=True):
     """在**同时持仓上限 + 每日新开仓上限**下，逐日顺序决定「实际持有」哪些仓位。
 
     为什么需要这个
@@ -373,6 +374,19 @@ def plan_positions(mask, day_idx, n_days, hold, max_pos=10, max_new=3,
     ⚠️ 关键纪律：**排序必须在信号日 T 的信息集内完成**（用 T 日收盘可见的字段），
        绝不能用到未来收益，否则又是前视偏差。
 
+    ⚠️ **同一只票不得重复持仓**（`dedupe=True`，默认开启）
+    --------------------------------------------------------
+    已持有某只票、且这笔仓位**还没到期卖出**时，即使它明天又出信号，也**不再买入**；
+    等这笔仓位卖出之后，该票恢复可交易。传 `stock_of_row` 才生效。
+
+    为什么必要：不约束的话，一只持续满足条件的票会在 20 个交易日里天天被买入，
+    同时挂着十几个同一标的的仓位 —— 这既不是真实的下单逻辑（等于对单一标的加杠杆、
+    集中风险），也会让「同时持仓 10 只」的约束失去意义（实际只有 3~4 只不同的票）。
+
+    注意实现上的取舍：**先剔除重复、再按 max_new / 仓位余量截断**。
+    也就是撞上已持仓的候选时往下顺延往下一位候选 —— 模拟真人「这只已经拿了，买下一只」，
+    而不是白白浪费当天的买入额度。被判为重复的信号计入 `n_drop_dup`。
+
     参数
     ----
     mask      : bool[n]   信号掩码（面板行级）
@@ -384,12 +398,16 @@ def plan_positions(mask, day_idx, n_days, hold, max_pos=10, max_new=3,
     pick      : float[n]  同日候选的排序键；None 表示按面板原始顺序
     pick_asc  : bool      True = 键小者优先（如「最超跌优先」）；
                           False = 键大者优先（如「成交额大者优先」）
+    stock_of_row : int[n] 每行所属股票的序号（同一只票同值）。用于「不得重复持仓」，
+                          传 None 则该约束失效
+    dedupe    : bool      True = 同一只票未平仓期间不得再买（默认）
 
     返回
     ----
     dict(
-      holds      : list[(entry_day, exit_day, row_idx, ret_proxy)]  实际建仓记录
-      n_drop     : int      因容量限制被丢弃的信号数
+      holds      : list[(entry_day, exit_day, row_idx)]  实际建仓记录
+      n_drop     : int      因容量限制/重复持仓被丢弃的信号数
+      n_drop_dup : int      其中「已持有未平仓而被跳过」的部分
       n_signal   : int      总信号数
     )
 
@@ -406,7 +424,7 @@ def plan_positions(mask, day_idx, n_days, hold, max_pos=10, max_new=3,
     # ---- 按日归集信号行号（保持面板原始顺序，确保可复现）
     sig_rows = np.flatnonzero(mask & np.isfinite(day_idx))
     if len(sig_rows) == 0:
-        return dict(holds=[], n_drop=0, n_signal=0)
+        return dict(holds=[], n_drop=0, n_drop_dup=0, n_signal=0)
 
     # 按 (日, 原始顺序) 分组
     order = np.lexsort((sig_rows, day_idx[sig_rows]))
@@ -422,17 +440,35 @@ def plan_positions(mask, day_idx, n_days, hold, max_pos=10, max_new=3,
     if pick is not None and str(pick) == "__random__":
         rand_key = rng.random(len(mask))
 
+    # 「不得重复持仓」只在拿到行→股票映射时才生效
+    dedupe = bool(dedupe) and stock_of_row is not None
+    if dedupe:
+        stock_of_row = np.asarray(stock_of_row)
+
     holds = []              # (entry_day, exit_day, row_idx)
     open_exits = []         # 已建仓的到期日列表（用于快速释放）
+    open_sids = []          # 与 open_exits 一一对应：该仓位持有的股票序号
     n_drop = 0
+    n_drop_dup = 0          # 其中「已持有未平仓」而被跳过者
     occupied = 0            # 当前持仓数（= 尚未到期的 holds 数）
 
     for d in range(n_days):
         # ---- 1. 先释放到期仓位（exit_day <= d 视为今日开盘前已卖出）
+        #        卖出后该股票立刻恢复可交易 —— 「同仓不得二次交易」到此为止
         if open_exits:
-            still = [e for e in open_exits if e > d]
-            occupied = len(still)
-            open_exits = still
+            if dedupe:
+                # ⚠️ 必须同步过滤 open_sids：不开启去重时 open_sids 恒为空，
+                #    若统一走 zip 会得到空序列 → 持仓被误判全部到期 → 上限失效
+                still_e, still_s = [], []
+                for e, s in zip(open_exits, open_sids):
+                    if e > d:
+                        still_e.append(e)
+                        still_s.append(s)
+                open_exits, open_sids = still_e, still_s
+                occupied = len(still_e)
+            else:
+                open_exits = [e for e in open_exits if e > d]
+                occupied = len(open_exits)
         # ---- 2. 今日新信号
         a, b = day_start[d], day_end[d]
         if b <= a:
@@ -452,7 +488,16 @@ def plan_positions(mask, day_idx, n_days, hold, max_pos=10, max_new=3,
                            np.lexsort((rows[finite], -k[finite] if not pick_asc else k[finite]))],
                            np.flatnonzero(~finite)]))
             rows = rows[ord_idx]
-        # ---- 4. 容量截断
+        # ---- 4. 剔除「已持有且未平仓」的股票；卖出后才回到候选池
+        if dedupe and open_sids:
+            held = set(open_sids)
+            kept = [int(r) for r in rows if stock_of_row[r] not in held]
+            n_drop_dup += len(rows) - len(kept)
+            n_drop += len(rows) - len(kept)
+            rows = kept
+            if not rows:
+                continue
+        # ---- 5. 容量截断
         room = max_pos - occupied
         if room <= 0:
             n_drop += len(rows)
@@ -465,8 +510,11 @@ def plan_positions(mask, day_idx, n_days, hold, max_pos=10, max_new=3,
             exit_d = entry + hold
             holds.append((entry, exit_d, int(r)))
             open_exits.append(exit_d)
+            if dedupe:
+                open_sids.append(int(stock_of_row[r]))
             occupied += 1
     return dict(holds=holds, n_drop=int(n_drop), n_signal=int(len(sig_rows)),
+                n_drop_dup=int(n_drop_dup),
                 pick=str(pick) if pick is not None else None)
 
 
@@ -558,4 +606,6 @@ def capacity_stats(plan, n_days, cnt, net, nd_active=None):
         empty_days=int((cnt == 0).sum()),
         empty_pct=float((cnt == 0).mean()),
         active_pct=float((cnt > 0).mean()),
+        # 「已持有未平仓」而被跳过的信号数（同一只票不得重复持仓）
+        n_drop_dup=int(plan.get("n_drop_dup", 0)),
     )

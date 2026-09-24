@@ -622,6 +622,7 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
             实测平均同时持仓 <b data-page-node-id="wTCON0Xc7qgGHiMlWYPV2l">943.9 只</b>，个人资金根本做不到。
             打开本选项后，按真实下单节奏重算：每日先卖到期 → 再看新信号 → 排序取前几只
             → 受持仓上限截断，<b data-page-node-id="mzr83Wp71WbzMxj9WDrhr1">被丢弃的信号不补买</b>。
+            同一只票<b>未平仓期间不会重复买入</b>，<b>卖出之后</b>才恢复可交易。
           </div>
           <div class="caprow" data-page-node-id="wkjX4vCrSOEV4TGt0pyhTw">
             <label data-page-node-id="xeb79IsPgY8oOqF35BbTcf">同时持仓</label>
@@ -1545,7 +1546,8 @@ function tradePlanCard(p, hold) {
         <div class="n">占全部信号 ${PCT(keepPct, 2)}</div></div>
       <div class="mc"><div class="l">被丢弃信号</div>
         <div class="v sm">${NUM(p.n_drop)}</div>
-        <div class="n">占 ${PCT(p.drop_pct, 1)}（不补买）</div></div>
+        <div class="n">占 ${PCT(p.drop_pct, 1)}（不补买）${p.n_drop_dup > 0 ?
+          `<br>其中 ${NUM(p.n_drop_dup)} 笔因已持有未平仓` : ''}</div></div>
       <div class="mc"><div class="l">本页可结算</div>
         <div class="v sm">${NUM(p.n_plan - p.n_open)} 笔</div>
         <div class="n">扣掉未平仓</div></div>
@@ -1559,7 +1561,8 @@ function tradePlanCard(p, hold) {
         `实盘里就是<b>还拿在手上</b>，因此<b>不计入本页明细与胜率统计</b>` +
         `（否则会因缺少结局而偏乐观）。<br>` : ''}
       规则：<b>${p.pick_name}</b>；信号拥挤时只在当日信号里按该规则取前 ${p.max_new} 只，
-      持仓满 ${p.max_pos} 只时不再新开。被丢弃的信号<b>不补买</b>（保守假设）。
+      持仓满 ${p.max_pos} 只时不再新开，被丢弃的信号<b>不补买</b>（保守假设）；
+      <b>同一只票未平仓期间不重复买入</b>，卖出后才回到候选池。
     </div></div>`;
 }
 
