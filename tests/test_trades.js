@@ -8,7 +8,7 @@ const html = fs.readFileSync(path.join(ROOT, 'app/index.html'), 'utf8');
 const { JSDOM } = require(require('path').join(ROOT, 'node_modules/jsdom'));
 const F = n => JSON.parse(fs.readFileSync(path.join(__dirname, `fixtures/fixture_${n}.json`), 'utf8'));
 const FX = { meta: F('meta'), defaults: F('defaults'), backtest: F('backtest'),
-             scan: F('scan'), trades: F('trades') };
+             scan: F('scan'), trades: F('trades'), trades_cap: F('trades_cap') };
 
 const errors = [], warns = [];
 const chartCalls = [];
@@ -275,6 +275,119 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   // ---- 16. 无错误
   ok('无运行时错误', errors.length === 0, errors.slice(0, 3).join(' | ') || '干净');
+
+  /* ================================================================
+     17~21. 仓位约束口径（⑧ 开启后，交易明细只列「实际建仓」）
+     ----------------------------------------------------------------
+     为什么要单独起一个 JSDOM：上面的断言依赖 fetchLog 的顺序，
+     中途切换口径会污染计数。用独立实例最干净。
+     ================================================================ */
+  const capDom = new JSDOM(html, {
+    runScripts: 'dangerously', pretendToBeVisual: true,
+    url: 'http://127.0.0.1:8771/',
+    beforeParse(w) {
+      w.HTMLElement.prototype.scrollIntoView = () => {};
+      w.requestAnimationFrame = cb => setTimeout(() => cb(Date.now()), 0);
+      w.echarts = { init: () => ({ setOption() {}, resize() {}, dispose() {}, getDom: () => null }) };
+      w.fetch = async (url, opt) => {
+        const u = String(url);
+        const payload = opt && opt.body ? JSON.parse(opt.body) : {};
+        let body = {};
+        if (u.includes('/api/meta')) body = FX.meta;
+        else if (u.includes('/api/defaults')) body = FX.defaults;
+        else if (u.includes('/api/backtest')) body = FX.backtest;
+        else if (u.includes('/api/scan')) body = FX.scan;
+        // 🔴 后端按 params.max_pos 分流：>0 走容量口径 fixture
+        else if (u.includes('/api/trades')) {
+          const mp = (payload.params && payload.params.max_pos) || 0;
+          body = mp > 0 ? FX.trades_cap : FX.trades;
+        } else body = {};
+        return { ok: true, status: 200, headers: { get: () => null },
+          json: async () => body, text: async () => JSON.stringify(body),
+          blob: async () => ({ size: 1 }), arrayBuffer: async () => new ArrayBuffer(1) };
+      };
+      w.URL.createObjectURL = () => 'blob:x';
+      w.URL.revokeObjectURL = () => {};
+      w.onerror = () => {};
+      w.console.error = () => {};
+      w.console.warn = () => {};
+    },
+  });
+  const w2 = capDom.window, d2 = w2.document;
+  const click2 = el => el.dispatchEvent(new w2.MouseEvent('click', { bubbles: true }));
+  await sleep(1200);
+
+  // 开启「限制持仓」（点快捷预设同时会切口径）
+  const q = [...d2.querySelectorAll('.capquick button')].find(b => b.dataset.cap === '10,3');
+  click2(q);
+  await sleep(80);
+  ok('快捷预设切到限制持仓', d2.querySelector('#seg-cap button.on').dataset.v === '1');
+  ok('持仓上限 = 10', d2.querySelector('#cap_maxpos').value === '10');
+  ok('每日买入 = 3', d2.querySelector('#cap_maxnew').value === '3');
+
+  // 切到交易明细 Tab → 自动拉取（容量口径）
+  const tbtn2 = [...d2.querySelectorAll('#tabs button')].find(b => b.dataset.t === 'trades');
+  click2(tbtn2);
+  await sleep(700);
+  ok('交易明细已渲染', !!d2.querySelector('#tbody-trades'));
+
+  const CP = FX.trades_cap.plan;
+  const txt2 = d2.querySelector('#p-trades').textContent;
+  const flat2 = txt2.replace(/\s+/g, ' ');
+  const fmt = n => new Intl.NumberFormat('zh-CN').format(n);
+
+  // 17. 口径说明切换为「仓位约束」
+  ok('口径说明含「仓位约束」', /仓位约束/.test(txt2));
+  ok('口径说明含持仓上限 10 只', /同时最多持 10 只/.test(flat2), flat2.slice(0, 60));
+  ok('口径说明含每日买入 3 只', /每日最多买 3 只/.test(flat2));
+  ok('口径说明含选股规则名', txt2.includes(CP.pick_name), CP.pick_name);
+  ok('不再出现「不限仓位」警示', !/实盘做不完这么多/.test(txt2));
+
+  // 18. 仓位约束诊断卡
+  ok('诊断卡存在', /仓位约束诊断/.test(txt2));
+  const need4 = ['本次实际建仓', '被丢弃信号', '本页可结算', '期末未平仓'];
+  const miss4 = need4.filter(x => !txt2.includes(x));
+  ok('诊断卡 4 项齐全', miss4.length === 0, miss4.length ? '缺: ' + miss4 : 'ok');
+
+  // 19. 🔴 数值一致性：屏幕数字必须等于 plan 里的数字
+  ok(`建仓数 = ${fmt(CP.n_plan)}`, txt2.includes(fmt(CP.n_plan)));
+  ok(`丢弃数 = ${fmt(CP.n_drop)}`, txt2.includes(fmt(CP.n_drop)));
+  ok(`可结算 = ${fmt(CP.n_plan - CP.n_open)}`, txt2.includes(fmt(CP.n_plan - CP.n_open)));
+  ok(`未平仓 = ${fmt(CP.n_open)}`, txt2.includes(fmt(CP.n_open)));
+  // 🔴 最关键的等式：可结算 == 明细总笔数（防止两处口径脱节）
+  ok('可结算数 == n_trade', CP.n_plan - CP.n_open === FX.trades_cap.n_trade,
+     `${CP.n_plan - CP.n_open} vs ${FX.trades_cap.n_trade}`);
+  ok('页面「共 N 笔」= 可结算数',
+     txt2.replace(/,/g, '').includes(`共 ${CP.n_plan - CP.n_open} 笔`),
+     `共 ${FX.trades_cap.n_trade} 笔`);
+  if (CP.n_open > 0) {
+    // ⚠️ 措辞必须说「最后 H 个交易日内」，而不是「n_open 个交易日内」——
+    //    前者是**时间窗口**（= 持有期 20 日），后者是**笔数**，两者不是一回事。
+    ok('含未平仓说明（时间窗口口径）',
+       /数据末尾最后 20 个交易日内/.test(txt2.replace(/\s+/g, ' ')),
+       (txt2.replace(/\s+/g, ' ').match(/数据末尾最后 \d+ 个交易日/) || [''])[0]);
+    ok('未平仓不计入统计', /不计入本页明细与胜率统计/.test(txt2));
+  }
+
+  // 20. 汇总卡用容量口径 summary（而非不限仓位的 93,553）
+  ok('汇总卡不含不限仓位笔数',
+     !txt2.replace(/,/g, '').includes(fmt(FX.trades.summary.n_trade)),
+     fmt(FX.trades.summary.n_trade));
+  const capN = fmt(FX.trades_cap.summary.n_trade);
+  ok(`汇总卡含容量口径笔数 ${capN}`,
+     d2.querySelector('#p-trades .mgrid').textContent.includes(capN));
+
+  // 21. 导出文件名带容量标记（防止导出成不限仓位口径）
+  let dlName = null;
+  const origCreate = d2.createElement.bind(d2);
+  d2.createElement = tag => {
+    const el = origCreate(tag);
+    if (tag === 'a') Object.defineProperty(el, 'click', { value: () => { dlName = el.download; } });
+    return el;
+  };
+  click2(d2.querySelector('#t-exp'));
+  await sleep(300);
+  ok('导出文件名带容量标记', /持10只日3只/.test(String(dlName)), String(dlName));
 
   console.log('\n══════ 前端「交易明细」Tab 验证 ══════\n');
   out.forEach(l => console.log(l));

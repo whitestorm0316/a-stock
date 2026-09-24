@@ -55,6 +55,10 @@ def main():
     save("backtest", post("/api/backtest", {"params": {}, "pool": POOL}))
     save("trades", post("/api/trades", {"params": {}, "pool": POOL,
                                         "page": 1, "page_size": 50}))
+    # 交易明细 · 容量约束口径（前端 ⑧ 开启后走这条分支，含 plan 诊断块）
+    save("trades_cap", post("/api/trades",
+                            {"params": {"max_pos": 10, "max_new": 3, "pick": "deep"},
+                             "pool": POOL, "page": 1, "page_size": 50}))
     # 容量约束：n_sim 设小一点让抓取快一些，前端断言只关心字段与关键数值
     cap = post("/api/backtest",
                {"params": {"max_pos": 10, "max_new": 3, "pick": "deep"},

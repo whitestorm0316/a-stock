@@ -50,8 +50,19 @@ const strip = s => String(s).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   await rpc(ws, 'Emulation.setDeviceMetricsOverride',
     { width: 1680, height: 1400, deviceScaleFactor: 1, mobile: false });
   // 收集未捕获异常
-  await evalJS(ws, `window.__errs = []; window.addEventListener('error',
-    e => window.__errs.push(String(e.message))); 'ok'`);
+  // ⚠️ 必须用 Page.addScriptToEvaluateOnNewDocument，而不是 Runtime.evaluate：
+  //    新建标签页时导航可能尚未完成，直接 evaluate 注进去的 window.__errs
+  //    会被随后的文档加载**整个清掉** → 最后读到 undefined（本脚本栽过）。
+  //    前者会在**每个新文档**里执行，天然免疫这个时序问题。
+  await rpc(ws, 'Page.addScriptToEvaluateOnNewDocument', {
+    source: `window.__errs = [];
+      window.addEventListener('error', e => window.__errs.push(String(e.message)));`,
+  });
+  // ⚠️ 上面注册的脚本只对**之后创建**的文档生效。而标签页是用
+  //    /json/new?<url> 打开的，文档可能已经在创建了 → 必须显式再导航一次，
+  //    否则脚本不会执行，最后读到 undefined（本脚本栽过两次）。
+  await rpc(ws, 'Page.navigate', { url: URL_APP });
+  await sleep(500);
 
   let pass = 0, fail = 0;
   const ok = (c, m) => { c ? pass++ : (fail++, console.log('  ✗ ' + m)); };
@@ -165,7 +176,34 @@ const strip = s => String(s).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   ok(Array.isArray(yrSeries) && yrSeries.some(n => n && n.includes('受限')),
      `逐年图应有受限系列，实际 ${JSON.stringify(yrSeries)}`);
 
-  console.log('【8】运行时无未捕获异常');
+  console.log('【8】交易明细页用容量口径（不再是不限仓位）');
+  await evalJS(ws, `(() => {
+    const b = [...document.querySelectorAll('#tabs button')].find(x => x.dataset.t === 'trades');
+    b.click(); return 'ok';
+  })()`);
+  const trReady = await waitFor(
+    `(document.querySelector('#tbody-trades') || {}).children !== undefined
+     && document.querySelector('#tbody-trades').children.length > 0`,
+    180000, '交易明细渲染完成');
+  ok(trReady, '交易明细应渲染出行');
+  const trTxt = strip(await evalJS(ws, `document.querySelector('#p-trades').textContent`));
+  for (const [k, re] of [
+    ['口径为仓位约束', /仓位约束/],
+    ['不再出现「不限仓位」警示', /实盘做不完这么多/],
+    ['持仓上限 10 只', /同时最多持 10 只/],
+    ['每日买入 3 只', /每日最多买 3 只/],
+    ['诊断卡「本次实际建仓」', /本次实际建仓/],
+    ['诊断卡「期末未平仓」', /期末未平仓/],
+    ['未平仓说明', /超出了面板范围|还拿在手上/],
+  ]) {
+    if (k === '不再出现「不限仓位」警示') ok(!re.test(trTxt), '交易明细仍显示「不限仓位」警示');
+    else ok(re.test(trTxt), `交易明细：${k} 未出现`);
+  }
+  // 🔴 屏幕上的「共 N 笔」必须等于回测页的建仓数减未平仓（781 = 787 − 6）
+  ok(/共\s*781\s*笔/.test(trTxt.replace(/,/g, '')),
+     `明细总笔数应为 781，实际「${(trTxt.match(/共\s*[\d,]+\s*笔/) || [''])[0]}」`);
+
+  console.log('【9】运行时无未捕获异常');
   const errs = await evalJS(ws, `window.__errs`);
   ok(Array.isArray(errs) && errs.length === 0,
      `不应有未捕获异常，实际 ${JSON.stringify(errs)}`);

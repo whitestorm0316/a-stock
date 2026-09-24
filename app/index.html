@@ -608,14 +608,14 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
         <div class="row" data-page-node-id="mqJnOnD6ZHQU13Y91AwPrA">
           <label style="flex:0 0 46px" data-page-node-id="irq9LOpT9dQr0YB9xSNfCx">口径</label>
           <div class="seg grow" id="seg-cap" data-page-node-id="SciaxXCTG9AGKKGjut2F7I">
-            <button data-v="0" data-page-node-id="i8HyA7SxPLdFRUa3GPdDQQ">不限仓位</button>
-            <button data-v="1" class="on" data-page-node-id="g50wWa67aNMUILkuEXC2on">限制持仓</button>
+            <button data-v="0" class="on" data-page-node-id="i8HyA7SxPLdFRUa3GPdDQQ">不限仓位</button>
+            <button data-v="1" data-page-node-id="g50wWa67aNMUILkuEXC2on">限制持仓</button>
           </div>
         </div>
-        <div class="capwrap on" id="capwrap" data-page-node-id="uPtxoMUod3amdhjJa3pwKZ">
+        <div class="capwrap" id="capwrap" data-page-node-id="uPtxoMUod3amdhjJa3pwKZ">
           <div class="caphead" data-page-node-id="byOXXWhdFYlTf3UsoWl8V7">
             <span data-page-node-id="nGUHuFvubeeLomsCDQIAzK">容量约束</span>
-            <span class="capbadge" id="cap_badge" data-page-node-id="uDUMeZvd0lBBRfq5DjVsFB">已启用</span>
+            <span class="capbadge" id="cap_badge" data-page-node-id="uDUMeZvd0lBBRfq5DjVsFB">已关闭</span>
           </div>
           <div class="caphint" data-page-node-id="Jr3mGVCE7uziw41iRgZlev">
             上面所有指标的默认口径是<b data-page-node-id="qgUzV2t44bUiSm858OplWx">不限仓位</b>——某日有 500 个信号就等权买 500 只。
@@ -638,7 +638,7 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
             <select id="cap_pick" data-page-node-id="w8MBalf6aeNfuUOEnJxW5K"></select>
           </div>
           <div class="capquick" data-page-node-id="G7ccbIC2ZiWEYWdxEZ3DJZ">
-            <button data-cap="10,3" class="on" data-page-node-id="ZLl0CZ6TLn4lAZHGWFVcIl">10只 / 日3只</button>
+            <button data-cap="10,3" data-page-node-id="ZLl0CZ6TLn4lAZHGWFVcIl">10只 / 日3只</button>
             <button data-cap="10,1" data-page-node-id="GQFrSjvc8e5piBEAgbuBZs">10只 / 日1只</button>
             <button data-cap="20,3" data-page-node-id="5l5uYe3kBfL2nxGMtwJUnr">20只 / 日3只</button>
             <button data-cap="5,2" data-page-node-id="C1bEogaMOFmFejDZuC8O6v">5只 / 日2只</button>
@@ -1534,7 +1534,7 @@ function tradeFreeNote() {
     若想看「只能同时拿 N 只、每天最多买 M 只」时<b>实际会发生</b>哪些交易，
     请在左侧 <b>⑧ 仓位约束</b> 打开限制后再回测。</span>`;
 }
-function tradePlanCard(p) {
+function tradePlanCard(p, hold) {
   const ns = Math.max(p.n_signal, 1);
   const keepPct = Math.min(1, (p.n_plan || 0) / ns);
   return `<div class="card" style="background:#fafbfc">
@@ -1551,12 +1551,13 @@ function tradePlanCard(p) {
         <div class="n">扣掉未平仓</div></div>
       <div class="mc"><div class="l">期末未平仓</div>
         <div class="v sm">${NUM(p.n_open)} 笔</div>
-        <div class="n">持有期超出数据末尾</div></div>
+        <div class="n">持有期尚未走完</div></div>
     </div>
     <div class="cap" style="margin:0">
-      ${p.n_open > 0 ? `⚠️ 有 <b>${p.n_open}</b> 笔在数据末尾 ${p.n_open} 个交易日内建仓，` +
-        `到期日<b>超出了面板范围</b>，算不出卖出价 —— 实盘里就是<b>还拿在手上</b>，` +
-        `因此<b>不计入本页明细与胜率统计</b>（否则会因缺少结局而偏乐观）。<br>` : ''}
+      ${p.n_open > 0 ? `⚠️ 有 <b>${p.n_open}</b> 笔建仓落在数据末尾最后 ${hold} 个交易日内，` +
+        `买入后持有期<b>还没走完就到数据边界了</b>，算不出卖出价 —— ` +
+        `实盘里就是<b>还拿在手上</b>，因此<b>不计入本页明细与胜率统计</b>` +
+        `（否则会因缺少结局而偏乐观）。<br>` : ''}
       规则：<b>${p.pick_name}</b>；信号拥挤时只在当日信号里按该规则取前 ${p.max_new} 只，
       持仓满 ${p.max_pos} 只时不再新开。被丢弃的信号<b>不补买</b>（保守假设）。
     </div></div>`;
@@ -1615,7 +1616,7 @@ function renderTrades(r) {
     </div></div>`;
 
   // ---- 仓位约束口径提示（仅受限口径显示）
-  if (r.plan) h += tradePlanCard(r.plan);
+  if (r.plan) h += tradePlanCard(r.plan, r.hold);
 
   // ---- 分布图 + 逐年图
   h += `<div class="charts">

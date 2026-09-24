@@ -311,9 +311,27 @@ class Handler(BaseHTTPRequestHandler):
         if mask.sum() < 50:
             return self._json({"error": f"信号数过少（{int(mask.sum())}），无法列出交易。"
                                        f"请放宽条件。"}, 200)
-        tr = ENGINE.trades(mask, hold, cost=cost)
+        # ---- 容量约束（与 /api/backtest 同口径）：max_pos>0 时只列实际建仓
+        #      ⚠️ 这里用轻量版 capacity_plan()，不跑 200 次随机模拟（明细不需要分布）
+        mp = int(p.get("max_pos") or 0)
+        plan = None
+        if mp > 0:
+            try:
+                plan = ENGINE.capacity_plan(
+                    mask, hold=hold, max_pos=mp,
+                    max_new=int(p.get("max_new") or 3),
+                    pick=str(p.get("pick") or "deep"))
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                plan = None
+                mp = 0
+        tr = ENGINE.trades(mask, hold, cost=cost, plan=plan)
         if tr is None:
-            return self._json({"error": "该参数下没有任何完成的交易。"}, 200)
+            msg = ("该参数下没有任何完成的交易。" if plan is None else
+                   f"该仓位约束下没有任何可结算的交易（计划建仓 "
+                   f"{len(plan['holds'])} 笔，全部未平仓或被过滤）。请放宽条件。")
+            return self._json({"error": msg}, 200)
 
         rows = tr["rows"]
         # ---- 过滤
