@@ -359,6 +359,20 @@ def main():
         df = df.drop_duplicates(subset=["thscode", "date_ms"], keep="last")
         print(f"  merged gap data -> rows={len(df):,}")
 
+    # 合并每日增量数据（scripts/99_daily_update.py 产出）
+    # ⚠ 必须排在 dump 之后拼接：dedupe keep="last" 时越靠后的越优先，
+    #    这样增量里的同一 (thscode, date_ms) 会覆盖 dump 中的旧值 ——
+    #    从而能修复「昨日那条尚未走完的 K 线」。
+    incr_path = os.path.join(RAW, "daily_k_incr.parquet")
+    if os.path.exists(incr_path):
+        inc = pd.read_parquet(incr_path)
+        inc = inc.reindex(columns=df.columns)
+        n_before = len(df)
+        df = pd.concat([df, inc], ignore_index=True)
+        df = df.drop_duplicates(subset=["thscode", "date_ms"], keep="last")
+        print(f"  merged incremental data -> rows={len(df):,} "
+              f"({len(df)-n_before:+,})")
+
     df["date"] = to_date(df["date_ms"])
     print(f"  date range: {df['date'].min().date()} ~ {df['date'].max().date()}")
     print(f"  n stocks: {df['thscode'].nunique()}")

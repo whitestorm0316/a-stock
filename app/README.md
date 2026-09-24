@@ -1,14 +1,65 @@
 # A股超跌反转 · 交互式选股器
 
 ## 启动
-```bash
-bash app/start.sh          # 默认端口 8770
-bash app/start.sh 9000     # 自定义端口
-```
-首次启动会加载 1053 万行面板并预计算全部因子，**约 60~90 秒**；之后常驻内存，
-每次改参数的重算只需 **0.1~13 秒**。
 
-然后浏览器打开 `http://127.0.0.1:8770/`。
+首次启动会加载 1000+ 万行面板并预计算全部因子，**约 80~100 秒**；之后常驻内存，
+每次改参数的重算只需 **0.1~13 秒**。然后浏览器打开 `http://127.0.0.1:8770/`。
+
+### Windows —— 双击即可
+
+仓库根目录三个 `.cmd`，双击运行，不用开终端：
+
+| 文件 | 作用 |
+|---|---|
+| `start.cmd` | **启动**（就绪后自动打开浏览器） |
+| `stop.cmd` | 停止 |
+| `update.cmd` | **每日更新**（停服务 → 增量拉取 → 重建面板 → 起服务，约 18 分钟） |
+
+需要参数时再开命令行：
+
+```bat
+start.cmd --port 9000          :: 换端口
+start.cmd --no-browser         :: 不自动开浏览器
+update.cmd --no-rebuild        :: 只更新原始数据（约 10 分钟）
+update.cmd --industry          :: 顺带刷新行业归属（建议每周一次）
+```
+
+Python 的查找顺序：环境变量 `ASTOCK_PY` → `%USERPROFILE%\.workbuddy\binaries\python\envs\default` →
+仓库 `.venv` → PATH 上的 `python`。想固定某个解释器就设 `ASTOCK_PY`。
+
+> 以前 `app/start.sh` 里写死了作者机器的 macOS Python 绝对路径，在别的机器上一跑就失败；
+> 现已改为跨平台委派，Windows 用上面的 `.cmd`。
+
+### macOS / Linux
+
+```bash
+bash app/start.sh              # 默认端口 8770
+bash app/start.sh 9000         # 自定义端口
+bash app/start.sh --no-browser
+```
+
+### 统一控制入口 `scripts/ctl.py`
+
+上面那些 `.cmd` / `.sh` 都只是薄壳，真正的逻辑在这里，三个平台共用：
+
+```bash
+python scripts/ctl.py status                  # 服务状态 + 数据文件清单
+python scripts/ctl.py start                   # 启动（就绪后自动开浏览器）
+python scripts/ctl.py start --port 9000
+python scripts/ctl.py stop
+python scripts/ctl.py restart
+python scripts/ctl.py update                  # 每日更新（含重建面板，最后自动起服务）
+python scripts/ctl.py update --no-rebuild --no-start
+python scripts/ctl.py update --since 2026-09-01    # 回补某段区间
+```
+
+它替你处理了三件容易踩的事：① 自动释放被占用的端口；② 轮询 `/api/meta` 判断真正就绪
+（加载期间访问一律 **502，不代表服务坏了**）；③ `update` 前先停服务
+（服务常驻约 7GB，与重建面板抢内存会 OOM）。
+
+日志：`logs/server-<port>.log`。启动失败时会自动打印日志尾部。
+
+> ⚠️ 更新期间服务不可用，`update.cmd` 之前务必先在界面上导出好需要的东西。
 
 ## 默认参数（= 研究报告第 12 节验证的最优 3 条件策略）
 | 条件 | 取值 |
@@ -422,7 +473,7 @@ app/
 │                    + capacity_plan() 轻量建仓计划（供 trades/export 复用）
 ├── server.py        本地 HTTP 服务 + 8 个 API
 ├── index.html       单文件前端（ECharts + 原生 JS，无构建步骤）
-├── start.sh         启动脚本
+├── start.sh         启动脚本（macOS/Linux；委派到 scripts/ctl.py）
 └── README.md
 
 scripts/
@@ -430,7 +481,9 @@ scripts/
 │                           + plan_positions() 逐日顺序建仓（容量约束）
 │                           + nav_from_holds() 双口径净值
 │                           + capacity_stats() 容量诊断
+├── ctl.py                  ★ 统一控制入口：start / stop / restart / update / status
 ├── fetch_fin_announce.py   财务数据拉取（披露日 + 利润表 + 合并）
+├── 99_daily_update.py      每日增量更新（追加式，见文件头注释）
 └── fin_panel_info.py       财务面板数据字典与自检
 
 tests/

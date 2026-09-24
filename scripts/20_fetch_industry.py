@@ -89,7 +89,10 @@ def main():
 
     # 3. 与全A标的清单对齐, 看覆盖率
     tk = json.load(open(os.path.join(RAW, "tickers_ashare.json")))
-    allc = {x["thscode"] for x in tk["data"]["item"]}
+    # 01_fetch_data.py 写入的是 list；若上游换成 {"data": {"item": [...]}} 也能兼容
+    if isinstance(tk, dict):
+        tk = tk["data"]["item"]
+    allc = {x["thscode"] for x in tk}
     covered = allc & set(stock2ind)
     print(f"全A标的 {len(allc)} 只, 有行业归属 {len(covered)} 只 "
           f"({len(covered)/max(len(allc),1)*100:.1f}%), 无归属 {len(allc - set(stock2ind))} 只")

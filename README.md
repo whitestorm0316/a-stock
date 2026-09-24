@@ -4,18 +4,46 @@
 
 ## 一、快速开始
 
+> **Windows 用户**：数据重建好之后，双击仓库根目录的 `start.cmd` 就行，不必开终端。
+
 ```bash
 # 1. 环境（需要 pandas / numpy / pyarrow）
 pip install pandas numpy pyarrow
 
 # 2. 重建面板（见下文「数据重建」）
 python scripts/01_fetch_data.py        # 拉原始行情（需 API key）
+python scripts/01b_fetch_gap.py        # 补齐早期日K
+python scripts/01c_fetch_index.py      # 指数K线（API 限制跨度≤10年，必须分段拉）
+python scripts/20_fetch_industry.py    # → industry_map.json，是 21 的硬依赖
 python scripts/02_build_dataset.py     # → data/processed/panel.parquet
 python scripts/21_build_v2_features.py # → data/processed/v2_panel.parquet
 
-# 3. 启动交互式选股器
-bash app/start.sh                      # http://127.0.0.1:8770/
+# 3. 启动交互式选股器（跨平台）
+python scripts/ctl.py start            # http://127.0.0.1:8770/
 ```
+
+### 启动与日常运维
+
+统一入口 `scripts/ctl.py`（Windows / macOS / Linux 通用）。
+Windows 另有根目录的双击入口：
+
+| 想做的事 | Windows 双击 | 命令行（跨平台） |
+|---|---|---|
+| 启动 | `start.cmd` | `python scripts/ctl.py start` |
+| 停止 | `stop.cmd` | `python scripts/ctl.py stop` |
+| 重启 | — | `python scripts/ctl.py restart` |
+| 查看状态 | — | `python scripts/ctl.py status` |
+| **每日更新** | `update.cmd` | `python scripts/ctl.py update` |
+
+三点须知：
+
+- 启动要加载 3.6GB 面板，**约 80~100 秒**。加载期间端口已在听但服务未就绪，
+  访问会返回 **502，这不代表坏了**；`ctl.py` 会轮询 `/api/meta` 判断真正就绪后再开浏览器。
+- `update` 会**先停服务**再更新 —— 服务常驻约 7GB，与重建面板抢内存会 OOM。
+  完整流程（含重建面板）约 **18 分钟**，只更新原始数据约 **10 分钟**。
+- 日志在 `logs/server-<port>.log`；更新期间服务不可用。
+
+细节见 `app/README.md`。
 
 ## 二、⚠️ 数据文件（不入库）
 
