@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="zh-CN" data-page-node-id="cVBR8gOapxfEFR61FE9tuu">
+<head data-page-node-id="gAjb2HhVhvaUwhIZOhSEKE">
+<meta charset="UTF-8" data-page-node-id="FDcFK1wXY1QfQ1wq4UMwQD">
+<meta name="viewport" content="width=device-width, initial-scale=1" data-page-node-id="FtFURVzITBOBMnxdalnBRq">
 <title>A股超跌反转 · 交互式选股器</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
 <style>
@@ -254,6 +254,50 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
   padding:10px 13px;background:#fafbfc;border:1px solid var(--line);
   border-radius:var(--rmd);margin-bottom:12px}
 .kv b{color:var(--tx);font-family:var(--mono);font-weight:600}
+/* ---- 容量约束（实盘可执行性） ---- */
+.capwrap{margin-top:14px;border:1px solid var(--line);border-radius:8px;
+  background:#fafbfc;padding:10px 11px;transition:background .2s,border-color .2s}
+.capwrap.on{background:#fbf8f3;border-color:#ecdfc8}
+.caphead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.caphead>span:first-child{font-size:12px;font-weight:600;color:var(--tx)}
+.capbadge{font-size:10px;padding:2px 7px;border-radius:9px;border:1px solid var(--line2);
+  background:#f4f6f9;color:var(--tx3);font-weight:600;white-space:nowrap}
+.capwrap.on .capbadge{background:#fdf1e0;border-color:#f0d9b5;color:#a8622c}
+.caphint{font-size:11px;color:var(--tx3);line-height:1.65;margin-bottom:9px;
+  padding:7px 9px;background:#fff;border:1px dashed var(--line2);border-radius:6px}
+.caphint b{color:#a8622c;font-weight:600}
+.caprow{display:flex;align-items:center;gap:5px;margin-bottom:6px}
+.caprow label{flex:0 0 66px;font-size:11.5px;color:var(--tx2)}
+.caprow input[type=number],.caprow select{flex:1;min-width:0;font-size:11.5px;
+  padding:5px 7px;border:1px solid var(--line2);border-radius:5px;background:#fff;
+  color:var(--tx);outline:none}
+.caprow input[type=number]{font-family:var(--mono)}
+.caprow input:focus,.caprow select:focus{border-color:var(--blue)}
+.caprow .unit{font-size:10.5px;color:var(--tx3);flex:0 0 auto}
+.capquick{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.capquick button{font-size:10.5px;padding:4px 9px;border:1px solid var(--line2);
+  background:#fff;border-radius:11px;color:var(--tx2);cursor:pointer}
+.capquick button:hover{background:#eef4ff;border-color:var(--blue);color:var(--blue)}
+.capquick button.on{background:var(--blue);border-color:var(--blue);color:#fff}
+/* 双口径对比卡 */
+.vs{display:grid;grid-template-columns:1fr 26px 1fr;gap:0;align-items:stretch;
+  border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+.vs .side{padding:11px 13px}
+.vs .side.hl2{background:#f6f9fd}
+.vs .mid{display:flex;align-items:center;justify-content:center;
+  background:#fafbfc;font-size:10.5px;color:var(--tx3);writing-mode:vertical-rl;
+  border-left:1px solid var(--line);border-right:1px solid var(--line);
+  letter-spacing:1px;line-height:1.1}
+.vs .sh{font-size:11px;color:var(--tx3);margin-bottom:7px;font-weight:600}
+.vs .big{font-size:22px;font-weight:600;font-family:var(--mono);letter-spacing:-.6px}
+.vs .sub{font-size:11px;color:var(--tx3);margin-top:3px}
+.vs .l2{display:flex;justify-content:space-between;font-size:11.5px;color:var(--tx2);
+  padding:3px 0;border-bottom:1px dashed var(--line)}
+.vs .l2:last-child{border-bottom:0}
+.vs .l2 b{font-family:var(--mono);color:var(--tx)}
+@media(max-width:640px){.vs{grid-template-columns:1fr}
+  .vs .mid{writing-mode:horizontal-tb;border:0;border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);padding:5px;letter-spacing:0}}
 .codesbox{font-size:11.5px;color:var(--tx3);margin-top:5px}
 #mkt{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px}
 .mktcard{flex:1;min-width:145px;background:var(--panel);border:1px solid var(--line);
@@ -273,350 +317,400 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
 }
 </style>
 </head>
-<body>
-<div id="app">
+<body data-page-node-id="DNxrrpkD03OBgbIYxeDQMf">
+<div id="app" data-page-node-id="jYOwdVTF3oZCsEcDE7UYoh">
 
-<div id="top">
-  <h1>A股超跌反转 · 交互式选股器</h1>
-  <span class="sub" id="netinfo">正在连接数据服务…</span>
-  <span class="spacer"></span>
-  <span class="badge" id="bdate">—</span>
-  <span class="badge bad" id="bmode">默认：最优 3 条件</span>
-  <span class="badge warn" id="bwarn">研究结论，不构成投资建议</span>
+<div id="top" data-page-node-id="aqI1Xcb4A3f1oJd5dGoukv">
+  <h1 data-page-node-id="oMqTfUMjJ20XHPpyfzrEay">A股超跌反转 · 交互式选股器</h1>
+  <span class="sub" id="netinfo" data-page-node-id="DW4kslyCfpUQA1JbvwZrjG">正在连接数据服务…</span>
+  <span class="spacer" data-page-node-id="VcGvif6nQIZLJN3qGSpIwk"></span>
+  <span class="badge" id="bdate" data-page-node-id="kJgFRm3ccWeiHX7bmBSFDH">—</span>
+  <span class="badge bad" id="bmode" data-page-node-id="pM4uDILCKdf4iEKPdzzPtO">默认：最优 3 条件</span>
+  <span class="badge warn" id="bwarn" data-page-node-id="OGXBDHb6CeIniWKSASmzjJ">研究结论，不构成投资建议</span>
 </div>
 
-<div id="main">
+<div id="main" data-page-node-id="hfYOk1Uv37CWGt0M2gEuYO">
   <!-- ================= 左栏：参数 ================= -->
-  <aside id="side">
+  <aside id="side" data-page-node-id="4ho6uBsDuzVRaOEamfqDVu">
 
-    <div class="grp">
-      <h2>预设方案 <span class="hint">报告已验证</span></h2>
-      <div class="body">
-        <select id="preset"></select>
-        <div class="desc" id="presetdesc" style="font-size:11.5px;color:var(--tx3);margin:7px 0 0;line-height:1.6"></div>
+    <div class="grp" data-page-node-id="pHoBzDSaLp1HW2dbvmbVKF">
+      <h2 data-page-node-id="4fZaCxp2xw1vZ2dPyhQBQv">预设方案 <span class="hint" data-page-node-id="78LV6VwcpE8DlvfPgjb3kr">报告已验证</span></h2>
+      <div class="body" data-page-node-id="shVjJtFcNXbGkOp0PXUjxe">
+        <select id="preset" data-page-node-id="LmGdx7ifXMZvJpBjIf7MNG"></select>
+        <div class="desc" id="presetdesc" style="font-size:11.5px;color:var(--tx3);margin:7px 0 0;line-height:1.6" data-page-node-id="Q8PnrCXBiRjAxeKB1HZ4Ai"></div>
       </div>
     </div>
 
-    <div class="grp">
-      <h2>① 超跌条件 <span class="hint">价格尺子</span></h2>
-      <div class="body">
-        <div class="row">
-          <label style="flex:0 0 58px">距MA60</label>
-          <div class="seg grow" id="seg-ma60">
-            <button data-lo="" data-hi="">不限</button>
-            <button data-lo="1" data-hi="1">D1</button>
-            <button data-lo="1" data-hi="2">D1~2</button>
-            <button data-lo="1" data-hi="3">D1~3</button>
-            <button data-lo="2" data-hi="6">D2~6</button>
+    <div class="grp" data-page-node-id="lfRCGNpatF6JJyTtyFmiww">
+      <h2 data-page-node-id="AZCLXw3yWnlRVQTVPfDjC6">① 超跌条件 <span class="hint" data-page-node-id="gS6C4FeRRaeKZE77mZ5vRv">价格尺子</span></h2>
+      <div class="body" data-page-node-id="NidtGzrNtG9SpTAB53GicY">
+        <div class="row" data-page-node-id="ICDWnO0vGmSbiQFpLq5JCy">
+          <label style="flex:0 0 58px" data-page-node-id="M4I8gDZ9eIswW0i51ZVXcb">距MA60</label>
+          <div class="seg grow" id="seg-ma60" data-page-node-id="zhF3Mm2bdkG9QyFsVJmTM5">
+            <button data-lo="" data-hi="" data-page-node-id="nebhdKfo7UGOorvuUCUOs3">不限</button>
+            <button data-lo="1" data-hi="1" data-page-node-id="oFburzmeMq8Mgfn1HpX192">D1</button>
+            <button data-lo="1" data-hi="2" data-page-node-id="PcWGT1PjJU8Okg5c4jsPBj">D1~2</button>
+            <button data-lo="1" data-hi="3" data-page-node-id="enHoDAln3zb0q7XcVr2dhu">D1~3</button>
+            <button data-lo="2" data-hi="6" data-page-node-id="jw9clTsiTmbdzxG7X1bN4v">D2~6</button>
           </div>
         </div>
-        <div class="row">
-          <label style="flex:0 0 58px">距MA120</label>
-          <div class="seg grow" id="seg-ma120">
-            <button data-lo="" data-hi="">不限</button>
-            <button data-lo="1" data-hi="1">D1</button>
-            <button data-lo="1" data-hi="2">D1~2</button>
-            <button data-lo="1" data-hi="3">D1~3</button>
+        <div class="row" data-page-node-id="fg0Qz1lx1zSSrP5PoFyGCw">
+          <label style="flex:0 0 58px" data-page-node-id="1GMpUKWfwjTSRxHX71NHn8">距MA120</label>
+          <div class="seg grow" id="seg-ma120" data-page-node-id="cWC0E5Jat8pOd7f9duIvLs">
+            <button data-lo="" data-hi="" data-page-node-id="Hbk7dLyVba96yiA8RAyrGh">不限</button>
+            <button data-lo="1" data-hi="1" data-page-node-id="gsBO2U5QHqxC6zfagfs8kJ">D1</button>
+            <button data-lo="1" data-hi="2" data-page-node-id="KqesO9XnssuFtt1GnftMIX">D1~2</button>
+            <button data-lo="1" data-hi="3" data-page-node-id="EIKBsmCNHkhe4j82ibulb4">D1~3</button>
           </div>
         </div>
-        <div class="row">
-          <label style="flex:0 0 58px">ret20跌幅</label>
-          <div class="seg grow" id="seg-ret20">
-            <button data-lo="" data-hi="">不限</button>
-            <button data-lo="1" data-hi="1">D1</button>
-            <button data-lo="1" data-hi="3">D1~3</button>
-            <button data-lo="2" data-hi="6">D2~6</button>
+        <div class="row" data-page-node-id="3kaKhqM8VROp9N75LlCRGK">
+          <label style="flex:0 0 58px" data-page-node-id="BB1mySjXEIs29XaJ4nrOzy">ret20跌幅</label>
+          <div class="seg grow" id="seg-ret20" data-page-node-id="uG2Vp51QT67MOm7Hg10GGr">
+            <button data-lo="" data-hi="" data-page-node-id="oWoXbrI5sQqbVJjQFN0rm3">不限</button>
+            <button data-lo="1" data-hi="1" data-page-node-id="A8HUEwNQDnM3Gr5JFR6S3a">D1</button>
+            <button data-lo="1" data-hi="3" data-page-node-id="0W7Bz9WrwsUMcIlAzsIiCl">D1~3</button>
+            <button data-lo="2" data-hi="6" data-page-node-id="LAlMS3Ao4F02ZTEk5nKAbZ">D2~6</button>
           </div>
         </div>
-        <label class="chk" style="padding-left:0">
-          <input type="checkbox" id="deep_any">
-          <span><span class="t">深度超跌（任一 D1）</span>
-          <span class="d">ret40 / ret60 / 距MA60 任一处于 D1</span></span>
+        <label class="chk" style="padding-left:0" data-page-node-id="w2HvF3gCC0Drk8TCqh5mok">
+          <input type="checkbox" id="deep_any" data-page-node-id="VKyl7JAuspY3MTFB0otP7d">
+          <span data-page-node-id="3L9Nl3IuA2To1NQdIEozJN"><span class="t" data-page-node-id="nZwqJ8UqNMdnRVtj1UW0Yz">深度超跌（任一 D1）</span>
+          <span class="d" data-page-node-id="C14HL5bbsGQMHo25bqYQ2n">ret40 / ret60 / 距MA60 任一处于 D1</span></span>
         </label>
       </div>
     </div>
 
-    <div class="grp">
-      <h2>② 市值 <span class="hint">最强增强项</span></h2>
-      <div class="body">
-        <div class="slide">
-          <span class="nm">上限</span>
-          <input type="range" id="size_max" min="0" max="9" step="1" value="2">
-          <span class="vl" id="size_v">30%</span>
+    <div class="grp" data-page-node-id="zZkxgop7NP807hAiUAFG5O">
+      <h2 data-page-node-id="jMK4F6b0AAknfiFDiYD4XQ">② 市值 <span class="hint" data-page-node-id="LiJ8j7sep9xbtwwV8G79Te">最强增强项</span></h2>
+      <div class="body" data-page-node-id="SP8ZgznPLo0Bn78rGtYOZU">
+        <div class="slide" data-page-node-id="SIwN7Op58XUhDTZUQ5xBl4">
+          <span class="nm" data-page-node-id="CvfL6y2WdWNAF49wTk6a8P">上限</span>
+          <input type="range" id="size_max" min="0" max="9" step="1" value="2" data-page-node-id="RUiRhXos8WFOEJYsAXthkh">
+          <span class="vl" id="size_v" data-page-node-id="EBGfbyXn42cc8pIWgNRYZL">30%</span>
         </div>
-        <div class="cap">市值组 ≤ M(N+1)。M1=最小10% · M3=最小30% · M10=全部。<br>
+        <div class="cap" data-page-node-id="Cg6xA2JlwfZ0ztCnxS1es8">市值组 ≤ M(N+1)。M1=最小10% · M3=最小30% · M10=全部。<br data-page-node-id="XDMsjE8DMAik3QEGaomhks">
           报告第8节：超跌反转几乎全部来自小市值（最小10% vs 最大10% 差 2.5pp/日）。</div>
       </div>
     </div>
 
-    <div class="grp">
-      <h2>③ 市场环境 <span class="hint">熊市才有效</span></h2>
-      <div class="body">
-        <div class="row">
-          <label style="flex:0 0 46px">净值</label>
-          <div class="seg grow" id="seg-mkt">
-            <button data-v="any">不限</button>
-            <button data-v="bear">&lt;MA60</button>
-            <button data-v="bull">&gt;MA60</button>
+    <div class="grp" data-page-node-id="GMfv9XlaqZXYXqzvj2eyS7">
+      <h2 data-page-node-id="x0ZXev9xpXE6lBT5Bup1cw">③ 市场环境 <span class="hint" data-page-node-id="eYAITBzTtyGqjyICAovFiY">熊市才有效</span></h2>
+      <div class="body" data-page-node-id="xZlKRcuFH3NVHa28KKJ0sL">
+        <div class="row" data-page-node-id="tJd0hKvoDbr9Z1bYUAP4B8">
+          <label style="flex:0 0 46px" data-page-node-id="kSU9fqOCVG3hDGJ9BfWtrm">净值</label>
+          <div class="seg grow" id="seg-mkt" data-page-node-id="RHyqApMcifHND8mrcfPhuv">
+            <button data-v="any" data-page-node-id="C3DBH9B3ZVGOgsS1tbSXue">不限</button>
+            <button data-v="bear" data-page-node-id="P0WdyI0YYHne1ZMjjQDzpo">&lt;MA60</button>
+            <button data-v="bull" data-page-node-id="X96XWfBdmxxXXTADaJlGCS">&gt;MA60</button>
           </div>
         </div>
-        <div class="row">
-          <label style="flex:0 0 46px">波动</label>
-          <div class="seg grow" id="seg-hv">
-            <button data-v="any">不限</button>
-            <button data-v="high">高</button>
-            <button data-v="low">低</button>
+        <div class="row" data-page-node-id="h8romecg8QqGmsnTYj0C57">
+          <label style="flex:0 0 46px" data-page-node-id="HDiaGVxOP0NY40ePPTPLfb">波动</label>
+          <div class="seg grow" id="seg-hv" data-page-node-id="bCelY19h06pCn9cKIj59i2">
+            <button data-v="any" data-page-node-id="4Omuuz2lyFrzm90A9WR7YR">不限</button>
+            <button data-v="high" data-page-node-id="yvfvOsxl0zrHWJgiyeuWDS">高</button>
+            <button data-v="low" data-page-node-id="7CM0Q5fbMD9x78ENuLAGKy">低</button>
           </div>
         </div>
-        <div class="cap">报告第6节：市场 &lt;MA60 时 +1.29%，&gt;MA60 时 −0.60%。<br>
+        <div class="cap" data-page-node-id="xVZLkYxuaNZXRppmllZ0Pr">报告第6节：市场 &lt;MA60 时 +1.29%，&gt;MA60 时 −0.60%。<br data-page-node-id="vOcwqZCRxrdM7BPUu4Kw8V">
           机制：牛市里的「超跌」多是基本面恶化，熊市才更多是流动性错杀。</div>
       </div>
     </div>
 
-    <div class="grp">
-      <h2>④ 反转确认 <span class="hint">建议全不勾</span></h2>
-      <div class="body">
-        <div class="cap" style="margin:0 0 8px;color:#a8622c">
-          报告第3节：8 个确认信号<b>全部负贡献</b>。反转从 T+1 就开始，等确认等于等已涨完的部分。
+    <div class="grp" data-page-node-id="SgVQm750G2aEPGs7FsazJ9">
+      <h2 data-page-node-id="jJODXwPGRJ1uDu1H7RFCvr">④ 反转确认 <span class="hint" data-page-node-id="M7dxwgN5Nk3hwEXlf31gkb">建议全不勾</span></h2>
+      <div class="body" data-page-node-id="hFOPHpXBjaSG7e81oXjyBa">
+        <div class="cap" style="margin:0 0 8px;color:#a8622c" data-page-node-id="XEEzifQlDKK1LRFkAnz2AM">
+          报告第3节：8 个确认信号<b data-page-node-id="91kcDwe1FJohcKPhQsqtGv">全部负贡献</b>。反转从 T+1 就开始，等确认等于等已涨完的部分。
         </div>
-        <div class="chks" id="confirms">
-          <label class="chk"><input type="checkbox" value="ma5">
-            <span><span class="t">Close &gt; MA5</span><span class="d">站上 5 日线 · −0.224%</span></span></label>
-          <label class="chk"><input type="checkbox" value="ma5up">
-            <span><span class="t">MA5 开始向上</span><span class="d">5日线拐头 · −0.447%</span></span></label>
-          <label class="chk"><input type="checkbox" value="up2">
-            <span><span class="t">连续 2 日上涨</span><span class="d">最差信号 · −3.421%</span></span></label>
-          <label class="chk"><input type="checkbox" value="histup3">
-            <span><span class="t">MACD柱连改善 3 日</span><span class="d">相对最好 · +0.015%</span></span></label>
-          <label class="chk"><input type="checkbox" value="histpos">
-            <span><span class="t">MACD柱翻红</span><span class="d">−1.950%</span></span></label>
-          <label class="chk"><input type="checkbox" value="difdea">
-            <span><span class="t">DIF &gt; DEA</span><span class="d">−0.064%</span></span></label>
-          <label class="chk"><input type="checkbox" value="ma10">
-            <span><span class="t">Close &gt; MA10</span><span class="d">站上 10 日线 · −0.447%</span></span></label>
-          <label class="chk"><input type="checkbox" value="ma20">
-            <span><span class="t">Close &gt; MA20</span><span class="d">站上 20 日线 · −0.684%</span></span></label>
-          <label class="chk"><input type="checkbox" value="volup">
-            <span><span class="t">放量上涨（量比&gt;1.2）</span><span class="d">报告第4节：放量是反向指标</span></span></label>
+        <div class="chks" id="confirms" data-page-node-id="DuWY3UdwzbQjTLHzPOdoFL">
+          <label class="chk" data-page-node-id="PcqREplmILuxYWReEDYWQ9"><input type="checkbox" value="ma5" data-page-node-id="jGpRGguXilA00ZtDWNpwsl">
+            <span data-page-node-id="SYLwX4P5uDD1MvLeUafMLs"><span class="t" data-page-node-id="heSVcDFLaIg0EzFbeLmoro">Close &gt; MA5</span><span class="d" data-page-node-id="fOOZUjHFZazKHIyOMPTQWy">站上 5 日线 · −0.224%</span></span></label>
+          <label class="chk" data-page-node-id="RvIKETNj1wtYINa7WgxAnX"><input type="checkbox" value="ma5up" data-page-node-id="ClYubezPGZVzWiIOUsr9N4">
+            <span data-page-node-id="bqfRVjTM0waJihYcHt1PLL"><span class="t" data-page-node-id="X3aZYotvsi0A31yhaZOo4q">MA5 开始向上</span><span class="d" data-page-node-id="ibewtJ2Db2yHeFh0AS92AQ">5日线拐头 · −0.447%</span></span></label>
+          <label class="chk" data-page-node-id="2LliGLpqZMfcdQI20MDFrr"><input type="checkbox" value="up2" data-page-node-id="CFZ0FAhSbBKOFOfKuFsOxZ">
+            <span data-page-node-id="Z6eSbHGPkgkadpEy3WyNMe"><span class="t" data-page-node-id="u406zWfcZ0ACbJtJeWXCCh">连续 2 日上涨</span><span class="d" data-page-node-id="NmqcwnBSrsuvb8G1iPN0l2">最差信号 · −3.421%</span></span></label>
+          <label class="chk" data-page-node-id="VL5YvzRsWn9uO8ILX2eimL"><input type="checkbox" value="histup3" data-page-node-id="gitVLO2HM2xrt1fJGInSju">
+            <span data-page-node-id="h6cBjOdjFNaBJlJ6TN4kNv"><span class="t" data-page-node-id="po5SabPcuxDAazsjbNSua4">MACD柱连改善 3 日</span><span class="d" data-page-node-id="cmZiGl6BFSaMCqWCK8PSVg">相对最好 · +0.015%</span></span></label>
+          <label class="chk" data-page-node-id="lTBgyqAGIuBcthlzt9qIvQ"><input type="checkbox" value="histpos" data-page-node-id="C73SkHELQ3Tt9QyD4igZaE">
+            <span data-page-node-id="GIAWlgvbaaMNmJibl2D8Cu"><span class="t" data-page-node-id="KAbRdLJgronTudG8qOm17H">MACD柱翻红</span><span class="d" data-page-node-id="DdrZPlPxrI7F0eryOGoGbR">−1.950%</span></span></label>
+          <label class="chk" data-page-node-id="0aqEuwf3hmm3I9umPDseBv"><input type="checkbox" value="difdea" data-page-node-id="sRPSqDnq6rk6cRjYhoO4n9">
+            <span data-page-node-id="p6MlzGgvAQ9bxFvloJlUt8"><span class="t" data-page-node-id="6fWEfsM56vlN1NknAoqbIX">DIF &gt; DEA</span><span class="d" data-page-node-id="fVPFlyaVRZEp90TlM7cpOQ">−0.064%</span></span></label>
+          <label class="chk" data-page-node-id="BSD3mWYDIbuC2BOh2N3BqE"><input type="checkbox" value="ma10" data-page-node-id="nNPri3jfjubuXzaZKz6542">
+            <span data-page-node-id="MUlYVDqrG9bR4VEYAni6PL"><span class="t" data-page-node-id="E6CmMgCHZuv4tFHYBkU99l">Close &gt; MA10</span><span class="d" data-page-node-id="NlBKQWyBo6zMMuYtbdkwdt">站上 10 日线 · −0.447%</span></span></label>
+          <label class="chk" data-page-node-id="I4OokLzvfAtp0FylK1yAsi"><input type="checkbox" value="ma20" data-page-node-id="DchEpuCJq3pNUyjRxNMPAj">
+            <span data-page-node-id="pAtNMiix7Um60ZLfVIXUsR"><span class="t" data-page-node-id="1JwqQrFprUozg5LIATHTQN">Close &gt; MA20</span><span class="d" data-page-node-id="lmavnU6rSqvtSYqp19osPp">站上 20 日线 · −0.684%</span></span></label>
+          <label class="chk" data-page-node-id="XPSn8SbGfWiIvHi0cM3kN9"><input type="checkbox" value="volup" data-page-node-id="bxwdsVcPh2DS0XBnmMoTqr">
+            <span data-page-node-id="rYUaJqriEwJppGTF5oKeIf"><span class="t" data-page-node-id="P14K5JbilQIxqoXQLArF9v">放量上涨（量比&gt;1.2）</span><span class="d" data-page-node-id="l3UeOT4RuNFTuZJkS487G3">报告第4节：放量是反向指标</span></span></label>
         </div>
       </div>
     </div>
 
-    <div class="grp">
-      <h2>⑤ 高级过滤 <span class="hint">可选</span></h2>
-      <div class="body">
-        <div class="row">
-          <label style="flex:0 0 62px">相对强弱</label>
-          <div class="seg grow" id="seg-rs">
-            <button data-lo="" data-hi="">不限</button>
-            <button data-lo="1" data-hi="3">弱 D1~3</button>
-            <button data-lo="4" data-hi="7">中 D4~7</button>
-            <button data-lo="8" data-hi="10">强 D8~10</button>
+    <div class="grp" data-page-node-id="OA1ijhpWBb52graKXNCdbD">
+      <h2 data-page-node-id="HnmjpXnDBhGOWMAJfmmIQq">⑤ 高级过滤 <span class="hint" data-page-node-id="egq7w1esaS8pHu2MYATUiV">可选</span></h2>
+      <div class="body" data-page-node-id="hQYttwNCfglfqJ5CGQaWSO">
+        <div class="row" data-page-node-id="ndwrZ1xOszeDI7IYqDK6oW">
+          <label style="flex:0 0 62px" data-page-node-id="Y0skoG3sUbLP2zdnyhph0Z">相对强弱</label>
+          <div class="seg grow" id="seg-rs" data-page-node-id="0LfFkXP8d1d9ZbeXUmMCdE">
+            <button data-lo="" data-hi="" data-page-node-id="zjmksVLRFw44YGHdc3nywd">不限</button>
+            <button data-lo="1" data-hi="3" data-page-node-id="qnicIx60s2Too0qyLnv9qo">弱 D1~3</button>
+            <button data-lo="4" data-hi="7" data-page-node-id="gq0h947LHCOuXFomfCD1h8">中 D4~7</button>
+            <button data-lo="8" data-hi="10" data-page-node-id="8k40XnErVaQjcpvW1nCaLE">强 D8~10</button>
           </div>
         </div>
-        <div class="row">
-          <label style="flex:0 0 62px">个股波动</label>
-          <div class="seg grow" id="seg-ihv">
-            <button data-lo="" data-hi="">不限</button>
-            <button data-lo="1" data-hi="3">低 D1~3</button>
-            <button data-lo="8" data-hi="10">高 D8~10</button>
+        <div class="row" data-page-node-id="8Jq88FeuHOVwUTWHiBDbAU">
+          <label style="flex:0 0 62px" data-page-node-id="na9w3Y5D3qN5A6tRa0UyBn">个股波动</label>
+          <div class="seg grow" id="seg-ihv" data-page-node-id="s9lvzgumN2EypjL76UTFzj">
+            <button data-lo="" data-hi="" data-page-node-id="7Kn7RJkeRfXoUZjEse88kv">不限</button>
+            <button data-lo="1" data-hi="3" data-page-node-id="GPloG3gocJvzPhr5GDzQdg">低 D1~3</button>
+            <button data-lo="8" data-hi="10" data-page-node-id="f42YAcjJSf1fxYhsYiHAaL">高 D8~10</button>
           </div>
         </div>
-        <div class="row">
-          <label style="flex:0 0 62px">量比</label>
-          <div class="seg grow" id="seg-rv">
-            <button data-lo="" data-hi="">不限</button>
-            <button data-lo="1" data-hi="3">缩量 D1~3</button>
-            <button data-lo="8" data-hi="10">放量 D8~10</button>
+        <div class="row" data-page-node-id="UWKUO61TxxigwNETXF8zok">
+          <label style="flex:0 0 62px" data-page-node-id="U2YnrkX1cQjKTSkVJftz3O">量比</label>
+          <div class="seg grow" id="seg-rv" data-page-node-id="1DY0QQoLHEkQRCxuG2POex">
+            <button data-lo="" data-hi="" data-page-node-id="lrnAUtP06dld3ezf5NLDzU">不限</button>
+            <button data-lo="1" data-hi="3" data-page-node-id="WpfgDhQBAWfexaANOyBkJS">缩量 D1~3</button>
+            <button data-lo="8" data-hi="10" data-page-node-id="rxknIA74lHCFlZtpv75PYb">放量 D8~10</button>
           </div>
         </div>
-        <div class="cap">报告第7节：「绝对超跌 + 相对强势」是最差组合之一。</div>
+        <div class="cap" data-page-node-id="c2kw2XXHSDxpf0i2ZxA3Zt">报告第7节：「绝对超跌 + 相对强势」是最差组合之一。</div>
       </div>
     </div>
 
-    <div class="grp">
-      <h2>⑥ 自定义股票群</h2>
-      <div class="body">
-        <div class="row">
-          <label style="flex:0 0 46px">范围</label>
-          <div class="seg grow" id="seg-pool">
-            <button data-v="all" class="on">全部A股</button>
-            <button data-v="custom">自定义</button>
+    <div class="grp" data-page-node-id="3biXxJZq57pNZfQ8iPq1D5">
+      <h2 data-page-node-id="o5v2L0L5yhAVtfsICKGIhm">⑥ 自定义股票群</h2>
+      <div class="body" data-page-node-id="NJILcvuOG3By5nB7mt94G1">
+        <div class="row" data-page-node-id="P2d2ncqp9tlawaYBJMyGrf">
+          <label style="flex:0 0 46px" data-page-node-id="QVXNT3IejgaFPfHNK4Zci5">范围</label>
+          <div class="seg grow" id="seg-pool" data-page-node-id="JuYa3QKgQyBFj18Lt6AaXy">
+            <button data-v="all" class="on" data-page-node-id="qSjEkzsokRwk9lin5RSgzY">全部A股</button>
+            <button data-v="custom" data-page-node-id="g6HmyjnFVta38yx7MpBa7h">自定义</button>
           </div>
         </div>
-        <div id="poolcustom" style="display:none">
-          <div style="font-size:12px;color:var(--tx2);margin:9px 0 5px">代码清单
-            <span style="color:var(--tx3);font-size:11px">（逗号/空格分隔，6位代码自动匹配）</span></div>
+        <div id="poolcustom" style="display:none" data-page-node-id="9UHiqoljMbU9Wemk4ox3m5">
+          <div style="font-size:12px;color:var(--tx2);margin:9px 0 5px" data-page-node-id="qwrLUfzWjFSc7FSMR1muXk">代码清单
+            <span style="color:var(--tx3);font-size:11px" data-page-node-id="pCQBbYuqHMkKoHd4x4DuVD">（逗号/空格分隔，6位代码自动匹配）</span></div>
           <textarea id="pool_codes" placeholder="000001.SZ, 600000.SH&#10;000002 600519 300750"></textarea>
-          <div class="codesbox" id="poolcnt">已输入 0 个代码</div>
-          <div class="btnrow" style="margin-top:7px">
-            <button class="btn ghost" id="pool_load" style="font-size:11.5px;padding:6px">载入当前候选</button>
-            <button class="btn ghost" id="pool_clear" style="font-size:11.5px;padding:6px">清空</button>
+          <div class="codesbox" id="poolcnt" data-page-node-id="m2lMtrbfCZVeNK8WtQyN5g">已输入 0 个代码</div>
+          <div class="btnrow" style="margin-top:7px" data-page-node-id="P6NjqLpEXoEcHSEon2fG8q">
+            <button class="btn ghost" id="pool_load" style="font-size:11.5px;padding:6px" data-page-node-id="dwJN0HNG3DeXydVKrYzMBk">载入当前候选</button>
+            <button class="btn ghost" id="pool_clear" style="font-size:11.5px;padding:6px" data-page-node-id="tLDeflN1jxExTg7Z64SFns">清空</button>
           </div>
         </div>
-        <div style="font-size:12px;color:var(--tx2);margin:11px 0 5px">行业筛选
-          <span style="color:var(--tx3);font-size:11px" id="indcnt">（0 选中 = 不限）</span></div>
-        <div class="poolcls">
-          <button data-act="allind">全选</button>
-          <button data-act="noneind">清空</button>
+        <div style="font-size:12px;color:var(--tx2);margin:11px 0 5px" data-page-node-id="TS9ZP062MY2quaUqFbq2cS">行业筛选
+          <span style="color:var(--tx3);font-size:11px" id="indcnt" data-page-node-id="tAClbdAG6uZhRSrDC7JYFK">（0 选中 = 不限）</span></div>
+        <div class="poolcls" data-page-node-id="jvzZUcct8vzSICXZyXNl0b">
+          <button data-act="allind" data-page-node-id="Ufgwc08VtKc5wRfs68lwoK">全选</button>
+          <button data-act="noneind" data-page-node-id="Bqb5GRYUKhDtVIW7CKfzC3">清空</button>
         </div>
-        <div class="chks" id="inds" style="max-height:190px"></div>
+        <div class="chks" id="inds" style="max-height:190px" data-page-node-id="o9ayDASEqsThnizZqZhQHM"></div>
 
-        <div style="font-size:12px;color:var(--tx2);margin:11px 0 5px">板块筛选
-          <span style="color:var(--tx3);font-size:11px" id="bdcnt">（0 选中 = 不限）</span></div>
-        <div class="poolcls">
-          <button data-act="allbd">全选</button>
-          <button data-act="nonebd">清空</button>
+        <div style="font-size:12px;color:var(--tx2);margin:11px 0 5px" data-page-node-id="kqMKUgEeEqdm9IotkO7GeC">板块筛选
+          <span style="color:var(--tx3);font-size:11px" id="bdcnt" data-page-node-id="UvC7YhIBogfhCYQRRilJiP">（0 选中 = 不限）</span></div>
+        <div class="poolcls" data-page-node-id="ysxPzglUbGWDI5CRW0iQAd">
+          <button data-act="allbd" data-page-node-id="s4SBMZo7jjSqiqdxJKArhY">全选</button>
+          <button data-act="nonebd" data-page-node-id="4DWbHdPlhS8XYk6IwLNPEj">清空</button>
         </div>
-        <div class="seg wrap" id="seg-board">
-          <button data-v="MAIN" class="on">主板<i class="sbc" id="sbc-MAIN"></i></button>
-          <button data-v="CHINEXT" class="on">创业板<i class="sbc" id="sbc-CHINEXT"></i></button>
-          <button data-v="STAR" class="on">科创板<i class="sbc" id="sbc-STAR"></i></button>
-          <button data-v="BJ">北交所<i class="sbc" id="sbc-BJ"></i></button>
+        <div class="seg wrap" id="seg-board" data-page-node-id="mCcEDsDZoSPGs16pI7adXw">
+          <button data-v="MAIN" class="on" data-page-node-id="opLt8Kp21pWnS1tREL6y4K">主板<i class="sbc" id="sbc-MAIN" data-page-node-id="yW2OKUMCcAliVAiysdm6xl"></i></button>
+          <button data-v="CHINEXT" class="on" data-page-node-id="mUUXRCxqFkT0WWuxWXhYXz">创业板<i class="sbc" id="sbc-CHINEXT" data-page-node-id="KJEIxgl0UkBJzMLs9nb3ec"></i></button>
+          <button data-v="STAR" class="on" data-page-node-id="49etJVoEFKvvIHcLxwrVcL">科创板<i class="sbc" id="sbc-STAR" data-page-node-id="lNCqrgVA2TpHIPCOlUcakp"></i></button>
+          <button data-v="BJ" data-page-node-id="cImAFBQg7cBFM5UUdyxeOJ">北交所<i class="sbc" id="sbc-BJ" data-page-node-id="0bn0XpsQLZvUYZwZnRvh6D"></i></button>
         </div>
-        <div class="cap">板块由证券代码号段判定，经涨跌停幅度交叉验证（主板 10% / 创业板·科创板 20% / 北交所 30%）。
+        <div class="cap" data-page-node-id="a9MHgbPU4lbTOU6XE8aoGS">板块由证券代码号段判定，经涨跌停幅度交叉验证（主板 10% / 创业板·科创板 20% / 北交所 30%）。
           北交所流动性与制度差异大，默认不选。</div>
 
-        <div style="font-size:12px;color:var(--tx2);margin:11px 0 5px">交易所</div>
-        <div class="seg" id="seg-ex">
-          <button data-v="SH" class="on">沪市</button>
-          <button data-v="SZ" class="on">深市</button>
-          <button data-v="BJ">北交所</button>
+        <div style="font-size:12px;color:var(--tx2);margin:11px 0 5px" data-page-node-id="WgVedQvHe2qge98icdF34Q">交易所</div>
+        <div class="seg" id="seg-ex" data-page-node-id="xTe4hKfnf5wLBeEQAOg1eU">
+          <button data-v="SH" class="on" data-page-node-id="xSEXdXFsKXAx5opUT2gJpF">沪市</button>
+          <button data-v="SZ" class="on" data-page-node-id="TpDacmpceap9uSMNQNo6KT">深市</button>
+          <button data-v="BJ" data-page-node-id="Id7iHndYHqapLvAaF9ZPcn">北交所</button>
         </div>
-        <div class="cap">交易所与板块是两个独立维度：创业板都在深市，科创板都在沪市；
+        <div class="cap" data-page-node-id="JkZTr8cCGDBvwIiJlwtdv1">交易所与板块是两个独立维度：创业板都在深市，科创板都在沪市；
           先按板块限量，再用交易所做二次细分。</div>
 
-        <div class="finwrap">
-          <div class="finhead">
-            <span>财务筛选</span>
-            <span class="finbadge" id="fin_badge">动态 · 无前视偏差</span>
+        <div class="finwrap" data-page-node-id="5iRbTZYuuYu4KOYESnoSWm">
+          <div class="finhead" data-page-node-id="mdFZ7sLlzY2mS3Tzhi3Ahx">
+            <span data-page-node-id="IzIrr9isxGpACfjAeAHEVw">财务筛选</span>
+            <span class="finbadge" id="fin_badge" data-page-node-id="B0TKdQdCklNdXqG5PKR5LF">动态 · 无前视偏差</span>
           </div>
-          <div class="finhint">
-            回测时按<b>财报实际披露日</b>动态对齐：任意历史交易日只使用「当时已公告」的财报，
-            绝不使用未来数据，<b>无前视偏差</b>。财报为累计口径，同比增长按去年同期对比。
+          <div class="finhint" data-page-node-id="IOwMGQ478DZyDuNmAgFJWw">
+            回测时按<b data-page-node-id="dPEZUDH1mDzIjwmswwEfOS">财报实际披露日</b>动态对齐：任意历史交易日只使用「当时已公告」的财报，
+            绝不使用未来数据，<b data-page-node-id="5q5kR8XoF1IK0JMmuOzYDK">无前视偏差</b>。财报为累计口径，同比增长按去年同期对比。
           </div>
 
-          <div class="finrow">
-            <label>营业总收入</label>
-            <input type="number" id="fin_rev_min" placeholder="下限" step="0.1">
-            <span class="unit">亿元</span>
-            <input type="number" id="fin_rev_max" placeholder="上限" step="0.1">
-            <span class="unit">亿元</span>
+          <div class="finrow" data-page-node-id="rFFpi9FRd6lNIkdyPslSpZ">
+            <label data-page-node-id="U7L4GR9jM68KVM8avJXnSS">营业总收入</label>
+            <input type="number" id="fin_rev_min" placeholder="下限" step="0.1" data-page-node-id="vn652XVvJrteowqyY01t0q">
+            <span class="unit" data-page-node-id="KK7ujgjDVHhKohIGG0gdoX">亿元</span>
+            <input type="number" id="fin_rev_max" placeholder="上限" step="0.1" data-page-node-id="2W1MGtmTcqmsiE4uVXDLKp">
+            <span class="unit" data-page-node-id="HRbb4ipHIjvYTpyOuRm7nl">亿元</span>
           </div>
-          <div class="finrow">
-            <label>营收同比</label>
-            <input type="number" id="fin_ry_min" placeholder="下限" step="1">
-            <span class="unit">%</span>
-            <input type="number" id="fin_ry_max" placeholder="上限" step="1">
-            <span class="unit">%</span>
+          <div class="finrow" data-page-node-id="ICeQGgMVsub1VCTVlseBNA">
+            <label data-page-node-id="KChkovKCzVdBmMOn4jGiki">营收同比</label>
+            <input type="number" id="fin_ry_min" placeholder="下限" step="1" data-page-node-id="fP3S5LSGwMRJAugR2i2STJ">
+            <span class="unit" data-page-node-id="JgHulNKImvzSAxqgxhGo6m">%</span>
+            <input type="number" id="fin_ry_max" placeholder="上限" step="1" data-page-node-id="PZUdvaxfH96siLqVyTVJGT">
+            <span class="unit" data-page-node-id="HtRH4ZBaFdzIBBFAvQTTOC">%</span>
           </div>
-          <div class="finrow">
-            <label>归母净利润</label>
-            <input type="number" id="fin_np_min" placeholder="下限" step="0.1">
-            <span class="unit">亿元</span>
-            <input type="number" id="fin_np_max" placeholder="上限" step="0.1">
-            <span class="unit">亿元</span>
+          <div class="finrow" data-page-node-id="yrifXg0Qi4wOCABHWhJo0d">
+            <label data-page-node-id="1oD2h90pWrzn2XMTMkPGlO">归母净利润</label>
+            <input type="number" id="fin_np_min" placeholder="下限" step="0.1" data-page-node-id="JsuvtFdzwHBIXivwPqOTdt">
+            <span class="unit" data-page-node-id="GDCoDSoG8TdiiYS7zJ7JZu">亿元</span>
+            <input type="number" id="fin_np_max" placeholder="上限" step="0.1" data-page-node-id="6w3fNLuEDGcwC4vfGF91q7">
+            <span class="unit" data-page-node-id="YFvWABG4eiQHaWkiLkCLqx">亿元</span>
           </div>
-          <div class="finrow">
-            <label>归母同比</label>
-            <input type="number" id="fin_ny_min" placeholder="下限" step="1">
-            <span class="unit">%</span>
-            <input type="number" id="fin_ny_max" placeholder="上限" step="1">
-            <span class="unit">%</span>
+          <div class="finrow" data-page-node-id="tmDDP1d8yr35RU8AS3cnAs">
+            <label data-page-node-id="k75q9DEd6307WAldBgL0f8">归母同比</label>
+            <input type="number" id="fin_ny_min" placeholder="下限" step="1" data-page-node-id="Sj4PEO7CjoruTRaKMv8AGO">
+            <span class="unit" data-page-node-id="OTAZnXVjD5ZWFzbUeIyKhl">%</span>
+            <input type="number" id="fin_ny_max" placeholder="上限" step="1" data-page-node-id="CqPyICbzLp4igrTGPizDIW">
+            <span class="unit" data-page-node-id="0FGiGl0irX9Obj9JBsAgLn">%</span>
           </div>
-          <div class="finrow">
-            <label>财报期</label>
-            <select id="fin_period">
-              <option value="latest">最新可用</option>
-              <option value="q1">只看 Q1</option>
-              <option value="q2">只看半年报</option>
-              <option value="q3">只看 Q3</option>
-              <option value="q4">只看年报</option>
+          <div class="finrow" data-page-node-id="pZVvtYANYYpQhMZqzlwU49">
+            <label data-page-node-id="VF7nKoG5jyMYdGAsaD9VeH">财报期</label>
+            <select id="fin_period" data-page-node-id="HY3GwetFsNuknLB8L04DAA">
+              <option value="latest" data-page-node-id="IEJDxvCPKMhDb6pxAM9Ro5">最新可用</option>
+              <option value="q1" data-page-node-id="uTaozcd3JR4RJlHo5Bvvtz">只看 Q1</option>
+              <option value="q2" data-page-node-id="H4j66NPUWBH7R8pinv0aLq">只看半年报</option>
+              <option value="q3" data-page-node-id="wVu6L9BINCyLE6DTZvy6nZ">只看 Q3</option>
+              <option value="q4" data-page-node-id="lZtUZhODqJvQrVC3eyptZH">只看年报</option>
             </select>
           </div>
-          <div class="finquick">
-            <button data-fin="rev_up">营收正增长</button>
-            <button data-fin="rev20">营收增20%+</button>
-            <button data-fin="np_up">利润正增长</button>
-            <button data-fin="big">营收&gt;10亿</button>
-            <button data-fin="clear">清空</button>
+          <div class="finquick" data-page-node-id="7uAdAMxNyVA3CZEKGoi46n">
+            <button data-fin="rev_up" data-page-node-id="5adUAJJ07Oi2QWuhoeggVe">营收正增长</button>
+            <button data-fin="rev20" data-page-node-id="p8umukt6wUDV1ryxR4CLna">营收增20%+</button>
+            <button data-fin="np_up" data-page-node-id="5ks5CJM4dJX8BQoxKF5fCm">利润正增长</button>
+            <button data-fin="big" data-page-node-id="q52YCtV4rNT1UOIogXMamQ">营收&gt;10亿</button>
+            <button data-fin="clear" data-page-node-id="VfB0LfD50qlGQ6akdgAr7a">清空</button>
           </div>
-          <div class="cap" id="fin_stat">未启用财务筛选</div>
+          <div class="cap" id="fin_stat" data-page-node-id="EHFm7hhDwH5hBB7K1IUEy0">未启用财务筛选</div>
         </div>
       </div>
     </div>
 
-    <div class="grp">
-      <h2>⑦ 持有期</h2>
-      <div class="body">
-        <div class="slide">
-          <span class="nm">持有</span>
-          <input type="range" id="hold" min="1" max="60" step="1" value="20">
-          <span class="vl" id="hold_v">20日</span>
+    <div class="grp" data-page-node-id="P28vYRGy5kVyFaMotL0Due">
+      <h2 data-page-node-id="WdT0yJcLAzNiEmj1kKYb3C">⑦ 持有期</h2>
+      <div class="body" data-page-node-id="oblQoc6vOjV5JKNsV2knzi">
+        <div class="slide" data-page-node-id="2jwCbwQAe4CSHaKWNsFMG2">
+          <span class="nm" data-page-node-id="ovqQpB3npixafiWeXzQXj1">持有</span>
+          <input type="range" id="hold" min="1" max="60" step="1" value="20" data-page-node-id="aqARoDqzgfyHGSZbACGT4S">
+          <span class="vl" id="hold_v" data-page-node-id="4JkXZjygyF8pEDshNdYA1J">20日</span>
         </div>
-        <div class="cap">报告：20~60 日是宽平台（40 日最优 29.1%）。</div>
+        <div class="cap" data-page-node-id="THYOuEagYuojA2ZOZddzp0">报告：20~60 日是宽平台（40 日最优 29.1%）。</div>
       </div>
     </div>
 
-    <div class="btnrow">
-      <button class="btn" id="run">运行回测</button>
-      <button class="btn ghost" id="reset" style="flex:0 0 74px">重置</button>
+    <div class="grp" data-page-node-id="z8KVDef4uoiwquWOR18s7O">
+      <h2 data-page-node-id="UcB8SxwwUmpWwBPGIcqWGB">⑧ 仓位约束 <span class="tag" data-page-node-id="d2EUXWwlZbxC1ihTouSnAj">实盘可执行性</span></h2>
+      <div class="body" data-page-node-id="47yuor02pMxgrP6PuJB9qX">
+        <div class="row" data-page-node-id="mqJnOnD6ZHQU13Y91AwPrA">
+          <label style="flex:0 0 46px" data-page-node-id="irq9LOpT9dQr0YB9xSNfCx">口径</label>
+          <div class="seg grow" id="seg-cap" data-page-node-id="SciaxXCTG9AGKKGjut2F7I">
+            <button data-v="0" data-page-node-id="i8HyA7SxPLdFRUa3GPdDQQ">不限仓位</button>
+            <button data-v="1" class="on" data-page-node-id="g50wWa67aNMUILkuEXC2on">限制持仓</button>
+          </div>
+        </div>
+        <div class="capwrap on" id="capwrap" data-page-node-id="uPtxoMUod3amdhjJa3pwKZ">
+          <div class="caphead" data-page-node-id="byOXXWhdFYlTf3UsoWl8V7">
+            <span data-page-node-id="nGUHuFvubeeLomsCDQIAzK">容量约束</span>
+            <span class="capbadge" id="cap_badge" data-page-node-id="uDUMeZvd0lBBRfq5DjVsFB">已启用</span>
+          </div>
+          <div class="caphint" data-page-node-id="Jr3mGVCE7uziw41iRgZlev">
+            上面所有指标的默认口径是<b data-page-node-id="qgUzV2t44bUiSm858OplWx">不限仓位</b>——某日有 500 个信号就等权买 500 只。
+            实测平均同时持仓 <b data-page-node-id="wTCON0Xc7qgGHiMlWYPV2l">943.9 只</b>，个人资金根本做不到。
+            打开本选项后，按真实下单节奏重算：每日先卖到期 → 再看新信号 → 排序取前几只
+            → 受持仓上限截断，<b data-page-node-id="mzr83Wp71WbzMxj9WDrhr1">被丢弃的信号不补买</b>。
+          </div>
+          <div class="caprow" data-page-node-id="wkjX4vCrSOEV4TGt0pyhTw">
+            <label data-page-node-id="xeb79IsPgY8oOqF35BbTcf">同时持仓</label>
+            <input type="number" id="cap_maxpos" value="10" min="1" max="200" step="1" data-page-node-id="jB7JK2qfoqPD32vGtF11zZ">
+            <span class="unit" data-page-node-id="Htxc1ey0O8GsVijckCZpFU">只为上限</span>
+          </div>
+          <div class="caprow" data-page-node-id="Zf4u7WXuIpYgh752CBN146">
+            <label data-page-node-id="AfxblY8KxUUjuckkNjToPN">每日买入</label>
+            <input type="number" id="cap_maxnew" value="3" min="1" max="50" step="1" data-page-node-id="s5cfBgWU71NSlZnGfI8r0W">
+            <span class="unit" data-page-node-id="j9YqW0HCi1V1esGGaMuKSl">只/日</span>
+          </div>
+          <div class="caprow" data-page-node-id="lBQTBjfSV3BkS57lYH9fqm">
+            <label data-page-node-id="eval9VpyxTuD9U472RW64z">超额选股</label>
+            <select id="cap_pick" data-page-node-id="w8MBalf6aeNfuUOEnJxW5K"></select>
+          </div>
+          <div class="capquick" data-page-node-id="G7ccbIC2ZiWEYWdxEZ3DJZ">
+            <button data-cap="10,3" class="on" data-page-node-id="ZLl0CZ6TLn4lAZHGWFVcIl">10只 / 日3只</button>
+            <button data-cap="10,1" data-page-node-id="GQFrSjvc8e5piBEAgbuBZs">10只 / 日1只</button>
+            <button data-cap="20,3" data-page-node-id="5l5uYe3kBfL2nxGMtwJUnr">20只 / 日3只</button>
+            <button data-cap="5,2" data-page-node-id="C1bEogaMOFmFejDZuC8O6v">5只 / 日2只</button>
+          </div>
+          <div class="cap" style="margin-top:9px" data-page-node-id="SfCyVVArazdQdu3NzG1LzX">
+            信号远多于仓位时，需要一个「先买哪只」的规则。<b data-page-node-id="gNDyd0UG7NDY0vAklhFet2">所有规则只用信号日当天可见的字段</b>，
+            无前视偏差。经 200 次随机选股对照检验，「最超跌优先」显著优于随机（z≈4.0）。
+          </div>
+        </div>
+        <div class="cap" id="cap_stat" data-page-node-id="SpqpTEhFvgi2WxQMrnCG8M">当前口径：不限仓位（研究报告原始口径）</div>
+      </div>
+    </div>
+
+    <div class="btnrow" data-page-node-id="YbAaaLGUA4wVFeVuIfigHr">
+      <button class="btn" id="run" data-page-node-id="oCNdjot8A6QMDVqdBnTUfD">运行回测</button>
+      <button class="btn ghost" id="reset" style="flex:0 0 74px" data-page-node-id="9KtDuxfmifhIropoJi16DR">重置</button>
     </div>
 
   </aside>
 
   <!-- ================= 右栏：结果 ================= -->
-  <div id="right">
-    <div id="tabs">
-      <button data-t="scan" class="on">今日选股 <span class="cnt" id="c-scan"></span></button>
-      <button data-t="bt">策略回测</button>
-      <button data-t="trades">交易明细</button>
-      <button data-t="tune">参数寻优</button>
-      <button data-t="stock">单股透视</button>
-      <button data-t="help">研究结论</button>
+  <div id="right" data-page-node-id="Ij43FPwGzFd7F64aVYS8df">
+    <div id="tabs" data-page-node-id="BPZTvhfk8K53peU3Qk0FB0">
+      <button data-t="scan" class="on" data-page-node-id="1XGiJm5K4xITH89xEyRRhH">今日选股 <span class="cnt" id="c-scan" data-page-node-id="ip76NXkN2nGmS0ZPkwY9T7"></span></button>
+      <button data-t="bt" data-page-node-id="74fqzHQEWLLFKQLHNBoLXH">策略回测</button>
+      <button data-t="trades" data-page-node-id="EHDwkubjI07WLPnBWLpVsF">交易明细</button>
+      <button data-t="tune" data-page-node-id="XrOKn4aGvhKw4x41JHRp2Q">参数寻优</button>
+      <button data-t="stock" data-page-node-id="cCDKgGUMxDYAEl3Fvyeute">单股透视</button>
+      <button data-t="help" data-page-node-id="XGRCrj9vOT0o08dmaMS12D">研究结论</button>
     </div>
-    <div id="view">
+    <div id="view" data-page-node-id="o8UHSxdmC0Qw9IDulIMyIq">
 
-      <div class="pane on" id="p-scan">
-        <div class="empty">点击左侧「运行回测」，或直接在下方查看最新交易日候选股。</div>
+      <div class="pane on" id="p-scan" data-page-node-id="Q8LBrLVkGcqPxPv9jXanzq">
+        <div class="empty" data-page-node-id="j0zRjeUOSGHnJDqa8DcASu">点击左侧「运行回测」，或直接在下方查看最新交易日候选股。</div>
       </div>
-      <div class="pane" id="p-bt">
-        <div class="empty">等待回测结果。默认参数 = 报告第 12 节验证的最优 3 条件策略。</div>
+      <div class="pane" id="p-bt" data-page-node-id="5eO7qyXgkkOFkkdPYX3PdY">
+        <div class="empty" data-page-node-id="4v5A7iAVVqdyMjsPJwaEyY">等待回测结果。默认参数 = 报告第 12 节验证的最优 3 条件策略。</div>
       </div>
-      <div class="pane" id="p-trades">
-        <div class="empty">等待回测结果。点上方「策略回测」跑一次，或直接在此查看逐笔交易明细。</div>
+      <div class="pane" id="p-trades" data-page-node-id="DMZWUaxlbqzyjOprZC0thd">
+        <div class="empty" data-page-node-id="3KCGwB9I8F7DyjMvqiucZy">等待回测结果。点上方「策略回测」跑一次，或直接在此查看逐笔交易明细。</div>
       </div>
-      <div class="pane" id="p-tune">
-        <div class="card">
-          <h3>参数寻优 <span class="tag">简单网格搜索</span></h3>
-          <div class="desc">勾选要一起寻优的维度，系统做笛卡尔积后按 Sharpe 排序。组合数上限 240。
+      <div class="pane" id="p-tune" data-page-node-id="bGEcucXICspQSmxKGrig0I">
+        <div class="card" data-page-node-id="9m63nWXOyuKDgh1BfyfKKv">
+          <h3 data-page-node-id="3l0ffLZCbRtvQVaw2Af7wp">参数寻优 <span class="tag" data-page-node-id="cqLQHeUeooFqGBCFo0fcbu">简单网格搜索</span></h3>
+          <div class="desc" data-page-node-id="eN2GiKflS2ASozVIKumH4y">勾选要一起寻优的维度，系统做笛卡尔积后按 Sharpe 排序。组合数上限 240。
             报告的核心发现是「越简单越好」，所以先只勾 2~3 个维度。</div>
-          <div class="chks" id="axes" style="max-height:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:2px">
-            <label class="chk"><input type="checkbox" value="px_ma60" checked><span><span class="t">距MA60 分位区间</span><span class="d">D1 / D1~2 / D1~3 / D2~3 / D1~5 / D1~10</span></span></label>
-            <label class="chk"><input type="checkbox" value="size_max" checked><span><span class="t">市值上限</span><span class="d">最小10% ~ 全部（7 档）</span></span></label>
-            <label class="chk"><input type="checkbox" value="mkt_state" checked><span><span class="t">市场环境</span><span class="d">熊市 / 不限 / 牛市</span></span></label>
-            <label class="chk"><input type="checkbox" value="mkt_hv"><span><span class="t">市场波动</span><span class="d">不限 / 高 / 低</span></span></label>
-            <label class="chk"><input type="checkbox" value="ret20"><span><span class="t">ret20 分位区间</span><span class="d">不限 / D1~3 / D2~6 / D1 / D1~5</span></span></label>
-            <label class="chk"><input type="checkbox" value="confirm"><span><span class="t">反转确认信号</span><span class="d">无 / MACD改善 / MA5 / 放量 / 组合</span></span></label>
+          <div class="chks" id="axes" style="max-height:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:2px" data-page-node-id="yBbUkoRCJlnKyCjiVFmMf8">
+            <label class="chk" data-page-node-id="RuYRi5SWBNERWHlaYQx0hO"><input type="checkbox" value="px_ma60" checked data-page-node-id="xyoOremWAEERGjqwS27OGo"><span data-page-node-id="0sYD7ZrEF7mUxFV8jCVaKN"><span class="t" data-page-node-id="3oeX9Bf3WkCndeel48iatK">距MA60 分位区间</span><span class="d" data-page-node-id="dktWS6DKihPdaqERZGfCBE">D1 / D1~2 / D1~3 / D2~3 / D1~5 / D1~10</span></span></label>
+            <label class="chk" data-page-node-id="PUb8A41UcJzPTF2CMuOCNP"><input type="checkbox" value="size_max" checked data-page-node-id="LGiqoyk7czr6JHiukGto6G"><span data-page-node-id="ZogWmHgj3PMCBfgBqTOGbI"><span class="t" data-page-node-id="UbCcFYwHBKU7fAX54Ol4A8">市值上限</span><span class="d" data-page-node-id="PFCkRUKzHmjarYyr7IWXD4">最小10% ~ 全部（7 档）</span></span></label>
+            <label class="chk" data-page-node-id="ADE6kHSSKtIechCXTwViEX"><input type="checkbox" value="mkt_state" checked data-page-node-id="myGA5YBK3ZpSbL8F5DCOEB"><span data-page-node-id="rG7aT3bckReK2KQzbwO6Uc"><span class="t" data-page-node-id="QxxgaChishZy43BmUtABS8">市场环境</span><span class="d" data-page-node-id="5g6PAcNYdMHmlI1XSKUDMB">熊市 / 不限 / 牛市</span></span></label>
+            <label class="chk" data-page-node-id="qpQUThDb7Rw2CbmlYf91Ci"><input type="checkbox" value="mkt_hv" data-page-node-id="vpSMXnhR2QSkAE19HdoyHK"><span data-page-node-id="d3ZN2JhAHa0m8ZuLScidQq"><span class="t" data-page-node-id="IDr467vo4JwanvlKtNaezX">市场波动</span><span class="d" data-page-node-id="d46MsposF7ZYljbpnWpTJJ">不限 / 高 / 低</span></span></label>
+            <label class="chk" data-page-node-id="HKcGmQjsFNEfQOUtTFbH1c"><input type="checkbox" value="ret20" data-page-node-id="3UbTzUIJ3Qu2170EerfwTv"><span data-page-node-id="3HR2axIAmKPhTRFSMFWCp6"><span class="t" data-page-node-id="bm9tC3wm7jrcCtd5htQbvy">ret20 分位区间</span><span class="d" data-page-node-id="1YvAvQBJU2BnvfNIwQ7hwH">不限 / D1~3 / D2~6 / D1 / D1~5</span></span></label>
+            <label class="chk" data-page-node-id="fQfhBsXytcdxDEVUfeBOxG"><input type="checkbox" value="confirm" data-page-node-id="wkwltnnElzfLMNkTtwzFt6"><span data-page-node-id="VNjbrCmQZDCHuYz916qBJJ"><span class="t" data-page-node-id="4h1XZeAWy8nhcXxI5UeoKe">反转确认信号</span><span class="d" data-page-node-id="xQxJukpFwU8D6y0JSbX5O5">无 / MACD改善 / MA5 / 放量 / 组合</span></span></label>
           </div>
-          <div class="btnrow" style="margin-top:13px;max-width:330px">
-            <button class="btn" id="tune_run">开始寻优</button>
-          </div>
-        </div>
-        <div id="tune-out"></div>
-      </div>
-      <div class="pane" id="p-stock">
-        <div class="card">
-          <h3>单股透视</h3>
-          <div class="desc">看一只股票历史上的「超跌信号」出现位置与后续表现。</div>
-          <div class="row" style="max-width:430px">
-            <input type="text" id="stk_code" placeholder="输入代码，如 300750 或 000001.SZ">
-            <button class="btn" id="stk_go" style="flex:0 0 76px">查询</button>
+          <div class="btnrow" style="margin-top:13px;max-width:330px" data-page-node-id="aaEdCy5uE94UTOaN4y1Ibb">
+            <button class="btn" id="tune_run" data-page-node-id="7tEUvmrJ6qSIztq9F7Cz7I">开始寻优</button>
           </div>
         </div>
-        <div id="stk-out"></div>
+        <div id="tune-out" data-page-node-id="25IDgotoUb0gI6ImAeWUQr"></div>
       </div>
-      <div class="pane" id="p-help"></div>
+      <div class="pane" id="p-stock" data-page-node-id="s9aEG1vWgWTXPBx3GDPMcD">
+        <div class="card" data-page-node-id="dBoJIwYywz5aE9Hb2ROBuS">
+          <h3 data-page-node-id="FaYvolH6zT4z7VJ6PYUNSD">单股透视</h3>
+          <div class="desc" data-page-node-id="D86AkKszogw2tCZLYAiCxK">看一只股票历史上的「超跌信号」出现位置与后续表现。</div>
+          <div class="row" style="max-width:430px" data-page-node-id="zBmqX8wQWcpwXmkOTWaEyu">
+            <input type="text" id="stk_code" placeholder="输入代码，如 300750 或 000001.SZ" data-page-node-id="x5Eo2koHIlF88TmmMb8ZnQ">
+            <button class="btn" id="stk_go" style="flex:0 0 76px" data-page-node-id="z4S2D2SHxhOMS4H3nipuss">查询</button>
+          </div>
+        </div>
+        <div id="stk-out" data-page-node-id="pS8lY04yq3rh1GBpMlRgWe"></div>
+      </div>
+      <div class="pane" id="p-help" data-page-node-id="eCrjFRjcSxUMqaq3Stim9l"></div>
 
     </div>
   </div>
@@ -703,6 +797,10 @@ function collect() {
     rvol_min: nz(rv && rv.lo), rvol_max: nz(rv && rv.hi),
     confirm: c,
     hold: parseInt($('#hold').value, 10),
+    // ---- 容量约束（实盘可执行性）：0 = 不限仓位
+    max_pos: (segv('#seg-cap') === '1') ? Math.max(1, parseInt($('#cap_maxpos').value, 10) || 10) : 0,
+    max_new: Math.max(1, parseInt($('#cap_maxnew').value, 10) || 3),
+    pick: $('#cap_pick').value || 'deep',
     // ---- 财务（动态）
     rev_min: toYuan(fnum('fin_rev_min')), rev_max: toYuan(fnum('fin_rev_max')),
     rev_yoy_min: toFrac(fnum('fin_ry_min')), rev_yoy_max: toFrac(fnum('fin_ry_max')),
@@ -783,8 +881,20 @@ function applyParams(p) {
   setN('fin_ry_min', p.rev_yoy_min, 100); setN('fin_ry_max', p.rev_yoy_max, 100);
   setN('fin_ny_min', p.np_yoy_min, 100); setN('fin_ny_max', p.np_yoy_max, 100);
   $('#fin_period').value = p.fin_period || 'latest';
+  // ---- 仓位约束（applyParams 用于预设/重置，预设默认不限仓位）
+  const mp = parseInt(p.max_pos ?? 0, 10) || 0;
+  $$('#seg-cap button').forEach(b => b.classList.toggle('on',
+    b.dataset.v === (mp > 0 ? '1' : '0')));
+  if (p.max_pos) $('#cap_maxpos').value = mp;
+  if (p.max_new) $('#cap_maxnew').value = p.max_new;
+  if (p.pick && $('#cap_pick').querySelector(`option[value="${p.pick}"]`)) {
+    $('#cap_pick').value = p.pick;
+  }
+  $$('.capquick button').forEach(b =>
+    b.classList.toggle('on', b.dataset.cap === `${mp},${p.max_new ?? 3}`));
   $$('.finquick button').forEach(b => b.classList.remove('on'));
   syncLabels();
+  syncCap();
   updateModeBadge();
   updateFinBadge();
 }
@@ -824,6 +934,8 @@ function updateModeBadge() {
   if (p.np_min !== null || p.np_max !== null) fq.push('归母');
   if (p.np_yoy_min !== null || p.np_yoy_max !== null) fq.push('归母同比');
   if (fq.length) { n += fq.length; L.push('财务:' + fq.join('/')); }
+  // 仓位约束（不是选股条件，单独提示）
+  if (p.max_pos > 0) { L.push(`仓位≤${p.max_pos}只/日${p.max_new}只`); }
   const b = $('#bmode');
   b.textContent = n ? `${n} 个条件 · ` + L.slice(0, 4).join(' + ') + (L.length > 4 ? ' …' : '')
     : '无过滤 · 全市场基准';
@@ -875,6 +987,8 @@ async function init() {
     $('#preset').innerHTML = PRESETS.map(p =>
       `<option value="${p.id}">${p.name}</option>`).join('');
     $('#presetdesc').textContent = PRESETS[0].desc;
+    // ⚠️ 必须在 applyParams 之前填充，否则 cap_pick 还没有 option，选不中
+    fillPickRules(d.pick_rules);
     applyParams(PRESETS[0].params);
     CFG = { ...DEFAULT_PARAMS, ...PRESETS[0].params };
     // 行业
@@ -1063,6 +1177,96 @@ function renderScanRows(items) {
 }
 
 /* ---------------- 渲染：回测 ---------------- */
+/* ---------------- 渲染：容量约束块（实盘可执行性） ---------------- */
+/* 两种口径：
+     · 已投资金 —— 日收益 = Σ持仓收益 / 持仓只数，可与不限仓位基线直接对比
+     · 账户资金 —— 日收益 = Σ持仓收益 / 同时持仓上限，是账户里真实看到的收益率
+   两者比值 = 资金利用率。 */
+function capHTML(r) {
+  const c = r.capacity;
+  if (!c) {
+    return `<div class="card"><h3>仓位约束 <span class="tag">实盘可执行性</span></h3>
+      <div class="desc">上方所有指标都是<b>不限仓位</b>口径：某日有多少信号就等权买多少只。
+        实测平均同时持仓 <b>${F(r.avg_holdings, 0)} 只</b>
+        （信号 ${NUM(r.n_signal)} 个 / 成交 ${NUM(r.n_trade)} 笔），个人资金无法复制。</div>
+      <div class="warnbox" style="margin-top:2px">
+        想看到「如果只能同时拿 10 只、每天最多买 3 只」的结果，
+        请在左侧 <b>⑧ 仓位约束</b> 里把口径切到「限制持仓」后重新运行回测。</div></div>`;
+  }
+  const util = c.avg_pos / c.max_pos;          // 资金利用率（平均持仓 / 上限）
+  const zline = (c.z !== undefined && c.z !== null)
+    ? `落在随机分布第 <b>${F(c.rand_pctile * 100, 1, '%')}</b> 百分位
+       · z = <b>${F(c.z, 2)}</b> · 对照 ${NUM(c.n_sim)} 次随机选股`
+    : '';
+  let h = `<div class="card"><h3>仓位约束结果 <span class="tag">实盘可执行口径</span></h3>
+    <div class="desc">同时持仓上限 <b>${c.max_pos}</b> 只 · 每日最多买入 <b>${c.max_new}</b> 只 ·
+      超额时按「<b>${c.pick_name}</b>」排序（${c.pick_desc}）。</div>
+
+    <div class="vs" style="margin-bottom:13px">
+      <div class="side">
+        <div class="sh">已投资金口径</div>
+        <div class="big ${cls(c.cagr)}">${PCT(c.cagr)}</div>
+        <div class="sub">假设闲置资金也赚钱，仅用于与基线对比</div>
+        <div style="margin-top:9px">
+          <div class="l2"><span>Sharpe</span><b>${F(c.sharpe, 3)}</b></div>
+          <div class="l2"><span>最大回撤</span><b>${PCT(c.mdd)}</b></div>
+          <div class="l2"><span>年化波动</span><b>${PCT(c.vol)}</b></div>
+        </div>
+      </div>
+      <div class="mid">利用率 ${F(util * 100, 0, '%')}</div>
+      <div class="side hl2">
+        <div class="sh">账户资金口径 · 你真实看到的</div>
+        <div class="big ${cls(c.cap_cagr)}">${PCT(c.cap_cagr)}</div>
+        <div class="sub">资金按 ${c.max_pos} 份等分，空着的那份赚 0</div>
+        <div style="margin-top:9px">
+          <div class="l2"><span>Sharpe</span><b>${F(c.cap_sharpe, 3)}</b></div>
+          <div class="l2"><span>最大回撤</span><b>${PCT(c.cap_mdd)}</b></div>
+          <div class="l2"><span>年化波动</span><b>${PCT(c.cap_vol)}</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mgrid" style="margin-bottom:12px">
+      <div class="mc"><div class="l">实际建仓</div>
+        <div class="v sm">${NUM(c.n_hold)}</div>
+        <div class="n">信号 ${NUM(c.n_signal)} 个</div></div>
+      <div class="mc"><div class="l">被迫丢弃</div>
+        <div class="v sm neg">${PCT(c.drop_pct, 1)}</div>
+        <div class="n">成交率 ${PCT(c.fill_pct, 1)}</div></div>
+      <div class="mc"><div class="l">平均持仓只数</div>
+        <div class="v sm">${F(c.avg_pos, 1)}</div>
+        <div class="n">上限 ${c.max_pos} 只 · 实达 ${c.max_pos_seen} 只</div></div>
+      <div class="mc"><div class="l">资金利用率</div>
+        <div class="v sm">${PCT(util, 1)}</div>
+        <div class="n">满仓日占比 ${PCT(c.active_pct, 1)}</div></div>
+      <div class="mc"><div class="l">空仓日占比</div>
+        <div class="v sm">${PCT(c.empty_pct, 1)}</div>
+        <div class="n">无信号可买的天数</div></div>
+    </div>`;
+
+  // 随机基准对照（判断「选股规则」是否真有效）
+  if (c.z !== undefined && c.z !== null) {
+    const stronger = c.z > 2;
+    h += `<div class="card" style="background:#fafbfc;margin-bottom:0">
+      <h3 style="font-size:13px">选股规则有效性检验 <span class="tag">对照 ${NUM(c.n_sim)} 次随机选股</span></h3>
+      <div class="desc">同样受 ${c.max_pos} 只 / 日 ${c.max_new} 只约束，但<b>随机</b>挑股票，
+        重复 ${NUM(c.n_sim)} 次得到分布：账户口径 CAGR 均值 <b>${PCT(c.rand_mean)}</b>，
+        标准差 ${PCT(c.rand_sd, 2)}，P5~P95 为 ${PCT(c.rand_p05)} ~ ${PCT(c.rand_p95)}，
+        区间 ${PCT(c.rand_min)} ~ ${PCT(c.rand_max)}。</div>
+      <div class="warnbox" style="margin:0;background:${stronger ? '#eaf6ef' : '#fdf1e0'};
+        border-color:${stronger ? '#bfe6cd' : '#f0d9b5'};color:${stronger ? '#0d7a3a' : '#a8622c'}">
+        「${c.pick_name}」账户口径 CAGR <b>${PCT(c.cap_cagr)}</b>，${zline}。
+        ${stronger ? '✅ 显著优于随机选股 —— 这个「先买哪只」的规则确实带来了超额。'
+                   : '⚠️ 未显著优于随机，说明该规则没有额外信息量，建议改用「最超跌优先」。'}
+      </div></div>`;
+  }
+  h += `<div class="cap">口径说明：<b>已投资金</b>把每笔投入的资金等权看待，
+    可与上方不限仓位基线直接比较；<b>账户资金</b>按 ${c.max_pos} 份等分，没投出去的部分赚 0，
+    这才是你账户里真实看到的收益率。两者之比就是资金利用率 ${F(util * 100, 0, '%')}。
+    被丢弃的信号<b>不补买</b>（保守假设），因此结果偏保守、不含运气成分。</div></div>`;
+  return h;
+}
+
 function renderBacktest(r) {
   const cs = r.conditions && r.conditions.length
     ? r.conditions.map(c => `<span class="c">${c}</span>`).join('')
@@ -1098,6 +1302,9 @@ function renderBacktest(r) {
       <div class="n">有仓位天数占比 ${PCT(r.active_pct, 1)}</div></div>
   </div>`;
 
+  // ---- 容量约束结果（实盘可执行性）
+  h += capHTML(r);
+
   // 超额表
   const HS = [1, 5, 10, 20, 40, 60];
   h += `<div class="card"><h3>分持有期超额收益 <span class="tag">日加权口径</span></h3>
@@ -1113,10 +1320,12 @@ function renderBacktest(r) {
     <div class="cap">|t| &gt; 2 视为统计显著。全负说明「等确认」是在等已经涨完的部分。</div></div>`;
 
   // 图表
+  const CC = r.capacity;
   h += `<div class="charts">
     <div class="card" style="margin:0"><h3>净值曲线 <span class="tag">含 0.3% 双边成本</span></h3>
       <div class="chart tall" id="ch-nav"></div>
-      <div class="cap" id="navcap">对数坐标。策略 vs 同股票池等权基准。</div></div>
+      <div class="cap" id="navcap">对数坐标。策略 vs 同股票池等权基准${
+        CC ? `；<b>紫色</b>为受限仓位（账户资金口径，${CC.max_pos}只/日${CC.max_new}只）` : ''}。</div></div>
     <div class="card" style="margin:0"><h3>回撤曲线</h3>
       <div class="chart tall" id="ch-dd"></div></div>
   </div>
@@ -1129,14 +1338,21 @@ function renderBacktest(r) {
 
   // 分期表
   const SK = ['2015-2020', '2021-2022', '2023-2024', '2025-2026'];
+  const capSeg = (CC && CC.segs) ? CC.segs : null;
   h += `<div class="card"><h3>样本内 / 样本外</h3>
     <div class="tw"><table><thead><tr><th style="text-align:left">口径</th>
       ${SK.map(k => `<th>${k}</th>`).join('')}<th>IS 2015-2020</th><th>OOS 2021-2026</th>
-    </tr></thead><tbody><tr><td class="l">区间累计收益</td>
+    </tr></thead><tbody><tr><td class="l">不限仓位</td>
       ${SK.map(k => `<td class="${cls(r.segs[k])}">${PCT(r.segs[k])}</td>`).join('')}
       <td class="${cls(r.segs['IS(2015-2020)'])}">${PCT(r.segs['IS(2015-2020)'])}</td>
       <td class="${cls(r.segs['OOS(2021-2026)'])}">${PCT(r.segs['OOS(2021-2026)'])}</td>
-    </tr></tbody></table></div>
+    </tr>${
+      capSeg ? `<tr><td class="l">受限 ${CC.max_pos}只/日${CC.max_new}只<br>
+        <span style="font-size:10.5px;color:var(--tx3)">账户资金口径</span></td>
+        ${SK.map(k => `<td class="${cls(capSeg[k])}">${PCT(capSeg[k])}</td>`).join('')}
+        <td class="${cls(capSeg['IS(2015-2020)'])}">${PCT(capSeg['IS(2015-2020)'])}</td>
+        <td class="${cls(capSeg['OOS(2021-2026)'])}">${PCT(capSeg['OOS(2021-2026)'])}</td>
+      </tr>` : ''}</tbody></table></div>
     <div class="cap">报告提醒：2015-2026 恰好是小市值占优期，OOS 极强不代表未来。
       「距MA60 D1 + 大市值」只有 2.9% 年化 —— 没有小市值，超跌几乎不赚钱。</div></div>`;
 
@@ -1157,6 +1373,13 @@ function renderBacktest(r) {
     name: '同池等权基准', type: 'line', showSymbol: false,
     data: b.nav.map(mult), lineStyle: { width: 1.4, color: '#b0b5bf' },
     itemStyle: { color: '#b0b5bf' }
+  });
+  // 受限仓位：账户资金口径（实盘真实感受）——放最后，视觉上最突出
+  if (CC && CC.nav_cap) series.push({
+    name: `受限仓位 ${CC.max_pos}只/日${CC.max_new}只（账户口径）`,
+    type: 'line', showSymbol: false,
+    data: CC.nav_cap.map(mult), lineStyle: { width: 2, color: '#7c4dbb' },
+    itemStyle: { color: '#7c4dbb' }
   });
   const nc = mkChart('ch-nav');
   nc && nc.setOption({
@@ -1199,18 +1422,31 @@ function renderBacktest(r) {
   yc && yc.setOption({
     grid: { left: 48, right: 12, top: 24, bottom: 26 },
     tooltip: { trigger: 'axis', ...TIP,
-      formatter: p => `<b>${p[0].name}</b><br>收益: <b>${p[0].value.toFixed(1)}%</b>` },
+      formatter: p => `<b>${p[0].name}</b><br>` + p.map(s =>
+        `${s.marker}${s.seriesName}: <b>${s.value.toFixed(1)}%</b>`).join('<br>') },
+    legend: (CC && CC.yearly) ? { top: 0, right: 4, itemWidth: 11, itemHeight: 8,
+      textStyle: { fontSize: 10.5, color: '#5c6270' } } : undefined,
     xAxis: { type: 'category', data: YC.map(x => String(x.year)), ...AX },
     yAxis: { type: 'value', ...AX,
       axisLabel: { ...AX.axisLabel, formatter: v => v + '%' } },
     series: [{
-      type: 'bar', barMaxWidth: 34,
+      name: '不限仓位', type: 'bar', barMaxWidth: 22,
       data: YC.map(x => ({ value: +(x.ret * 100).toFixed(1),
         itemStyle: { color: x.ret >= 0 ? '#e04a4a' : '#2ea06a',
           borderRadius: [3, 3, 0, 0] } })),
-      label: { show: true, position: 'top', fontSize: 10, color: '#5c6270',
+      label: { show: !(CC && CC.yearly), position: 'top', fontSize: 10, color: '#5c6270',
         formatter: p => p.value.toFixed(0) + '%' }
-    }]
+    }].concat((CC && CC.yearly) ? [{
+      name: `受限 ${CC.max_pos}只`, type: 'bar', barMaxWidth: 22,
+      data: YC.map(x => {
+        const m = (CC.yearly || []).find(y => y.year === x.year);
+        const v = m ? +(m.ret * 100).toFixed(1) : 0;
+        return { value: v, itemStyle: { color: v >= 0 ? '#c58fd6' : '#7fb7a4',
+          borderRadius: [3, 3, 0, 0] } };
+      }),
+      label: { show: true, position: 'top', fontSize: 9.5, color: '#5c6270',
+        formatter: p => p.value.toFixed(0) + '%' }
+    }] : [])
   });
 
   // --- 分期
@@ -1263,8 +1499,10 @@ const TCOLS = [
 
 async function runTrades() {
   const el = $('#p-trades');
+  const capped = segv('#seg-cap') === '1';
   el.innerHTML = `<div class="card"><div class="empty">
-    <span class="spin"></span> 正在提取逐笔交易明细（10 万笔量级，约 3~8 秒）…</div></div>`;
+    <span class="spin"></span> 正在提取逐笔交易明细（${
+      capped ? '已开启仓位约束，只列实际建仓的那批' : '10 万笔量级'}，约 3~8 秒）…</div></div>`;
   try {
     const body = {
       params: collect(), pool: currentPool(), cost: 0.003,
@@ -1281,6 +1519,47 @@ async function runTrades() {
   } catch (e) {
     el.innerHTML = `<div class="errbox"><b>交易明细加载失败：</b>${e.message}</div>`;
   }
+}
+
+/* ---- 交易明细口径说明：受容量约束 / 不限仓位 两种文案 ---- */
+function tradePlanNote(p) {
+  return `<span style="color:#6b3fa0">📌 本页是<b>仓位约束</b>口径 ——
+    同时最多持 <b>${p.max_pos} 只</b>、每日最多买 <b>${p.max_new} 只</b>、
+    冲突时按「<b>${p.pick_name}</b>」排序优先买入。
+    列出的是这套规则下<b>实际会建仓</b>的交易（实盘可照抄执行）。</span>`;
+}
+function tradeFreeNote() {
+  return `<span style="color:#a8622c">⚠️ 本页是<b>不限仓位</b>口径 ——
+    列出的是<b>全部</b>符合条件的信号对应的交易（实盘做不完这么多）。
+    若想看「只能同时拿 N 只、每天最多买 M 只」时<b>实际会发生</b>哪些交易，
+    请在左侧 <b>⑧ 仓位约束</b> 打开限制后再回测。</span>`;
+}
+function tradePlanCard(p) {
+  const ns = Math.max(p.n_signal, 1);
+  const keepPct = Math.min(1, (p.n_plan || 0) / ns);
+  return `<div class="card" style="background:#fafbfc">
+    <h3 style="font-size:13px">仓位约束诊断 <span class="tag">与「策略回测」页同口径</span></h3>
+    <div class="mgrid" style="margin-bottom:10px">
+      <div class="mc hl"><div class="l">本次实际建仓</div>
+        <div class="v sm">${NUM(p.n_plan)} 笔</div>
+        <div class="n">占全部信号 ${PCT(keepPct, 2)}</div></div>
+      <div class="mc"><div class="l">被丢弃信号</div>
+        <div class="v sm">${NUM(p.n_drop)}</div>
+        <div class="n">占 ${PCT(p.drop_pct, 1)}（不补买）</div></div>
+      <div class="mc"><div class="l">本页可结算</div>
+        <div class="v sm">${NUM(p.n_plan - p.n_open)} 笔</div>
+        <div class="n">扣掉未平仓</div></div>
+      <div class="mc"><div class="l">期末未平仓</div>
+        <div class="v sm">${NUM(p.n_open)} 笔</div>
+        <div class="n">持有期超出数据末尾</div></div>
+    </div>
+    <div class="cap" style="margin:0">
+      ${p.n_open > 0 ? `⚠️ 有 <b>${p.n_open}</b> 笔在数据末尾 ${p.n_open} 个交易日内建仓，` +
+        `到期日<b>超出了面板范围</b>，算不出卖出价 —— 实盘里就是<b>还拿在手上</b>，` +
+        `因此<b>不计入本页明细与胜率统计</b>（否则会因缺少结局而偏乐观）。<br>` : ''}
+      规则：<b>${p.pick_name}</b>；信号拥挤时只在当日信号里按该规则取前 ${p.max_new} 只，
+      持仓满 ${p.max_pos} 只时不再新开。被丢弃的信号<b>不补买</b>（保守假设）。
+    </div></div>`;
 }
 
 function renderTrades(r) {
@@ -1332,7 +1611,11 @@ function renderTrades(r) {
       （动态对齐，无前视偏差）。<br>
       <span style="color:#a8622c">⚠️ 这些交易<b>不是同时发生的</b>：按日度再平衡口径统计的组合
       CAGR 见「策略回测」页；本页逐笔收益是「每笔独立持有」的单笔口径，两者不可直接相乘。</span>
+      <br>${r.plan ? tradePlanNote(r.plan) : tradeFreeNote()}
     </div></div>`;
+
+  // ---- 仓位约束口径提示（仅受限口径显示）
+  if (r.plan) h += tradePlanCard(r.plan);
 
   // ---- 分布图 + 逐年图
   h += `<div class="charts">
@@ -1585,6 +1868,8 @@ function bindTradeControls(r) {
     }));
   }
   // 导出
+  // ⚠️ 必须带上仓位约束参数（collect() 已含），否则导出的 CSV
+  //    与页面上看到的「实际建仓」明细不一致（导成了不限仓位口径）。
   const ex = $('#t-exp'); ex && ex.addEventListener('click', async () => {
     const body = { kind: 'trades', params: collect(), pool: currentPool() };
     if (TST.win !== null) body.win = TST.win;
@@ -1597,7 +1882,8 @@ function bindTradeControls(r) {
     const blob = await resp.blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `超跌反转交易明细_H${r.hold}.csv`;
+    a.download = `超跌反转交易明细_H${r.hold}` +
+      (r.plan ? `_持${r.plan.max_pos}只日${r.plan.max_new}只` : '') + '.csv';
     document.body.appendChild(a); a.click(); a.remove();
   });
 }
@@ -1848,6 +2134,55 @@ $('#fin_period').addEventListener('change', updateFinBadge);
 $$('.finquick button').forEach(b => b.addEventListener('click', () => {
   setFinQuick(b.dataset.fin);
 }));
+/* ---------------- 容量约束（实盘可执行性） ---------------- */
+/* 口径单选：不限仓位 / 限制持仓。选「限制持仓」时才把容量参数发给后端。 */
+$$('#seg-cap button').forEach(b => b.addEventListener('click', () => {
+  b.classList.add('on');
+  $$('#seg-cap button').forEach(x => { if (x !== b) x.classList.remove('on'); });
+  syncCap();
+}));
+/* 快捷预设：同时持仓,每日买入 */
+$$('.capquick button').forEach(b => b.addEventListener('click', () => {
+  const [mp, mn] = String(b.dataset.cap).split(',').map(Number);
+  $('#cap_maxpos').value = mp;
+  $('#cap_maxnew').value = mn;
+  // 点快捷预设 → 自动切到「限制持仓」
+  $$('#seg-cap button').forEach(x => x.classList.toggle('on', x.dataset.v === '1'));
+  syncCap();
+  $$('.capquick button').forEach(x => x.classList.toggle('on', x === b));
+}));
+['#cap_maxpos', '#cap_maxnew'].forEach(s => $(s).addEventListener('input', () => {
+  $$('.capquick button').forEach(x => x.classList.remove('on'));
+  syncCap();
+}));
+$('#cap_pick').addEventListener('change', syncCap);
+function syncCap() {
+  const on = segv('#seg-cap') === '1';
+  $('#capwrap').classList.toggle('on', on);
+  $('#capwrap').style.display = on ? 'block' : 'none';
+  const mp = parseInt($('#cap_maxpos').value, 10) || 10;
+  const mn = parseInt($('#cap_maxnew').value, 10) || 3;
+  const pk = $('#cap_pick');
+  const pn = pk && pk.selectedOptions[0] ? pk.selectedOptions[0].textContent : '最超跌优先';
+  if (on) {
+    $('#cap_stat').innerHTML = `<span style="color:#a8622c">当前口径：限制持仓（实盘可执行）</span>
+      · 同时最多 <b style="font-family:var(--mono)">${mp}</b> 只
+      · 每日最多买 <b style="font-family:var(--mono)">${mn}</b> 只
+      · 超额时按「${pn}」排序`;
+  } else {
+    $('#cap_stat').innerHTML = '当前口径：<b>不限仓位</b>（研究报告原始口径，'
+      + '某日有多少信号就等权买多少只，实盘不可执行）';
+  }
+  const bd = $('#cap_badge');
+  if (bd) bd.textContent = on ? `已启用 · ${mp}只/${mn}只` : '已关闭';
+}
+/* 填充选股规则下拉（来自 /api/defaults 的 pick_rules） */
+function fillPickRules(rules) {
+  const sel = $('#cap_pick'); if (!sel || !rules || !rules.length) return;
+  sel.innerHTML = rules.map(r =>
+    `<option value="${r.id}"${r.default ? ' selected' : ''}>${r.name} —— ${r.desc}</option>`
+  ).join('');
+}
 function syncIndCnt() {
   const n = $$('#inds input:checked').length;
   $('#indcnt').textContent = n ? `（选中 ${n} 个）` : '（0 选中 = 不限）';

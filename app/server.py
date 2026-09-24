@@ -28,7 +28,7 @@ from urllib.parse import urlparse, parse_qs, quote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from engine import Engine, DEFAULT_PARAMS  # noqa: E402
+from engine import Engine, DEFAULT_PARAMS, PICK_RULES  # noqa: E402
 
 import numpy as np  # noqa: E402
 
@@ -41,6 +41,19 @@ print("=" * 72, flush=True)
 ENGINE = Engine()
 print(f"  ✅ 就绪：{ENGINE.C['n']:,} 行 / {len(ENGINE.C['starts']):,} 只 / "
       f"{ENGINE.nd:,} 交易日 / 耗时 {ENGINE.build_ms/1000:.1f}s", flush=True)
+
+# 净值曲线按周采样（前端足够平滑，体积降 80%）
+STEP = max(1, ENGINE.nd // 1400)
+DAY_STR = [str(x) for x in ENGINE.day_str[::STEP]]
+
+
+def _curve(nv):
+    return [round(float(x), 4) for x in np.asarray(nv)[::STEP]]
+
+
+def _curve_net(net):
+    """日收益数组 → 采样后的净值曲线"""
+    return _curve(np.cumprod(1.0 + np.asarray(net, float)))
 
 
 def _clean(obj):
@@ -114,9 +127,15 @@ class Handler(BaseHTTPRequestHandler):
                 d = ENGINE.stock_detail(code)
                 return self._json(d or {"error": "未找到该股票"}, 200 if d else 404)
             if p == "/api/defaults":
-                return self._json(dict(defaults=DEFAULT_PARAMS,
-                                       presets=PRESETS,
-                                       optbest=ENGINE.meta()["last_date"]))
+                return self._json(dict(
+                    defaults=DEFAULT_PARAMS,
+                    presets=PRESETS,
+                    # 容量约束：选股规则清单（供前端下拉）
+                    pick_rules=[dict(id=k, name=v["name"], desc=v["desc"],
+                                     default=(k == DEFAULT_PARAMS.get("pick")))
+                                for k, v in PICK_RULES.items()
+                                if not k.startswith("__")],
+                    optbest=ENGINE.meta()["last_date"]))
             if p.startswith("/static/"):
                 return self._serve_file(p[len("/static/"):], None)
             return self._json({"error": "not found"}, 404)
@@ -165,6 +184,19 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(res)
 
     def _backtest(self, b):
+        """策略回测。
+
+        请求体：
+          params : 策略参数（同 DEFAULT_PARAMS，**含容量约束**）
+                     max_pos : 同时持仓上限（0 = 不限，研究报告原始口径）
+                     max_new : 每日最多新建仓数
+                     pick    : 信号超额时的选股规则（见 PICK_RULES）
+          pool   : 股票池
+          n_sim  : 随机基准模拟次数（默认 200，仅 max_pos>0 时生效）
+
+        返回：不限仓位口径的 stats()（cagr/mdd/sharpe/...）
+              + 容量约束口径的 capacity 块（max_pos>0 时）
+        """
         t0 = time.time()
         pool, err = self._pool(b)
         if err:
@@ -179,12 +211,6 @@ class Handler(BaseHTTPRequestHandler):
                                        f"请放宽条件或检查股票池。"}, 200)
         # 基准：全市场（同股票池）
         base = ENGINE.stats(pool if pool is not None else np.ones(ENGINE.C["n"], bool), hold)
-        # 净值曲线抽取（按周采样，前端足够平滑）
-        step = max(1, ENGINE.nd // 1400)
-        def curve(nv):
-            v = nv[::step]
-            return [round(float(x), 4) for x in v]
-        dstr = [str(x) for x in ENGINE.day_str[::step]]
         out = dict(
             ms=int((time.time() - t0) * 1000), conditions=conds,
             n_signal=st["n_signal"], n_trade=st["n_trade"],
@@ -196,15 +222,44 @@ class Handler(BaseHTTPRequestHandler):
             exw={str(k): v for k, v in st["exw"].items()},
             exw_t={str(k): v for k, v in st["exw_t"].items()},
             yearly=st["yearly"], segs=st["segs"],
-            nav=curve(st["nav"]), nav_gross=curve(st["nav_gross"]),
-            dates=dstr,
+            nav=_curve(st["nav"]), nav_gross=_curve(st["nav_gross"]),
+            dates=DAY_STR,
             bench=(dict(cagr=base["cagr"], mdd=base["mdd"], sharpe=base["sharpe"],
-                        nav=curve(base["nav"])) if base else None),
+                        nav=_curve(base["nav"])) if base else None),
             hold=hold,
         )
+        # ---- 容量约束回测（实盘可执行性）：max_pos>0 时启用
+        mp = int(p.get("max_pos") or 0)
+        if mp > 0:
+            try:
+                cap = ENGINE.capacity(
+                    mask, hold=hold, max_pos=mp,
+                    max_new=int(p.get("max_new") or 3),
+                    pick=str(p.get("pick") or "deep"),
+                    n_sim=int(b.get("n_sim", 200)),
+                )
+                keep = {k: v for k, v in cap.items()
+                        if k not in ("net", "net_cap", "cnt", "nav")}
+                keep["nav_cap"] = _curve(cap["nav"])       # 账户资金口径净值
+                keep["nav_inv"] = _curve_net(cap["net"])   # 已投资金口径净值
+                out["capacity"] = keep
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                out["capacity"] = None
+        else:
+            out["capacity"] = None
         # 交易摘要（供回测页直接展示，无需再拉一次明细）
+        # ⚠️ 口径必须与上面一致：max_pos>0 时摘要也只统计**实际建仓**的那批，
+        #    否则「容量诊断说建仓 787 笔」而「交易摘要说 93,553 笔」，自相矛盾。
         try:
-            tr = ENGINE.trades(mask, hold, include_fin=False)
+            tplan = None
+            if mp > 0:
+                tplan = ENGINE.capacity_plan(
+                    mask, hold=hold, max_pos=mp,
+                    max_new=int(p.get("max_new") or 3),
+                    pick=str(p.get("pick") or "deep"))
+            tr = ENGINE.trades(mask, hold, include_fin=False, plan=tplan)
             if tr:
                 s = tr["summary"]
                 out["trade_brief"] = dict(
@@ -214,7 +269,7 @@ class Handler(BaseHTTPRequestHandler):
                     pf=s["pf"], payoff=s["payoff"],
                     avg_excess=s["avg_excess"], excess_win=s["excess_win"],
                     date_start=s["date_start"], date_end=s["date_end"],
-                    hist=tr["hist"],
+                    hist=tr["hist"], plan=tr.get("plan"),
                 )
         except Exception:
             out["trade_brief"] = None
@@ -235,6 +290,14 @@ class Handler(BaseHTTPRequestHandler):
           code        : null | "600519.SH"     只看某只股票
           min_ret/max_ret : 净收益率区间（小数，如 -0.1 = −10%）
           with_rows   : bool  是否返回 rows（默认 true；只想看汇总可设 false）
+
+        两种口径（由 params.max_pos 决定，与 /api/backtest 完全一致）
+        ------------------------------------------------------------
+        · max_pos=0（默认）→ **不限仓位**：列出全部信号对应的交易
+              （默认 K3 为 93,553 笔）；`plan` 返回 null。
+        · max_pos>0        → **容量约束**：只列「同时最多持 N 只、每日最多买 M 只」
+              时**真正建仓**的那批（默认 K3/10只/日3只 为 787 笔建仓 / 781 笔可结算），
+              `plan` 返回该计划的诊断信息（含 `n_open` 未平仓数）。
         """
         t0 = time.time()
         pool, err = self._pool(b)
@@ -332,6 +395,7 @@ class Handler(BaseHTTPRequestHandler):
             yearly=tr["yearly"], hist=tr["hist"],
             best=tr["best"], worst=tr["worst"],
             rows=(page_rows if b.get("with_rows", True) else []),
+            plan=tr.get("plan"),          # 容量约束信息（不限仓位时为 null）
         )
         return self._json(out)
 
@@ -491,7 +555,15 @@ class Handler(BaseHTTPRequestHandler):
         p.update(b.get("params") or {})
         hold = int(p.get("hold") or 20)
         mask, _ = ENGINE.build_mask(p, pool)
-        tr = ENGINE.trades(mask, hold, cost=float(b.get("cost", 0.003)))
+        # ---- 容量约束：口径必须与页面一致，否则导出 CSV ≠ 屏幕所见
+        mp = int(p.get("max_pos") or 0)
+        plan = None
+        if mp > 0:
+            plan = ENGINE.capacity_plan(
+                mask, hold=hold, max_pos=mp,
+                max_new=int(p.get("max_new") or 3),
+                pick=str(p.get("pick") or "deep"))
+        tr = ENGINE.trades(mask, hold, cost=float(b.get("cost", 0.003)), plan=plan)
         if tr is None:
             return self._json({"error": "该参数下没有完成的交易"}, 200)
         rows = tr["rows"]
@@ -525,6 +597,8 @@ class Handler(BaseHTTPRequestHandler):
         body = data.encode("utf-8")
         # RFC 5987（同 _export，避免 latin-1 编码 header 崩溃）
         tag = f"H{hold}"
+        if plan:
+            tag += f"_cap{mp}x{int(p.get('max_new') or 3)}"
         if yr:
             tag += f"_{int(yr)}"
         if win_f is not None:
@@ -548,6 +622,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": f"{name} not found"}, 404)
         key = (name, os.path.getmtime(path))
         if key not in _html_cache:
+            # 先清掉同名旧版本，否则每次改文件都会留一份缓存键，长期只增不减
+            for k in [k for k in _html_cache if k[0] == name]:
+                _html_cache.pop(k, None)
             with open(path, "rb") as f:
                 _html_cache[key] = f.read()
         body = _html_cache[key]

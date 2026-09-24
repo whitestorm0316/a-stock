@@ -619,12 +619,185 @@ class Engine:
             nav=nav_impl, nav_gross=nav_gross, net=net, cnt=cnt,
         )
 
+    # ============================================================ 容量约束回测
+    def capacity_plan(self, mask, hold=20, max_pos=10, max_new=3, pick="deep",
+                      seed0=42):
+        """只算「实际建仓计划」，不算净值 —— 供 `trades()` 复用。
+
+        为什么单独抽出来
+        ----------------
+        `capacity()` 会跑 200 次随机模拟（约 25s），但交易明细只需要**一次**
+        确定性计划。所以这里做轻量版：一次 `plan_positions`，并补齐
+        `pick_name` / `drop_pct` 等展示字段。
+
+        返回：`plan_positions()` 的结果 + max_pos/max_new/pick_name/drop_pct
+        """
+        from v3b_lib import plan_positions  # noqa: PLC0415
+        rule = PICK_RULES.get(str(pick), PICK_RULES["deep"])
+        col = rule["col"]
+        if col is None:
+            pk = None
+        elif col == "__random__":
+            pk = "__random__"
+        else:
+            pk = np.asarray(self.df[col].values, np.float64)
+        pl = plan_positions(mask, self.D, self.nd, int(hold),
+                            max_pos=max_pos, max_new=max_new,
+                            pick=pk, pick_asc=rule["asc"], rng_seed=seed0)
+        ns = max(pl["n_signal"], 1)
+        pl.update(max_pos=int(max_pos), max_new=int(max_new),
+                  pick=str(pick), pick_name=rule["name"],
+                  drop_pct=float(pl["n_drop"]) / ns)
+        return pl
+
+    def capacity(self, mask, hold=20, max_pos=10, max_new=3, pick="deep",
+                 n_sim=200, seed0=42):
+        """在「同时持仓上限 + 每日新开仓上限」下模拟，回答「实盘真能这么干吗」。
+
+        为什么必须做
+        ------------
+        `stats()` 是**不限仓位**口径：某日 500 个信号就等权买 500 只。
+        实测默认 K3 策略平均同时持仓 **943.9 只** —— 个人资金根本做不到。
+        本方法按真实下单节奏模拟：
+
+          每个交易日：先卖出到期仓位 → 再看当日新信号 → 排序取前 max_new 个
+                      → 受 max_pos 上限截断 → 被丢弃的信号**不补买**（保守）
+
+        ⚠️⚠️ 两个口径必须分清（这是容量回测最容易搞错的地方）
+        ------------------------------------------------------------------
+        · `on_invested`（已投资金口径）：日收益 = 持仓收益的等权平均
+            → 与不限仓位基线**可直接对比**，但它假设「闲置仓位也在赚钱」。
+        · `on_capital`（账户资金口径）：日收益 = 持仓收益之和 / max_pos
+            → **这才是账户里真实看到的收益率**，被资金利用率摊薄。
+
+        ⚠️ 排序只用信号日 T 当日可见字段（`PICK_RULES`），无前视偏差。
+           实测「最超跌优先」显著优于随机（详见 PICK_RULES 注释）。
+
+        参数
+        ----
+        mask     : bool[n]   原始信号掩码（不限仓位口径下会被全部买入的股票）
+        max_pos  : int       同时持仓上限
+        max_new  : int       每日最多新建仓数
+        pick     : str       PICK_RULES 的键
+        n_sim    : int       pick="rand" 时的随机模拟次数（用于给出分布的均值/分位）
+        seed0    : int       随机种子起点
+
+        返回 dict：两种口径的指标 + 容量诊断 + （rand 时）随机分布对照
+        """
+        from v3b_lib import (plan_positions, nav_from_holds,  # noqa: PLC0415
+                             capacity_stats, ann_stats)
+        mask = np.asarray(mask, bool)
+        rule = PICK_RULES.get(str(pick), PICK_RULES["deep"])
+        col = rule["col"]
+        n = self.C["n"]
+
+        def _run(pick_key, asc, seed):
+            if pick_key is None:
+                pk = None
+            elif pick_key == "__random__":
+                pk = "__random__"
+            else:
+                pk = np.asarray(self.df[pick_key].values, np.float64)
+            pl = plan_positions(mask, self.D, self.nd, int(hold),
+                                max_pos=max_pos, max_new=max_new,
+                                pick=pk, pick_asc=asc, rng_seed=seed)
+            netA, cnt = nav_from_holds(pl["holds"], self.D, self.nd,
+                                       self.oret_sig, self.C, hold=int(hold))
+            netB, _ = nav_from_holds(pl["holds"], self.D, self.nd,
+                                     self.oret_sig, self.C, hold=int(hold),
+                                     capital_slots=int(max_pos))
+            return pl, netA, netB, cnt
+
+        pl, netA, netB, cnt = _run(col, rule["asc"], seed0)
+        sA, sB = ann_stats(netA, self.nd), ann_stats(netB, self.nd)
+        cs = capacity_stats(pl, self.nd, cnt, netA)
+
+        out = dict(
+            max_pos=int(max_pos), max_new=int(max_new),
+            pick=str(pick), pick_name=rule["name"], pick_desc=rule["desc"],
+            # ---- 已投资金口径（与 stats() 基线可比）
+            cagr=sA["cagr"], mdd=sA["mdd"], sharpe=sA["sharpe"],
+            ann_arith=sA["ann_arith"], vol=sA["vol"], net=netA, cnt=cnt,
+            # ---- 账户资金口径（实盘真实感受）
+            cap_cagr=sB["cagr"], cap_mdd=sB["mdd"], cap_sharpe=sB["sharpe"],
+            cap_vol=sB["vol"], net_cap=netB,
+            # ---- 容量诊断
+            n_hold=int(cs["n_hold"]), n_signal=int(cs["n_signal"]),
+            n_drop=int(cs["n_drop"]), drop_pct=float(cs["drop_pct"]),
+            fill_pct=float(cs["fill_pct"]),
+            avg_pos=float(cs["avg_pos"]), max_pos_seen=int(cs["max_pos_seen"]),
+            empty_pct=float(cs["empty_pct"]), active_pct=float(cs["active_pct"]),
+            # ---- 分段表现
+            yearly=self._seg_yearly(netB),
+            segs=self._seg_periods(netB),
+            nav=np.cumprod(1.0 + netB),
+        )
+
+        # ---- 随机基准分布（用于判断当前规则是否真的有效）
+        if n_sim and str(pick) != "rand":
+            cg = []
+            for i in range(int(n_sim)):
+                _, _, nb, _ = _run("__random__", True, seed0 + i)
+                cg.append(ann_stats(nb, self.nd)["cagr"])
+            cg = np.asarray(cg, np.float64)
+            z = ((out["cap_cagr"] - cg.mean()) / cg.std(ddof=1)
+                 if cg.std(ddof=1) > 0 else 0.0)
+            out["rand_mean"] = float(cg.mean())
+            out["rand_sd"] = float(cg.std(ddof=1))
+            out["rand_p05"] = float(np.percentile(cg, 5))
+            out["rand_p95"] = float(np.percentile(cg, 95))
+            out["rand_min"] = float(cg.min())
+            out["rand_max"] = float(cg.max())
+            out["rand_pctile"] = float((cg < out["cap_cagr"]).mean())
+            out["z"] = float(z)
+            out["n_sim"] = int(n_sim)
+        return out
+
+    def _seg_yearly(self, net):
+        yrs = self.years
+        ytab = []
+        for y in range(2015, 2027):
+            s = yrs == y
+            if s.sum() < 20:
+                continue
+            nav = np.cumprod(1.0 + net[s])
+            ytab.append(dict(year=int(y), ret=float(nav[-1] - 1.0),
+                             mdd=float((nav / np.maximum.accumulate(nav) - 1.0).min())))
+        return ytab
+
+    def _seg_periods(self, net):
+        yrs = self.years
+        SEGS = [("2015-2020", 2015, 2020), ("2021-2022", 2021, 2022),
+                ("2023-2024", 2023, 2024), ("2025-2026", 2025, 2026)]
+        segs = {}
+        for sn, y0, y1 in SEGS:
+            s = (yrs >= y0) & (yrs <= y1)
+            segs[sn] = float(np.prod(1.0 + net[s]) - 1.0) if s.sum() >= 20 else None
+        segs["IS(2015-2020)"] = float(np.prod(1.0 + net[yrs <= 2020]) - 1.0)
+        segs["OOS(2021-2026)"] = float(np.prod(1.0 + net[yrs >= 2021]) - 1.0)
+        return segs
+
     # ================================================================ 交易明细
-    def trades(self, mask, hold=20, cost=RT_COST, include_fin=True):
+    def trades(self, mask, hold=20, cost=RT_COST, include_fin=True, plan=None):
         """从掩码提取**逐笔交易明细**（与 stats() 完全同源，口径一致）。
 
         交易口径（固定持有期，可复现）：
           信号日 T  →  T+1 开盘买入  →  持有 H 个交易日  →  T+1+H 开盘卖出
+
+        两种口径（由 `plan` 决定）
+        -------------------------
+        · `plan=None`（默认）→ **不限仓位**：列出全部信号对应的交易
+              （默认 K3 为 93,553 笔，实盘做不完这么多）。
+        · `plan=dict`（来自 `capacity_plan()`）→ **容量约束**：只保留
+              真正被建仓的那些交易（默认 K3 为 787 笔建仓 / 781 笔可结算）。
+
+        ⚠️⚠️ 为什么「建仓数」会 >「可结算数」（787 vs 781）
+        -------------------------------------------------
+        容量计划在建仓日只看「信号是否存在」，不看「持有期结束时数据是否还在」。
+        数据末尾最后 H 个交易日内建的仓，**到期日超出了面板范围**，因此算不出收益。
+        这批头寸是**未平仓**（实盘里就是还拿在手上），本方法用 `n_open` 单独报告，
+        **不混进交易明细**，也**不计入胜率等统计**（否则会因缺少结局而偏乐观）。
+        这一点必须显式呈现，不能悄悄丢 —— 否则「丢弃 99.2%」这类数字会对不上。
 
         实现要点
         --------
@@ -634,6 +807,13 @@ class Engine:
         3. 买卖价从 `shift_block(buy_open/sell_open, k)` 取，与 simulate_hold 同源；
         4. 基准（同口径市场收益）用 `CHAIN[H][入场日]`，即「T+1 开盘 → T+1+H 开盘」
            的市场链式收益，与个股 trade_ret 完全可比。
+        5. `plan` 的过滤**放在最前面**（simulate_hold 之后立刻切），
+           保证下游全部统计（汇总/逐年/分布/最佳最差）都自动只覆盖受限子集。
+
+        参数
+        ----
+        plan : dict | None
+            `capacity_plan()` 的返回；提供时只保留其 `holds` 里的交易。
 
         返回
         ----
@@ -643,6 +823,7 @@ class Engine:
           yearly   : list[dict]  逐年交易统计
           hist     : dict        收益分布直方图（分箱）
           n_trade  : int
+          plan     : dict|None   容量约束信息（含 n_open 未平仓数）
         )
 
         ⚠️⚠️ 单位约定 —— 本接口**故意混用两套**，改动前务必看清：
@@ -662,6 +843,26 @@ class Engine:
         r, ed, pos = L.simulate_hold(mask, self.buy_open, self.sell_open, self.C, hold)
         if len(r) == 0:
             return None
+
+        # ---- 容量约束：只保留真正建仓的那批（⚠️ 必须在任何统计之前切）
+        plan_info = None
+        if plan is not None:
+            held_rows = np.asarray([h[2] for h in plan["holds"]], np.int64)
+            keep = np.isin(pos, held_rows) if len(held_rows) else np.zeros(len(pos), bool)
+            n_open = int(len(held_rows) - keep.sum())
+            r, ed, pos = r[keep], ed[keep], pos[keep]
+            if len(r) == 0:
+                return None
+            plan_info = dict(
+                max_pos=int(plan.get("max_pos") or 0),
+                max_new=int(plan.get("max_new") or 0),
+                pick=plan.get("pick"), pick_name=plan.get("pick_name"),
+                n_signal=int(plan.get("n_signal") or 0),
+                n_drop=int(plan.get("n_drop") or 0),
+                drop_pct=float(plan.get("drop_pct") or 0.0),
+                n_plan=int(len(held_rows)),      # 计划建仓数
+                n_open=n_open,                   # 期末仍未平仓（数据边界所致）
+            )
 
         # ---- 买卖价（与 simulate_hold 内部完全同源）
         bi_all = L.shift_block(self.buy_open, self.C, 1)
@@ -814,7 +1015,7 @@ class Engine:
 
         return dict(n_trade=int(len(net)), rows=rows_sorted, summary=summary,
                     yearly=yearly, hist=hist,
-                    best=best20, worst=worst20, hold=int(hold))
+                    best=best20, worst=worst20, hold=int(hold), plan=plan_info)
 
     # ================================================================ 扫描
     def scan(self, pool_mask=None, limit=200, p=None, lookback=180):
@@ -1061,6 +1262,37 @@ DEFAULT_PARAMS = {
     "deep_any": False,
     "confirm": [],
     "hold": 20,
+    # ---- 容量约束（实盘可执行性）
+    #   max_pos = 0 表示不限（研究报告的原始口径：符合条件的全买）
+    #   max_pos > 0 时启用「同时持仓上限 + 每日新开仓上限」
+    "max_pos": 0,
+    "max_new": 3,
+    "pick": "deep",      # 信号超额时的选股规则，见 PICK_RULES
+}
+
+# 信号数超过每日/持仓上限时的**选股排序规则**。
+# ⚠️ 所有排序键都必须是信号日 T **当日收盘可见**的字段，否则就是前视偏差。
+#    实测结论（默认 K3 策略，10只/日3只）：
+#      · "deep"（最超跌优先）显著优于随机 —— 当日横截面内再分5档，
+#        Q1(最超跌) 单笔净收益 5.27% vs Q5(最不超跌) 3.69%，差 1.58pp
+#        (t=9.01, p=2e-19，19,202 vs 18,216 笔)；12 年中 11 年为正，
+#        且 OOS(2021-26) 的差(+2.01pp) 比 IS(2015-20) 的(+1.06pp) 更大。
+#      · "rand" 作为基准对照（多种子），用于判断某规则是否真有效。
+PICK_RULES = {
+    "deep":   dict(col="px_ma60_pct", asc=True,
+                   name="最超跌优先", desc="距MA60 越低越优先（推荐，经检验有显著正超额）"),
+    "amount": dict(col="turnover", asc=False,
+                   name="成交额优先", desc="流动性最好，冲击成本最低"),
+    "small":  dict(col="size_grp", asc=True,
+                   name="小市值优先", desc="市值越小越优先"),
+    "big":    dict(col="size_grp", asc=False,
+                   name="大市值优先", desc="市值越大越优先"),
+    "drop60": dict(col="ret60", asc=True,
+                   name="60日跌幅优先", desc="ret60 越低越优先"),
+    "rand":   dict(col="__random__", asc=True,
+                   name="随机（基准）", desc="随机选，用作对照基准"),
+    "none":   dict(col=None, asc=True,
+                   name="原始顺序", desc="按面板原始顺序（等同最早上市优先）"),
 }
 
 

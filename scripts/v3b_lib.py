@@ -352,3 +352,210 @@ def portfolio_nav(sig, day_idx, n_days, oret_sig, s_days, C, rt_cost=RT_COST):
     act = cnt > 0
     net = np.where(act, (rsum - csum) / np.maximum(cnt, 1), 0.0)
     return net, cnt
+
+
+# ================================================================ 容量约束组合
+def plan_positions(mask, day_idx, n_days, hold, max_pos=10, max_new=3,
+                   pick=None, pick_asc=True, rng_seed=42):
+    """在**同时持仓上限 + 每日新开仓上限**下，逐日顺序决定「实际持有」哪些仓位。
+
+    为什么需要这个
+    --------------
+    `portfolio_nav` 是「不限仓位」口径：某日有 500 个信号就等权持有 500 只。
+    实盘做不到（资金不够、也没人管得过来）。本函数按真实下单节奏模拟：
+
+      每个交易日 d：
+        1. 先处理**到期卖出**（按实际建仓日 + hold 计算），释放仓位；
+        2. 再看当日新信号，按 `pick` 排序取前 `max_new` 个；
+        3. 若「已持仓 + 新建仓」会超过 `max_pos`，则**截断**（信号被丢弃）；
+        4. 被丢弃的信号**不再补买**（保守假设：机会过了就是过了）。
+
+    ⚠️ 关键纪律：**排序必须在信号日 T 的信息集内完成**（用 T 日收盘可见的字段），
+       绝不能用到未来收益，否则又是前视偏差。
+
+    参数
+    ----
+    mask      : bool[n]   信号掩码（面板行级）
+    day_idx   : int[n]    每行的交易日序号
+    n_days    : int       总交易日数
+    hold      : int       固定持有期（交易日）
+    max_pos   : int       同时持仓上限（0/None = 不限）
+    max_new   : int       每日最多新建仓数（0/None = 不限）
+    pick      : float[n]  同日候选的排序键；None 表示按面板原始顺序
+    pick_asc  : bool      True = 键小者优先（如「最超跌优先」）；
+                          False = 键大者优先（如「成交额大者优先」）
+
+    返回
+    ----
+    dict(
+      holds      : list[(entry_day, exit_day, row_idx, ret_proxy)]  实际建仓记录
+      n_drop     : int      因容量限制被丢弃的信号数
+      n_signal   : int      总信号数
+    )
+
+    说明：这里只做**仓位筛选**，不在这里算收益 —— 收益统一由
+    `nav_from_holds()` 按「等权、逐日市值」口径计算，避免两处算法漂移。
+    """
+    mask = np.asarray(mask, bool)
+    hold = int(hold)
+    unlimited_pos = (max_pos is None) or (int(max_pos) <= 0)
+    unlimited_new = (max_new is None) or (int(max_new) <= 0)
+    max_pos = int(max_pos) if not unlimited_pos else 10 ** 9
+    max_new = int(max_new) if not unlimited_new else 10 ** 9
+
+    # ---- 按日归集信号行号（保持面板原始顺序，确保可复现）
+    sig_rows = np.flatnonzero(mask & np.isfinite(day_idx))
+    if len(sig_rows) == 0:
+        return dict(holds=[], n_drop=0, n_signal=0)
+
+    # 按 (日, 原始顺序) 分组
+    order = np.lexsort((sig_rows, day_idx[sig_rows]))
+    sig_rows = sig_rows[order]
+    sig_days = day_idx[sig_rows]
+    # 每日信号的起止位置
+    day_start = np.searchsorted(sig_days, np.arange(n_days), side="left")
+    day_end = np.searchsorted(sig_days, np.arange(n_days), side="right")
+
+    rng = np.random.default_rng(rng_seed)
+    # 预生成随机数（随机排序规则用），与行号一一对应放在 dict 里查
+    rand_key = None
+    if pick is not None and str(pick) == "__random__":
+        rand_key = rng.random(len(mask))
+
+    holds = []              # (entry_day, exit_day, row_idx)
+    open_exits = []         # 已建仓的到期日列表（用于快速释放）
+    n_drop = 0
+    occupied = 0            # 当前持仓数（= 尚未到期的 holds 数）
+
+    for d in range(n_days):
+        # ---- 1. 先释放到期仓位（exit_day <= d 视为今日开盘前已卖出）
+        if open_exits:
+            still = [e for e in open_exits if e > d]
+            occupied = len(still)
+            open_exits = still
+        # ---- 2. 今日新信号
+        a, b = day_start[d], day_end[d]
+        if b <= a:
+            continue
+        rows = sig_rows[a:b]
+        # ---- 3. 排序（只在 T 日信息集内）
+        if pick is not None:
+            if rand_key is not None:
+                k = rand_key[rows]
+            else:
+                k = np.asarray(pick)[rows]
+            # nan 排到最后（无法比较的候选不优先）
+            finite = np.isfinite(k)
+            ord_idx = (np.lexsort((rows, -k if not pick_asc else k))
+                       if finite.all() else
+                       np.concatenate([np.flatnonzero(finite)[
+                           np.lexsort((rows[finite], -k[finite] if not pick_asc else k[finite]))],
+                           np.flatnonzero(~finite)]))
+            rows = rows[ord_idx]
+        # ---- 4. 容量截断
+        room = max_pos - occupied
+        if room <= 0:
+            n_drop += len(rows)
+            continue
+        take = min(len(rows), max_new, room)
+        n_drop += len(rows) - take
+        for r in rows[:take]:
+            # 实际建仓日 = 信号日 + 1（T+1 开盘买入）
+            entry = int(d) + 1
+            exit_d = entry + hold
+            holds.append((entry, exit_d, int(r)))
+            open_exits.append(exit_d)
+            occupied += 1
+    return dict(holds=holds, n_drop=int(n_drop), n_signal=int(len(sig_rows)),
+                pick=str(pick) if pick is not None else None)
+
+
+def nav_from_holds(holds, day_idx, n_days, oret_sig, C,
+                   rt_cost=RT_COST, hold=None, capital_slots=None):
+    """把「实际建仓记录」转成日度净值序列（等权、逐日按市值加权）。
+
+    ⚠️⚠️ 两种口径，**必须弄清在用哪个**（这是容量约束回测最容易搞错的地方）：
+
+    · `capital_slots=None` → **已投资金口径**
+        日收益 = 开仓头寸收益的等权平均 = `Σr / cnt`
+        与 `portfolio_nav` 完全同构，**可与「不限仓位」基线直接对比**。
+        但它假设「闲置的仓位也在赚同样的钱」，会**高估**真实账户收益。
+
+    · `capital_slots=10` → **账户总资金口径**
+        日收益 = `Σr / capital_slots`
+        即把资金等分成 10 份，每份对应一个仓位；未开仓的份额赚 0（现金）。
+        **这才是用户账户里真实看到的收益率**，但它被资金利用率摊薄。
+
+    两个口径的比值就是资金利用率 `cnt / capital_slots`。
+
+    其余口径（与 portfolio_nav 对齐，保证可比）
+    ----------------------------------------
+    · 每笔仓位**等权**入场；成本按持仓天数摊薄，单笔整个持有期恰好承担 `rt_cost`；
+    · 空仓日收益 = 0（现金），且计入总交易日。
+
+    持仓第 j 日（j=0 起，即 entry+j）的收益用 `oret_sig[row + j]`
+    （row 是信号日行号；entry = 信号日+1，故 entry+j 开盘 → 下一日开盘）。
+
+    ⚠️ 为什么用 oret_sig：同 portfolio_nav / state_nav ——
+       持仓期内每天的收益必须是「该日开盘→次日开盘」，错用 oret 会偏一天。
+    """
+    n = C["n"]
+    rsum = np.zeros(n_days)
+    csum = np.zeros(n_days)
+    cnt = np.zeros(n_days, np.int64)
+    if not holds:
+        return np.zeros(n_days), cnt
+
+    holds = np.asarray(holds, np.int64)
+    entry = holds[:, 0]
+    exit_d = holds[:, 1]
+    row = holds[:, 2]
+    if hold is None:
+        H = int((exit_d - entry).max())
+    else:
+        H = int(hold)
+
+    for j in range(H):
+        # 仅计入「第 j 日仍在持有」的仓位：entry+j < exit_d
+        alive = (entry + j) < exit_d
+        if not alive.any():
+            continue
+        rr = row[alive]
+        q = rr + j                       # 面板行号
+        good = q < n
+        rr, q = rr[good], q[good]
+        r = oret_sig[q]
+        ok = np.isfinite(r)
+        r = r[ok]
+        d = day_idx[rr[ok]] + j
+        inb = d < n_days
+        d, r = d[inb], r[inb]
+        np.add.at(rsum, d, r)
+        np.add.at(cnt, d, 1)
+        np.add.at(csum, d, rt_cost / max(H, 1))
+    # 分母：已投资金口径用 cnt；账户口径用固定的 capital_slots。
+    # 分子在两种口径下**完全相同**：当日所有持仓的收益之和 − 当日所有持仓的成本之和
+    # （csum 每天累积 cnt × rt_cost/H，即 H 日恰好摊完 rt_cost）。只换分母。
+    denom = np.maximum(cnt, 1) if capital_slots is None \
+        else np.full(n_days, float(capital_slots))
+    act = cnt > 0
+    net = np.where(act, (rsum - csum) / denom, 0.0)
+    return net, cnt
+
+
+def capacity_stats(plan, n_days, cnt, net, nd_active=None):
+    """容量相关指标：信号丢弃率、满仓天数、平均持仓、资金利用率"""
+    holds = plan["holds"]
+    n_sig = max(plan["n_signal"], 1)
+    return dict(
+        n_hold=len(holds),
+        n_signal=plan["n_signal"],
+        n_drop=plan["n_drop"],
+        drop_pct=float(plan["n_drop"]) / n_sig,
+        fill_pct=float(len(holds)) / n_sig,
+        avg_pos=float(cnt[cnt > 0].mean()) if (cnt > 0).any() else 0.0,
+        max_pos_seen=int(cnt.max()) if len(cnt) else 0,
+        empty_days=int((cnt == 0).sum()),
+        empty_pct=float((cnt == 0).mean()),
+        active_pct=float((cnt > 0).mean()),
+    )
