@@ -357,7 +357,7 @@ def portfolio_nav(sig, day_idx, n_days, oret_sig, s_days, C, rt_cost=RT_COST):
 # ================================================================ 容量约束组合
 def plan_positions(mask, day_idx, n_days, hold, max_pos=10, max_new=3,
                    pick=None, pick_asc=True, rng_seed=42,
-                   stock_of_row=None, dedupe=True):
+                   stock_of_row=None, dedupe=True, ladder=None):
     """在**同时持仓上限 + 每日新开仓上限**下，逐日顺序决定「实际持有」哪些仓位。
 
     为什么需要这个
@@ -387,6 +387,37 @@ def plan_positions(mask, day_idx, n_days, hold, max_pos=10, max_new=3,
     也就是撞上已持仓的候选时往下顺延往下一位候选 —— 模拟真人「这只已经拿了，买下一只」，
     而不是白白浪费当天的买入额度。被判为重复的信号计入 `n_drop_dup`。
 
+    ⚠️ **阶梯建仓**（`ladder`，默认 None = 等权）
+    ------------------------------------------------
+    等权口径下每笔仓位的资金完全相同（各占 1/max_pos）。传 `ladder` 可改成
+    **「按批次控制每批买几只」** —— 序列里的每个数就是**那一批买入的股票只数**：
+
+        ladder = [1, 2, 2, 2, 3]     # 单位：只
+
+        第 1 批 → 买 1 只   （累计持有 1 只）
+        第 2 批 → 买 2 只   （累计持有 3 只）
+        第 3 批 → 买 2 只   （累计持有 5 只）
+        第 4 批 → 买 2 只   （累计持有 7 只）
+        第 5 批 → 买 3 只   （累计持有 10 只 = 满仓）
+
+    由此**两个参数都不再需要用户填写**（前端会把输入框接管置灰）：
+      · 同时持仓上限 = `sum(ladder)`（序列之和 = 满仓只数）
+      · 每日买入只数 = 该批的目标数量（本批要补的只数）
+
+    三条已定的纪律（改动前务必读）：
+      1. **档位靠「累计目标」推进，而不是批次计数器**。`cum = cumsum(ladder)`
+         = [1,3,5,7,10]；每次建仓把持仓**补到「大于当前持仓的最小 cum 值」**，
+         本批买入 = `目标 − 当前持仓`。这样上一批没买够（信号不足）或被截断时，
+         下一批会自动补齐，不会漏掉档位。
+      2. **满仓即停**：持仓只数 ≥ `sum(ladder)` 就不再开新仓，等仓位到期
+         卖出释放额度后才继续。`max_pos` 传进来会被 `sum(ladder)` 覆盖 ——
+         序列之和天然就是同时持仓上限。
+      3. **每只等分资金**：`w = 1 / sum(ladder)`，满仓时 Σw = 1.0（绝不超配）。
+         仍保留「剩余资金截断」护栏，防御浮点与卖出重买导致的边界情况。
+
+    返回的 `weights[i]` 是第 i 笔**占账户总资金的比例**（= 1/sum(ladder)），
+    供 `nav_from_holds(weights=...)` 计算加权净值。等权时该数组全为 1.0 且不应传入。
+
     参数
     ----
     mask      : bool[n]   信号掩码（面板行级）
@@ -409,6 +440,10 @@ def plan_positions(mask, day_idx, n_days, hold, max_pos=10, max_new=3,
       n_drop     : int      因容量限制/重复持仓被丢弃的信号数
       n_drop_dup : int      其中「已持有未平仓而被跳过」的部分
       n_signal   : int      总信号数
+      weights    : list[float]  与 holds 一一对应的账户权重（阶梯模式 = 1/满仓只数）
+      ladder     : list[int]|None 生效的每批只数序列（等权 = None）
+      ladder_total : int|None 满仓只数 = sum(ladder)（等权 = None）
+      max_new_eff  : int|None 每日买入上限 = max(ladder)（等权 = None）
     )
 
     说明：这里只做**仓位筛选**，不在这里算收益 —— 收益统一由
@@ -445,30 +480,53 @@ def plan_positions(mask, day_idx, n_days, hold, max_pos=10, max_new=3,
     if dedupe:
         stock_of_row = np.asarray(stock_of_row)
 
+    # ---- 阶梯建仓：规范化「每批只数」表；非法输入静默退回等权（绝不因参数脏而崩）
+    lad_cum = []            # 累计目标 [1,3,5,7,10]（补仓档位靠它推进）
+    lad_cap = 0             # 满仓只数 = sum(ladder) = 同时持仓上限
+    lad_new = 0             # 每日买入上限 = max(ladder)（单批最大只数）
+    w_each = 1.0            # 每只占账户资金比例（阶梯模式 = 1/满仓只数）
+    if ladder is not None:
+        try:
+            ladder = [int(round(float(x))) for x in ladder]
+        except (TypeError, ValueError):
+            ladder = None
+        if ladder and all(x >= 1 for x in ladder):
+            lad_cap = int(sum(ladder))
+            lad_new = int(max(ladder))      # 每日买入上限 = 单批最大只数
+            acc = 0
+            for x in ladder:
+                acc += x
+                lad_cum.append(acc)
+            w_each = 1.0 / lad_cap
+            # 满仓只数天然就是同时持仓上限（补满即停）
+            max_pos = lad_cap
+        else:
+            ladder = None
+
     holds = []              # (entry_day, exit_day, row_idx)
     open_exits = []         # 已建仓的到期日列表（用于快速释放）
     open_sids = []          # 与 open_exits 一一对应：该仓位持有的股票序号
+    open_w = []             # 与 open_exits 一一对应：资金权重（等权恒 1.0；阶梯 = 1/满仓只数）
+    weights = []            # 与 holds 一一对应：占账户总资金的比例（阶梯模式用）
     n_drop = 0
     n_drop_dup = 0          # 其中「已持有未平仓」而被跳过者
     occupied = 0            # 当前持仓数（= 尚未到期的 holds 数）
+    invested = 0.0          # 当前已投入成数（阶梯模式的资金护栏用）
 
     for d in range(n_days):
         # ---- 1. 先释放到期仓位（exit_day <= d 视为今日开盘前已卖出）
         #        卖出后该股票立刻恢复可交易 —— 「同仓不得二次交易」到此为止
         if open_exits:
+            # ⚠️ 必须同步过滤 open_sids：不开启去重时 open_sids 恒为空，
+            #    若统一走 zip 会得到空序列 → 持仓被误判全部到期 → 上限失效。
+            #    故这里按**下标**过滤，一次同步三张表（sids 只在 dedupe 时维护）。
+            keep_i = [i for i, e in enumerate(open_exits) if e > d]
+            open_exits = [open_exits[i] for i in keep_i]
+            open_w = [open_w[i] for i in keep_i]
             if dedupe:
-                # ⚠️ 必须同步过滤 open_sids：不开启去重时 open_sids 恒为空，
-                #    若统一走 zip 会得到空序列 → 持仓被误判全部到期 → 上限失效
-                still_e, still_s = [], []
-                for e, s in zip(open_exits, open_sids):
-                    if e > d:
-                        still_e.append(e)
-                        still_s.append(s)
-                open_exits, open_sids = still_e, still_s
-                occupied = len(still_e)
-            else:
-                open_exits = [e for e in open_exits if e > d]
-                occupied = len(open_exits)
+                open_sids = [open_sids[i] for i in keep_i]
+            occupied = len(open_exits)
+            invested = float(sum(open_w))   # 卖出释放资金（阶梯护栏要用）
         # ---- 2. 今日新信号
         a, b = day_start[d], day_end[d]
         if b <= a:
@@ -498,28 +556,60 @@ def plan_positions(mask, day_idx, n_days, hold, max_pos=10, max_new=3,
             if not rows:
                 continue
         # ---- 5. 容量截断
-        room = max_pos - occupied
-        if room <= 0:
-            n_drop += len(rows)
-            continue
-        take = min(len(rows), max_new, room)
-        n_drop += len(rows) - take
-        for r in rows[:take]:
+        if ladder is None:
+            # 等权口径（原逻辑，勿动）：一次算好能买几只
+            room = max_pos - occupied
+            if room <= 0:
+                n_drop += len(rows)
+                continue
+            take = min(len(rows), max_new, room)
+            picks = [(int(r), 1.0) for r in rows[:take]]
+        else:
+            # 阶梯口径：序列 = **每批建仓的只数**。每次建仓把持仓补到
+            # 「大于当前持仓的最小累计目标」，故本批买入 = 目标 − 当前持仓。
+            # 用累计目标（而非批次计数器）是为了容忍上一批没买够/被截断的情况。
+            # 每只等分资金：w_each = 1/满仓只数（满仓时 Σw = 1.0）。
+            if occupied >= lad_cap:
+                n_drop += len(rows)
+                continue                        # 补满即停
+            target = lad_cum[int(np.searchsorted(lad_cum, occupied, side="right"))]
+            want = target - occupied
+            picks = []
+            used = 0.0                          # 本批已占资金（invested 建仓时才更新）
+            for r in rows:
+                if len(picks) >= want:
+                    break
+                left = 1.0 - invested - used
+                if left <= 1e-9:
+                    break                       # 资金用尽 → 停（护栏，防超配）
+                w = min(w_each, left)           # 护栏：不超过剩余资金
+                picks.append((int(r), w))
+                used += w
+        n_drop += len(rows) - len(picks)
+        for r, w in picks:
             # 实际建仓日 = 信号日 + 1（T+1 开盘买入）
             entry = int(d) + 1
             exit_d = entry + hold
-            holds.append((entry, exit_d, int(r)))
+            holds.append((entry, exit_d, r))
             open_exits.append(exit_d)
+            open_w.append(w)
             if dedupe:
                 open_sids.append(int(stock_of_row[r]))
             occupied += 1
+            invested += w
+            # 账户口径的权重：等权时恒 1（不参与加权）；阶梯时已经是「占账户总资金比例」
+            weights.append(1.0 if ladder is None else w)
     return dict(holds=holds, n_drop=int(n_drop), n_signal=int(len(sig_rows)),
                 n_drop_dup=int(n_drop_dup),
+                weights=weights,
+                ladder=None if ladder is None else list(ladder),
+                ladder_total=None if ladder is None else lad_cap,
+                max_new_eff=None if ladder is None else lad_new,
                 pick=str(pick) if pick is not None else None)
 
 
 def nav_from_holds(holds, day_idx, n_days, oret_sig, C,
-                   rt_cost=RT_COST, hold=None, capital_slots=None):
+                   rt_cost=RT_COST, hold=None, capital_slots=None, weights=None):
     """把「实际建仓记录」转成日度净值序列（等权、逐日按市值加权）。
 
     ⚠️⚠️ 两种口径，**必须弄清在用哪个**（这是容量约束回测最容易搞错的地方）：
@@ -536,6 +626,19 @@ def nav_from_holds(holds, day_idx, n_days, oret_sig, C,
 
     两个口径的比值就是资金利用率 `cnt / capital_slots`。
 
+    ⚠️ **阶梯建仓（`weights`）**
+    ---------------------------
+    上面两种口径都建立在「每笔仓位一样大」上。传 `weights`（来自
+    `plan_positions(ladder=...)`，每笔**占账户总资金的比例**，全仓归一化到 Σ=1）
+    后改为**加权**：
+
+    · `weights=w, capital_slots=None` → 已投资金口径，分母 = 当日 `Σw`
+      （回答「投出去的钱赚了多少」）
+    · `weights=w, capital_slots=1.0` → 账户口径，分母 = 1.0 = 全部资金
+      （回答「整个账户赚了多少」；停用 `capital_slots` 的「等分份数」语义）
+
+    等权时（`weights=None`）行为与改动前**逐位一致**，原有调用方零影响。
+
     其余口径（与 portfolio_nav 对齐，保证可比）
     ----------------------------------------
     · 每笔仓位**等权**入场；成本按持仓天数摊薄，单笔整个持有期恰好承担 `rt_cost`；
@@ -550,6 +653,7 @@ def nav_from_holds(holds, day_idx, n_days, oret_sig, C,
     n = C["n"]
     rsum = np.zeros(n_days)
     csum = np.zeros(n_days)
+    wsum = np.zeros(n_days)          # 当日投入权重之和（仅加权口径用）
     cnt = np.zeros(n_days, np.int64)
     if not holds:
         return np.zeros(n_days), cnt
@@ -562,6 +666,9 @@ def nav_from_holds(holds, day_idx, n_days, oret_sig, C,
         H = int((exit_d - entry).max())
     else:
         H = int(hold)
+    w = None if weights is None else np.asarray(weights, np.float64)
+    if w is not None and len(w) != len(holds):
+        raise ValueError(f"weights 长度({len(w)})与 holds({len(holds)})不一致")
 
     for j in range(H):
         # 仅计入「第 j 日仍在持有」的仓位：entry+j < exit_d
@@ -569,33 +676,56 @@ def nav_from_holds(holds, day_idx, n_days, oret_sig, C,
         if not alive.any():
             continue
         rr = row[alive]
+        # ⚠️ 权重要跟着 alive / good / ok / inb 四道筛选同步走，
+        #    任一处漏筛都会让权重和行号错位 —— 这是本函数最易错的地方
+        ww = None if w is None else w[alive]
         q = rr + j                       # 面板行号
         good = q < n
         rr, q = rr[good], q[good]
+        if ww is not None:
+            ww = ww[good]
         r = oret_sig[q]
         ok = np.isfinite(r)
         r = r[ok]
+        if ww is not None:
+            ww = ww[ok]
         d = day_idx[rr[ok]] + j
         inb = d < n_days
         d, r = d[inb], r[inb]
-        np.add.at(rsum, d, r)
+        if ww is not None:
+            ww = ww[inb]
+        if ww is None:
+            np.add.at(rsum, d, r)
+            np.add.at(csum, d, rt_cost / max(H, 1))
+        else:
+            np.add.at(rsum, d, r * ww)
+            np.add.at(csum, d, rt_cost / max(H, 1) * ww)
+            np.add.at(wsum, d, ww)
         np.add.at(cnt, d, 1)
-        np.add.at(csum, d, rt_cost / max(H, 1))
-    # 分母：已投资金口径用 cnt；账户口径用固定的 capital_slots。
+    # 分母：已投资金口径用当日投入量（等权=cnt / 加权=Σw）；账户口径用固定总额。
     # 分子在两种口径下**完全相同**：当日所有持仓的收益之和 − 当日所有持仓的成本之和
-    # （csum 每天累积 cnt × rt_cost/H，即 H 日恰好摊完 rt_cost）。只换分母。
-    denom = np.maximum(cnt, 1) if capital_slots is None \
-        else np.full(n_days, float(capital_slots))
+    # （csum 每天累积 ∑w × rt_cost/H，即 H 日恰好摊完 rt_cost）。只换分母。
+    if w is None:
+        denom = np.maximum(cnt, 1) if capital_slots is None \
+            else np.full(n_days, float(capital_slots))
+    else:
+        denom = np.maximum(wsum, 1e-12) if capital_slots is None \
+            else np.full(n_days, float(capital_slots))
     act = cnt > 0
     net = np.where(act, (rsum - csum) / denom, 0.0)
     return net, cnt
 
 
-def capacity_stats(plan, n_days, cnt, net, nd_active=None):
-    """容量相关指标：信号丢弃率、满仓天数、平均持仓、资金利用率"""
+def capacity_stats(plan, n_days, cnt, net, nd_active=None, daily_w=None):
+    """容量相关指标：信号丢弃率、满仓天数、平均持仓、资金利用率
+
+    `daily_w`：可选的**每日投入权重之和**（阶梯建仓用，占账户总资金比例）。
+    给出时额外产出平均仓位 / 满仓天数占比 —— 等权口径下每笔都是
+    1/max_pos，平均仓位远低于 100%，用户看不到「钱有多少在外面空转」。
+    """
     holds = plan["holds"]
     n_sig = max(plan["n_signal"], 1)
-    return dict(
+    out = dict(
         n_hold=len(holds),
         n_signal=plan["n_signal"],
         n_drop=plan["n_drop"],
@@ -608,4 +738,14 @@ def capacity_stats(plan, n_days, cnt, net, nd_active=None):
         active_pct=float((cnt > 0).mean()),
         # 「已持有未平仓」而被跳过的信号数（同一只票不得重复持仓）
         n_drop_dup=int(plan.get("n_drop_dup", 0)),
+        # 阶梯建仓（等权时全为 None / 0）
+        ladder=plan.get("ladder"),
+        ladder_total=plan.get("ladder_total"),
     )
+    if daily_w is not None:
+        dw = np.asarray(daily_w, np.float64)
+        act = dw > 1e-9
+        out["avg_invested"] = float(dw[act].mean()) if act.any() else 0.0
+        out["full_pct"] = float((dw >= 1.0 - 1e-9).mean())
+        out["max_invested"] = float(dw.max()) if len(dw) else 0.0
+    return out

@@ -174,14 +174,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const dt = $$('#p-trades table').find(t => t.querySelector('#tbody-trades'));
   ok('明细表存在', !!dt);
   const htxt = th => th.textContent.replace(/[▲▼]/g, '').trim();
+  const HEAD = dt ? [...dt.querySelectorAll('thead th')].map(htxt) : [];
+  /* ⚠️⚠️ 列索引一律**按列名现查**（见下面的 ci()），不要把数字写死：
+     只要在 TCOLS 里插一列，后面所有硬编码索引就集体错位（加「仓位」列时踩过一次）。
+     唯一写死的是列总数 —— 它同时也是「改 TCOLS 必须同步这里」的哨兵。 */
+  const ci = n => HEAD.indexOf(n);
   if (dt) {
-    const ths = [...dt.querySelectorAll('thead th')].map(htxt);
-    ok('明细表 20 列', ths.length === 20, '实际 ' + ths.length);
-    const need2 = ['#', '代码', '名称', '板块', '信号日', '买入日', '卖出日', '买入价',
+    ok('明细表 21 列', HEAD.length === 21, '实际 ' + HEAD.length);
+    const need2 = ['#', '代码', '名称', '板块', '信号日', '买入日', '仓位', '卖出日', '买入价',
                    '卖出价', '净收益', '毛收益', '同期基准', '超额', '营收', '营收同比'];
-    const m2 = need2.filter(x => !ths.includes(x));
+    const m2 = need2.filter(x => !HEAD.includes(x));
     ok('明细列名齐全', m2.length === 0, m2.length ? '缺: ' + m2 : 'ok');
     ok('默认排序标记 exit_date', dt.querySelector('thead').textContent.includes('▼'));
+    ok('仓位列存在且位于买入日之后', ci('仓位') === ci('买入日') + 1,
+       `买入日=${ci('买入日')} 仓位=${ci('仓位')}`);
   }
 
   // ---- 10. 明细行
@@ -189,26 +195,31 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   ok('明细 50 行', trs.length === 50, '实际 ' + trs.length);
   if (trs.length) {
     const tds = trs[0].querySelectorAll('td');
-    ok('明细行 20 单元格', tds.length === 20, '实际 ' + tds.length);
+    // 用「行 = 表头」对齐代替写死数字：加列时只要 TCOLS 与行渲染同步就自动通过
+    ok('明细行单元格数 = 表头列数', tds.length === HEAD.length,
+       `行 ${tds.length} vs 表头 ${HEAD.length}`);
     const t = [...tds].map(x => x.textContent.trim());
-    ok('代码格式正确', /^\d{6}\.(SH|SZ|BJ)$/.test(t[1]), t[1]);
-    /* 列序（20 列，已用 probe 实证，改动渲染顺序必须同步这里）：
-       0# 1代码 2名称 3行业 4板块 5信号日 6买入日 7卖出日 8买入价 9卖出价
-       10净收益 11毛收益 12同期基准 13超额 14市值组 15距MA60
-       16营收 17营收同比 18归母净利 19归母同比 */
-    ok('板块列(索引4)为中文标签', ['主板', '创业板', '科创板', '北交所', '—'].includes(t[4]), t[4]);
-    ok('行业列(索引3)在板块列之前', t[3] !== '' && t[4] !== '', `行业=${t[3]} 板块=${t[4]}`);
-    ok('买入价列(索引8)是数字', /^\d+(\.\d+)?$/.test(t[8]), t[8]);
-    ok('卖出价列(索引9)是数字', /^\d+(\.\d+)?$/.test(t[9]), t[9]);
-    ok('毛收益列(索引11)带 %', /%/.test(t[11]), t[11]);
-    ok('市值组列(索引14)为 M+数字', /^M\d+$/.test(t[14]) || t[14] === '—', t[14]);
-    ok('距MA60列(索引15)为 D+数字', /^D\d+$/.test(t[15]) || t[15] === '—', t[15]);
-    // ⚠️ 净收益单元格（索引10）同时含「盈/亏」徽章，textContent 是 数值 + 徽章
-    ok('净收益带 %', /%/.test(t[10]), t[10]);
-    ok('盈亏标记存在', /盈|亏/.test(t[10]), t[10]);
+    ok('代码格式正确', /^\d{6}\.(SH|SZ|BJ)$/.test(t[ci('代码')]), t[ci('代码')]);
+    ok('板块列为中文标签',
+       ['主板', '创业板', '科创板', '北交所', '—'].includes(t[ci('板块')]), t[ci('板块')]);
+    ok('行业列在板块列之前', ci('行业') === ci('板块') - 1 && ci('行业') >= 0,
+       `行业=${ci('行业')} 板块=${ci('板块')}`);
+    ok('买入价列是数字', /^\d+(\.\d+)?$/.test(t[ci('买入价')]), t[ci('买入价')]);
+    ok('卖出价列是数字', /^\d+(\.\d+)?$/.test(t[ci('卖出价')]), t[ci('卖出价')]);
+    ok('毛收益列带 %', /%/.test(t[ci('毛收益')]), t[ci('毛收益')]);
+    ok('市值组列为 M+数字',
+       /^M\d+$/.test(t[ci('市值组')]) || t[ci('市值组')] === '—', t[ci('市值组')]);
+    ok('距MA60列为 D+数字',
+       /^D\d+$/.test(t[ci('距MA60')]) || t[ci('距MA60')] === '—', t[ci('距MA60')]);
+    // 仓位列：不限仓位口径下没有权重，应显示 —（不会被误渲染成 0%）
+    ok('仓位列在不限仓位口径下显示 —', t[ci('仓位')] === '—', t[ci('仓位')]);
+    // ⚠️ 净收益单元格同时含「盈/亏」徽章，textContent 是 数值 + 徽章
+    const netTxt = t[ci('净收益')];
+    ok('净收益带 %', /%/.test(netTxt), netTxt);
+    ok('盈亏标记存在', /盈|亏/.test(netTxt), netTxt);
     // ⚠️ 单位回归：净收益必须与 卖出价/买入价-1 对得上（防止再次 ×100）
-    const buy = parseFloat(t[8]), sell = parseFloat(t[9]);
-    const netShown = parseFloat((t[10].match(/-?\d+(\.\d+)?/) || [])[0]);
+    const buy = parseFloat(t[ci('买入价')]), sell = parseFloat(t[ci('卖出价')]);
+    const netShown = parseFloat((netTxt.match(/-?\d+(\.\d+)?/) || [])[0]);
     const calc = (sell / buy - 1) * 100;
     ok('净收益量级正确（防 ×100 回归）',
        Math.abs(netShown - calc) < 0.6,

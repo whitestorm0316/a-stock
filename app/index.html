@@ -309,12 +309,27 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
 .caphint b{color:#a8622c;font-weight:600}
 .caprow{display:flex;align-items:center;gap:5px;margin-bottom:6px}
 .caprow label{flex:0 0 66px;font-size:11.5px;color:var(--tx2)}
-.caprow input[type=number],.caprow select{flex:1;min-width:0;font-size:11.5px;
+.caprow input[type=number],.caprow input[type=text],.caprow select{flex:1;min-width:0;font-size:11.5px;
   padding:5px 7px;border:1px solid var(--line2);border-radius:5px;background:#fff;
   color:var(--tx);outline:none}
-.caprow input[type=number]{font-family:var(--mono)}
+.caprow input[type=number],.caprow input[type=text]{font-family:var(--mono)}
 .caprow input:focus,.caprow select:focus{border-color:var(--blue)}
+.caprow input:disabled{background:#f1f3f6;color:var(--tx3);cursor:not-allowed}
+.caprow input.bad{border-color:#e08a8a;background:#fdf6f6}
 .caprow .unit{font-size:10.5px;color:var(--tx3);flex:0 0 auto}
+/* ---- 建仓节奏：阶梯每批只数示意 ---- */
+/* 柱高百分比要对「轨道」而非整列生效 —— 否则标签会挤占高度，
+   让 flex 把柱子等比压扁（1/2/3 看起来差不多高）。 */
+.ladbars{display:flex;gap:3px;align-items:flex-end;height:36px;margin:7px 0 4px}
+.ladbar{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;
+  justify-content:flex-end;align-items:center;gap:2px}
+.ladtrack{flex:1 1 auto;width:100%;position:relative}
+.ladbar i{position:absolute;left:0;right:0;bottom:0;
+  border-radius:3px 3px 0 0;background:#8fa9cf;display:block}
+.ladbar:last-child i{background:#3266ad}
+.ladbar em{font-size:9px;color:var(--tx3);font-style:normal;font-family:var(--mono)}
+.ladsum{font-size:11px;color:var(--tx3);line-height:1.6;margin-top:5px}
+.ladsum b{color:#a8622c;font-family:var(--mono);font-weight:600}
 .capquick{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
 .capquick button{font-size:10.5px;padding:4px 9px;border:1px solid var(--line2);
   background:#fff;border-radius:11px;color:var(--tx2);cursor:pointer}
@@ -694,6 +709,19 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
             <button data-cap="20,3" data-page-node-id="5l5uYe3kBfL2nxGMtwJUnr">20只 / 日3只</button>
             <button data-cap="5,2" data-page-node-id="C1bEogaMOFmFejDZuC8O6v">5只 / 日2只</button>
           </div>
+          <div class="caprow" style="margin-top:11px" data-page-node-id="Rd7mVt2kQpLxNcYbHw4EjZ">
+            <label data-page-node-id="Se8nWu3lRqMyOdZcIx5FkA">建仓节奏</label>
+            <select id="cap_rhythm" data-page-node-id="Tf9oXv4mSrNzPeAdJy6GlB">
+              <option value="" data-page-node-id="Ug0pYw5nTsOaQfBeKz7HmC">等权（每笔一样大）</option>
+              <option value="__custom__" data-page-node-id="Vh1qZx6oUtPbRgCfLa8InD">自定义…</option>
+            </select>
+          </div>
+          <div class="caprow" id="cap_ladder_row" style="display:none" data-page-node-id="Wi2rAy7pVuQcShDgMb9JoE">
+            <label data-page-node-id="Xj3sBz8qWvRdTiEhNc0KpF">每批只数</label>
+            <input type="text" id="cap_ladder" value="1,2,2,2,3" placeholder="1,2,2,2,3" autocomplete="off" data-page-node-id="Yk4tCa9rXwSeUjFiOd1LqG">
+            <span class="unit" data-page-node-id="Zl5uDb0sYxTfVkGjPe2MrH">只/批</span>
+          </div>
+          <div id="cap_ladder_info" style="display:none" data-page-node-id="Am6vEc1tZyUgWlHkQf3NsI"></div>
           <div class="cap" style="margin-top:9px" data-page-node-id="SfCyVVArazdQdu3NzG1LzX">
             信号远多于仓位时，需要一个「先买哪只」的规则。<b data-page-node-id="gNDyd0UG7NDY0vAklhFet2">所有规则只用信号日当天可见的字段</b>，
             无前视偏差。经 200 次随机选股对照检验，「最超跌优先」显著优于随机（z≈4.0）。
@@ -889,6 +917,11 @@ function collect() {
     max_pos: (segv('#seg-cap') === '1') ? Math.max(1, parseInt($('#cap_maxpos').value, 10) || 10) : 0,
     max_new: Math.max(1, parseInt($('#cap_maxnew').value, 10) || 3),
     pick: $('#cap_pick').value || 'deep',
+    // 建仓节奏：null = 等权（每笔一样大）。
+    // ⚠️ 「不限仓位」口径下必须发 null —— 否则用户切回不限仓位后，
+    //    残留的只数序列会让后端仍然按容量约束算，与「口径」开关自相矛盾。
+    cap_ladder: (segv('#seg-cap') === '1' && ladderNow())
+      ? ($('#cap_ladder').value.trim() || null) : null,
     // ---- 财务（动态）
     rev_min: toYuan(fnum('fin_rev_min')), rev_max: toYuan(fnum('fin_rev_max')),
     rev_yoy_min: toFrac(fnum('fin_ry_min')), rev_yoy_max: toFrac(fnum('fin_ry_max')),
@@ -1006,6 +1039,8 @@ function applyParams(p) {
   setN('fin_ny_min', p.np_yoy_min, 100); setN('fin_ny_max', p.np_yoy_max, 100);
   $('#fin_period').value = p.fin_period || 'latest';
   // ---- 仓位约束（applyParams 用于预设/重置，预设默认不限仓位）
+  LAD_AUTO_MP = null;      // 先清掉「阶梯自动接管的同时持仓/每日买入」，避免还原到旧值
+  LAD_AUTO_MN = null;
   const mp = parseInt(p.max_pos ?? 0, 10) || 0;
   $$('#seg-cap button').forEach(b => b.classList.toggle('on',
     b.dataset.v === (mp > 0 ? '1' : '0')));
@@ -1016,6 +1051,16 @@ function applyParams(p) {
   }
   $$('.capquick button').forEach(b =>
     b.classList.toggle('on', b.dataset.cap === `${mp},${p.max_new ?? 3}`));
+  // ---- 建仓节奏（预设可能带 cap_ladder；默认 null = 等权）
+  const rsel = $('#cap_rhythm');
+  if (rsel) {
+    const cl = p.cap_ladder;
+    const txt = Array.isArray(cl) ? cl.join(',') : (cl == null ? '' : String(cl));
+    $('#cap_ladder').value = txt || '1,2,2,2,3';
+    rsel.value = !txt ? ''
+      : ([...rsel.options].some(o => o.value === txt) ? txt : '__custom__');
+    syncLadder();
+  }
   $$('.finquick button').forEach(b => b.classList.remove('on'));
   // ---- 退市风险过滤
   const dl = p.delist || {};
@@ -1122,6 +1167,7 @@ async function init() {
     $('#presetdesc').textContent = PRESETS[0].desc;
     // ⚠️ 必须在 applyParams 之前填充，否则 cap_pick 还没有 option，选不中
     fillPickRules(d.pick_rules);
+    fillLadderPresets(d.ladder_presets);
     applyParams(PRESETS[0].params);
     CFG = { ...DEFAULT_PARAMS, ...PRESETS[0].params };
     // 行业（两级：门类 → 细分行业）
@@ -1424,16 +1470,25 @@ function capHTML(r) {
         （信号 ${NUM(r.n_signal)} 个 / 成交 ${NUM(r.n_trade)} 笔），个人资金无法复制。</div>
       <div class="warnbox" style="margin-top:2px">
         想看到「如果只能同时拿 10 只、每天最多买 3 只」的结果，
-        请在左侧 <b>⑧ 仓位约束</b> 里把口径切到「限制持仓」后重新运行回测。</div></div>`;
+        请在左侧 <b>⑧ 仓位约束</b> 里把口径切到「限制持仓」后重新运行回测；
+        也可以在那里把<b>建仓节奏</b>选成 <b>阶梯建仓</b>（如 1/2/2/2/3 只：
+        第 1 批买 1 只、第 2 批 2 只…共 10 只满仓 —— 同时持仓与每日买入都由序列推出）。</div></div>`;
   }
   const util = c.avg_pos / c.max_pos;          // 资金利用率（平均持仓 / 上限）
+  const lad = c.ladder;                        // 阶梯只数序列（等权时为 null）
   const zline = (c.z !== undefined && c.z !== null)
     ? `落在随机分布第 <b>${F(c.rand_pctile * 100, 1, '%')}</b> 百分位
        · z = <b>${F(c.z, 2)}</b> · 对照 ${NUM(c.n_sim)} 次随机选股`
     : '';
   let h = `<div class="card"><h3>仓位约束结果 <span class="tag">实盘可执行口径</span></h3>
-    <div class="desc">同时持仓上限 <b>${c.max_pos}</b> 只 · 每日最多买入 <b>${c.max_new}</b> 只 ·
-      超额时按「<b>${c.pick_name}</b>」排序（${c.pick_desc}）。</div>
+    <div class="desc">同时持仓上限 <b>${c.max_pos}</b> 只 · ${lad
+      ? `每日买入 <b>由建仓节奏推出</b>（每批 ${lad.join('/')} 只）`
+      : `每日最多买入 <b>${c.max_new}</b> 只`} ·
+      超额时按「<b>${c.pick_name}</b>」排序（${c.pick_desc}）。`
+    + (lad ? `<br>建仓节奏：<b>阶梯建仓</b> 每批 ${lad.join(' / ')} 只 ——
+        满仓 <b>${c.ladder_total}</b> 只（= 序列之和 = 同时持仓上限），每只等分
+        ${F(100 / c.ladder_total, 1, '%')} 资金；每次建仓把持仓补到下一个累计目标，买满即停。`
+      : '') + `</div>
 
     <div class="vs" style="margin-bottom:13px">
       <div class="side">
@@ -1450,7 +1505,9 @@ function capHTML(r) {
       <div class="side hl2">
         <div class="sh">账户资金口径 · 你真实看到的</div>
         <div class="big ${cls(c.cap_cagr)}">${PCT(c.cap_cagr)}</div>
-        <div class="sub">资金按 ${c.max_pos} 份等分，空着的那份赚 0</div>
+        <div class="sub">${lad
+          ? `每只等分资金（满仓 ${c.ladder_total} 只），没投出去的部分赚 0`
+          : `资金按 ${c.max_pos} 份等分，空着的那份赚 0`}</div>
         <div style="margin-top:9px">
           <div class="l2"><span>Sharpe</span><b>${F(c.cap_sharpe, 3)}</b></div>
           <div class="l2"><span>最大回撤</span><b>${PCT(c.cap_mdd)}</b></div>
@@ -1469,9 +1526,11 @@ function capHTML(r) {
       <div class="mc"><div class="l">平均持仓只数</div>
         <div class="v sm">${F(c.avg_pos, 1)}</div>
         <div class="n">上限 ${c.max_pos} 只 · 实达 ${c.max_pos_seen} 只</div></div>
-      <div class="mc"><div class="l">资金利用率</div>
-        <div class="v sm">${PCT(util, 1)}</div>
-        <div class="n">满仓日占比 ${PCT(c.active_pct, 1)}</div></div>
+      <div class="mc"><div class="l">${lad ? '平均仓位' : '资金利用率'}</div>
+        <div class="v sm">${lad ? PCT(c.avg_invested, 1) : PCT(util, 1)}</div>
+        <div class="n">${lad
+          ? `真·满仓日占比 ${PCT(c.full_pct, 1)}`
+          : `满仓日占比 ${PCT(c.active_pct, 1)}`}</div></div>
       <div class="mc"><div class="l">空仓日占比</div>
         <div class="v sm">${PCT(c.empty_pct, 1)}</div>
         <div class="n">无信号可买的天数</div></div>
@@ -1482,7 +1541,9 @@ function capHTML(r) {
     const stronger = c.z > 2;
     h += `<div class="card" style="background:#fafbfc;margin-bottom:0">
       <h3 style="font-size:13px">选股规则有效性检验 <span class="tag">对照 ${NUM(c.n_sim)} 次随机选股</span></h3>
-      <div class="desc">同样受 ${c.max_pos} 只 / 日 ${c.max_new} 只约束，但<b>随机</b>挑股票，
+      <div class="desc">同样受 ${c.max_pos} 只${lad
+        ? `、每批 ${lad.join('/')} 只`
+        : ` / 日 ${c.max_new} 只`}约束，但<b>随机</b>挑股票，
         重复 ${NUM(c.n_sim)} 次得到分布：账户口径 CAGR 均值 <b>${PCT(c.rand_mean)}</b>，
         标准差 ${PCT(c.rand_sd, 2)}，P5~P95 为 ${PCT(c.rand_p05)} ~ ${PCT(c.rand_p95)}，
         区间 ${PCT(c.rand_min)} ~ ${PCT(c.rand_max)}。</div>
@@ -1494,8 +1555,12 @@ function capHTML(r) {
       </div></div>`;
   }
   h += `<div class="cap">口径说明：<b>已投资金</b>把每笔投入的资金等权看待，
-    可与上方不限仓位基线直接比较；<b>账户资金</b>按 ${c.max_pos} 份等分，没投出去的部分赚 0，
-    这才是你账户里真实看到的收益率。两者之比就是资金利用率 ${F(util * 100, 0, '%')}。
+    可与上方不限仓位基线直接比较；<b>账户资金</b>${lad
+      ? `把资金按满仓 ${c.ladder_total} 只等分（每只 ${F(100 / c.ladder_total, 1, '%')}），没投出去的部分赚 0`
+      : `按 ${c.max_pos} 份等分，没投出去的部分赚 0`}，
+    这才是你账户里真实看到的收益率${lad
+      ? `。阶梯模式下平均仓位 ${F(c.avg_invested * 100, 1, '%')}`
+      : `。两者之比就是资金利用率 ${F(util * 100, 0, '%')}`}。
     被丢弃的信号<b>不补买</b>（保守假设），因此结果偏保守、不含运气成分。</div></div>`;
   return h;
 }
@@ -1715,6 +1780,8 @@ const TCOLS = [
   ['board', '板块', 0],
   ['signal_date', '信号日', 0],
   ['entry_date', '买入日', 0],
+  // 阶梯建仓时该笔占账户资金的比例（等权不限仓位时为 null，显示 —）
+  ['w', '仓位', 0],
   ['exit_date', '卖出日', 0],
   ['buy', '买入价', 0],
   ['sell', '卖出价', 0],
@@ -1756,9 +1823,14 @@ async function runTrades() {
 
 /* ---- 交易明细口径说明：受容量约束 / 不限仓位 两种文案 ---- */
 function tradePlanNote(p) {
+  const lad = p.ladder;
   return `<span style="color:#6b3fa0">📌 本页是<b>仓位约束</b>口径 ——
-    同时最多持 <b>${p.max_pos} 只</b>、每日最多买 <b>${p.max_new} 只</b>、
-    冲突时按「<b>${p.pick_name}</b>」排序优先买入。
+    ${lad
+      ? `建仓节奏 <b>阶梯建仓</b>（每批 ${lad.join('/')} 只，满仓 ${p.ladder_total} 只）`
+        + `、每日买入由序列推出、冲突时按「<b>${p.pick_name}</b>」排序优先买入。`
+        + `每只等分资金，比例见明细表的「<b>仓位</b>」列。`
+      : `同时最多持 <b>${p.max_pos} 只</b>、每日最多买 <b>${p.max_new} 只</b>、`
+        + `冲突时按「<b>${p.pick_name}</b>」排序优先买入。`}
     列出的是这套规则下<b>实际会建仓</b>的交易（实盘可照抄执行）。</span>`;
 }
 function tradeFreeNote() {
@@ -1770,8 +1842,14 @@ function tradeFreeNote() {
 function tradePlanCard(p, hold) {
   const ns = Math.max(p.n_signal, 1);
   const keepPct = Math.min(1, (p.n_plan || 0) / ns);
+  const lad = p.ladder;
   return `<div class="card" style="background:#fafbfc">
     <h3 style="font-size:13px">仓位约束诊断 <span class="tag">与「策略回测」页同口径</span></h3>
+    ${lad ? `<div class="cap" style="margin:0 0 10px">
+      建仓节奏：<b>阶梯建仓</b> 每批 ${lad.join(' / ')} 只 —— 满仓 <b>${p.ladder_total}</b> 只
+      （= 序列之和 = 同时持仓上限），每只等分 <b>${(100 / p.ladder_total).toFixed(1)}%</b> 资金；
+      每次建仓把持仓补到下一个累计目标，买满即停。
+      明细表「<b>仓位</b>」列即该笔占账户资金的比例。</div>` : ''}
     <div class="mgrid" style="margin-bottom:10px">
       <div class="mc hl"><div class="l">本次实际建仓</div>
         <div class="v sm">${NUM(p.n_plan)} 笔</div>
@@ -1793,7 +1871,8 @@ function tradePlanCard(p, hold) {
         `实盘里就是<b>还拿在手上</b>，因此<b>不计入本页明细与胜率统计</b>` +
         `（否则会因缺少结局而偏乐观）。<br>` : ''}
       规则：<b>${p.pick_name}</b>；信号拥挤时只在当日信号里按该规则取前 ${p.max_new} 只，
-      持仓满 ${p.max_pos} 只时不再新开，被丢弃的信号<b>不补买</b>（保守假设）；
+      ${lad ? `累计投入满 <b>${p.ladder_total}</b> 成` : `持仓满 ${p.max_pos} 只`}时不再新开，
+      被丢弃的信号<b>不补买</b>（保守假设）；
       <b>同一只票未平仓期间不重复买入</b>，卖出后才回到候选池。
     </div></div>`;
 }
@@ -1975,6 +2054,7 @@ function renderTradeRows(rows) {
     <td><span class="pill bd${it.board}">${BD(it.board)}</span></td>
     <td style="color:var(--tx3)">${it.signal_date || '—'}</td>
     <td>${it.entry_date || '—'}</td>
+    <td style="color:${it.w == null ? 'var(--tx3)' : '#a8622c'};font-family:var(--mono)">${it.w == null ? '—' : F(it.w, 1, '%')}</td>
     <td>${it.exit_date || '—'}</td>
     <td>${F(it.buy, 2)}</td>
     <td>${F(it.sell, 2)}</td>
@@ -2387,6 +2467,13 @@ $$('#seg-cap button').forEach(b => b.addEventListener('click', () => {
 /* 快捷预设：同时持仓,每日买入 */
 $$('.capquick button').forEach(b => b.addEventListener('click', () => {
   const [mp, mn] = String(b.dataset.cap).split(',').map(Number);
+  // ⚠️ 快捷预设本身就是「等权」配置 —— 必须先关掉建仓节奏，
+  //    否则两个输入框还处于禁用接管态，改不动（改了也会和阶梯口径打架）。
+  const rs = $('#cap_rhythm');
+  if (rs) rs.value = '';
+  // ⚠️ 顺序不能反：syncLadder() 切回等权时会把「接管前的原值」写回两个输入框，
+  //    所以必须先回收、再覆盖为快捷预设值。
+  syncLadder();
   $('#cap_maxpos').value = mp;
   $('#cap_maxnew').value = mn;
   // 点快捷预设 → 自动切到「限制持仓」
@@ -2403,21 +2490,34 @@ function syncCap() {
   const on = segv('#seg-cap') === '1';
   $('#capwrap').classList.toggle('on', on);
   $('#capwrap').style.display = on ? 'block' : 'none';
+  const lad = on ? ladderNow() : null;
   const mp = parseInt($('#cap_maxpos').value, 10) || 10;
   const mn = parseInt($('#cap_maxnew').value, 10) || 3;
   const pk = $('#cap_pick');
   const pn = pk && pk.selectedOptions[0] ? pk.selectedOptions[0].textContent : '最超跌优先';
+  const M = 'font-family:var(--mono)';
+  const ladTxt = lad
+    ? ` · 建仓节奏 <b style="${M}">${lad.join('/')}</b> 只/批`
+      + `（满仓 ${lad.reduce((a, b) => a + b, 0)} 只，共 ${lad.length} 批）`
+    : '';
   if (on) {
     $('#cap_stat').innerHTML = `<span style="color:#a8622c">当前口径：限制持仓（实盘可执行）</span>
-      · 同时最多 <b style="font-family:var(--mono)">${mp}</b> 只
-      · 每日最多买 <b style="font-family:var(--mono)">${mn}</b> 只
-      · 超额时按「${pn}」排序`;
+      · 同时最多 <b style="${M}">${mp}</b> 只
+      · ${lad
+        ? `每日买入 <b style="${M}">由序列推出</b>`
+        : `每日最多买 <b style="${M}">${mn}</b> 只`}
+      · 超额时按「${pn}」排序${ladTxt}`;
   } else {
     $('#cap_stat').innerHTML = '当前口径：<b>不限仓位</b>（研究报告原始口径，'
       + '某日有多少信号就等权买多少只，实盘不可执行）';
   }
   const bd = $('#cap_badge');
-  if (bd) bd.textContent = on ? `已启用 · ${mp}只/${mn}只` : '已关闭';
+  if (bd) {
+    bd.textContent = on
+      ? (lad ? `已启用 · 阶梯满仓${lad.reduce((a, b) => a + b, 0)}只`
+             : `已启用 · ${mp}只/${mn}只`)
+      : '已关闭';
+  }
 }
 /* 填充选股规则下拉（来自 /api/defaults 的 pick_rules） */
 function fillPickRules(rules) {
@@ -2426,6 +2526,127 @@ function fillPickRules(rules) {
     `<option value="${r.id}"${r.default ? ' selected' : ''}>${r.name} —— ${r.desc}</option>`
   ).join('');
 }
+
+/* ---------------- 建仓节奏（阶梯建仓） ----------------
+   序列里的每个数 = **该批买入的股票只数**：满仓只数 = 序列之和，
+   同时持仓上限与每日买入都由它推出（两个输入框会被接管置灰）。
+   前端解析只用于**界面反馈**（画柱状示意、算满仓只数/每只资金）。
+   发给后端的是**原始字符串**，由 engine.parse_ladder() 做权威解析 ——
+   避免前后端两套规则漂移（例如后端偷偷支持全角逗号而前端不认）。 */
+let LAD_PRESETS = [];
+let LAD_AUTO_MP = null;      // 启用阶梯时被自动接管的「同时持仓」原值
+let LAD_AUTO_MN = null;      // 启用阶梯时被自动接管的「每日买入」原值
+function parseLadderStr(s) {
+  const t = String(s == null ? '' : s).trim();
+  if (!t) return null;
+  const parts = t.replace(/[，、/|;；\s]+/g, ',').split(',').filter(x => x !== '');
+  const v = [];
+  for (const p of parts) {
+    const n = Number(p);
+    if (!isFinite(n)) return null;
+    const c = Math.round(n);            // 只数按整数取（1.6 → 2）
+    if (c < 1) return null;             // 每批至少 1 只
+    v.push(c);
+  }
+  return (v.length && v.length <= 50) ? v : null;
+}
+/* 当前生效的阶梯（未启用/非法 → null） */
+function ladderNow() {
+  const r = $('#cap_rhythm');
+  if (!r || r.value === '') return null;
+  return parseLadderStr($('#cap_ladder').value);
+}
+function fillLadderPresets(list) {
+  const sel = $('#cap_rhythm');
+  if (!sel || !list || !list.length) return;
+  LAD_PRESETS = list;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">等权（每笔一样大）</option>'
+    + list.map(p => `<option value="${p.ladder.join(',')}">阶梯 ${p.ladder.join(' / ')}`
+        + (p.tag ? ` · ${esc(p.tag)}` : '') + '</option>').join('')
+    + '<option value="__custom__">自定义…</option>';
+  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+  syncLadder();
+}
+function syncLadder() {
+  const sel = $('#cap_rhythm'), row = $('#cap_ladder_row');
+  const inp = $('#cap_ladder'), box = $('#cap_ladder_info');
+  const mpEl = $('#cap_maxpos'), mnEl = $('#cap_maxnew');
+  if (!sel || !row || !inp || !box) return;
+  const raw = sel.value;
+  const show = raw !== '';
+  row.style.display = show ? '' : 'none';
+  box.style.display = show ? '' : 'none';
+  if (!show) {                        // 回到等权：归还「同时持仓」「每日买入」
+    if (mpEl) {
+      if (LAD_AUTO_MP !== null) { mpEl.value = LAD_AUTO_MP; LAD_AUTO_MP = null; }
+      mpEl.disabled = false; mpEl.title = '';
+    }
+    if (mnEl) {
+      if (LAD_AUTO_MN !== null) { mnEl.value = LAD_AUTO_MN; LAD_AUTO_MN = null; }
+      mnEl.disabled = false; mnEl.title = '';
+    }
+    return;
+  }
+  if (raw !== '__custom__' && raw !== inp.value) inp.value = raw;
+
+  const lad = parseLadderStr(inp.value);
+  inp.classList.toggle('bad', !lad);
+  if (!lad) {                         // 打字中间态：如实提示，不打断输入
+    box.innerHTML = '<div class="ladsum" style="color:#c0392b">只数序列无效'
+      + '（需为 ≥1 的整数，逗号或斜杠分隔），当前按<b>等权</b>处理。</div>';
+    if (mpEl) { mpEl.disabled = false; mpEl.title = ''; }
+    if (mnEl) { mnEl.disabled = false; mnEl.title = ''; }
+    return;
+  }
+  const tot = lad.reduce((a, b) => a + b, 0);      // 满仓只数 = 序列之和
+  const mx = Math.max(...lad);
+  // 满仓只数 → 同时持仓上限；最大单批只数 → 每日买入上限（都为推导值）
+  if (mpEl) {
+    if (!mpEl.disabled) LAD_AUTO_MP = mpEl.value;
+    mpEl.value = tot;
+    mpEl.disabled = true;
+    mpEl.title = '由建仓节奏推出：满仓只数 = 序列之和，不能单独修改';
+  }
+  if (mnEl) {
+    if (!mnEl.disabled) LAD_AUTO_MN = mnEl.value;
+    mnEl.value = mx;
+    mnEl.disabled = true;
+    mnEl.title = '由建仓节奏推出：最大单批只数，不能单独修改';
+  }
+
+  const per = 100 / tot;                            // 每只占账户资金（%）
+  const f = v => (+v.toFixed(2));
+  let acc = 0;
+  const cums = lad.map(x => (acc += x));
+  box.innerHTML =
+    '<div class="ladbars">' + lad.map((x, i) =>
+      `<div class="ladbar" title="第 ${i + 1} 批买入 ${x} 只 · 累计 ${cums[i]} 只">`
+      + `<span class="ladtrack"><i style="height:${Math.max(4, Math.round(x / mx * 100))}%"></i></span>`
+      + `<em>${x}</em></div>`).join('') + '</div>'
+    + `<div class="ladsum"><b>${tot}</b> 只满仓 · <b>${lad.length}</b> 批建仓`
+    + ` · 每只 <b>${f(per)}%</b> 资金 · 每批 <b>${lad.join(' / ')}</b> 只</div>`
+    + '<div class="ladsum">序列里的数就是<b>每批买入的只数</b> —— '
+    + '满仓只数（= 序列之和）与每日买入都由它推出，'
+    + '<b>不用再填「同时持仓」「每日买入」</b>。'
+    + `每次建仓把持仓补到下一个累计目标（${cums.join(' → ')} 只），`
+    + `买满 <b>${tot}</b> 只即停，等卖出释放额度后再补。`
+    + '资金每只等分，<b>绝不超配</b>。</div>';
+}
+const _rhythm = $('#cap_rhythm');
+if (_rhythm) _rhythm.addEventListener('change', () => {
+  if (_rhythm.value === '__custom__') { $('#cap_ladder').focus(); $('#cap_ladder').select(); }
+  syncLadder(); syncCap();
+});
+const _ladInp = $('#cap_ladder');
+if (_ladInp) _ladInp.addEventListener('input', () => {
+  // 手输后若与某个预设一致，下拉自动对上；否则切到「自定义」。
+  // ⚠️ 空串必须走「自定义」而不是匹配到 value="" 的「等权」选项 ——
+  //    用户在删除重打的过程中会短暂出现空串，若这时偷偷关掉阶梯会很突兀。
+  const sel = $('#cap_rhythm'), v = _ladInp.value.trim();
+  if (sel) sel.value = (v && [...sel.options].some(o => o.value === v)) ? v : '__custom__';
+  syncLadder(); syncCap();
+});
 function syncIndCnt() {
   const n = $$('#inds input.ibx:checked').length;
   const el = $('#indcnt');

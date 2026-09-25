@@ -35,7 +35,7 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 from _console import bootstrap, mark  # noqa: E402
 bootstrap()
 
-from engine import Engine, DEFAULT_PARAMS, PICK_RULES  # noqa: E402
+from engine import Engine, DEFAULT_PARAMS, PICK_RULES, LADDER_PRESETS, parse_ladder  # noqa: E402
 
 import numpy as np  # noqa: E402
 
@@ -158,6 +158,10 @@ class Handler(BaseHTTPRequestHandler):
                                      default=(k == DEFAULT_PARAMS.get("pick")))
                                 for k, v in PICK_RULES.items()
                                 if not k.startswith("__")],
+                    # 建仓节奏：阶梯建仓「每批只数」预设（供前端下拉）
+                    ladder_presets=[dict(id=x["id"], name=x["name"],
+                                         ladder=x["ladder"], tag=x.get("tag", ""),
+                                         desc=x["desc"]) for x in LADDER_PRESETS],
                     optbest=ENGINE.meta()["last_date"]))
             if p.startswith("/static/"):
                 return self._serve_file(p[len("/static/"):], None)
@@ -251,15 +255,19 @@ class Handler(BaseHTTPRequestHandler):
                         nav=_curve(base["nav"])) if base else None),
             hold=hold,
         )
-        # ---- 容量约束回测（实盘可执行性）：max_pos>0 时启用
+        # ---- 容量约束回测（实盘可执行性）：max_pos>0 或启用阶梯建仓时
+        #      ⚠️ 阶梯建仓（cap_ladder）的满仓只数 = sum(序列)，本身就是一种仓位上限，
+        #         单独设它也要生效（此时 max_pos / max_new 都会被推导值覆盖）
         mp = int(p.get("max_pos") or 0)
-        if mp > 0:
+        lad = parse_ladder(p.get("cap_ladder"))
+        if mp > 0 or lad:
             try:
                 cap = ENGINE.capacity(
                     mask, hold=hold, max_pos=mp,
                     max_new=int(p.get("max_new") or 3),
                     pick=str(p.get("pick") or "deep"),
                     n_sim=int(b.get("n_sim", 200)),
+                    ladder=lad,
                 )
                 keep = {k: v for k, v in cap.items()
                         if k not in ("net", "net_cap", "cnt", "nav")}
@@ -277,11 +285,12 @@ class Handler(BaseHTTPRequestHandler):
         #    否则「容量诊断说建仓 787 笔」而「交易摘要说 93,553 笔」，自相矛盾。
         try:
             tplan = None
-            if mp > 0:
+            if mp > 0 or lad:
                 tplan = ENGINE.capacity_plan(
                     mask, hold=hold, max_pos=mp,
                     max_new=int(p.get("max_new") or 3),
-                    pick=str(p.get("pick") or "deep"))
+                    pick=str(p.get("pick") or "deep"),
+                    ladder=lad)
             tr = ENGINE.trades(mask, hold, include_fin=False, plan=tplan)
             if tr:
                 s = tr["summary"]
@@ -334,16 +343,18 @@ class Handler(BaseHTTPRequestHandler):
         if mask.sum() < 50:
             return self._json({"error": f"信号数过少（{int(mask.sum())}），无法列出交易。"
                                        f"请放宽条件。"}, 200)
-        # ---- 容量约束（与 /api/backtest 同口径）：max_pos>0 时只列实际建仓
+        # ---- 容量约束（与 /api/backtest 同口径）：max_pos>0 或阶梯建仓时只列实际建仓
         #      ⚠️ 这里用轻量版 capacity_plan()，不跑 200 次随机模拟（明细不需要分布）
         mp = int(p.get("max_pos") or 0)
+        lad = parse_ladder(p.get("cap_ladder"))
         plan = None
-        if mp > 0:
+        if mp > 0 or lad:
             try:
                 plan = ENGINE.capacity_plan(
                     mask, hold=hold, max_pos=mp,
                     max_new=int(p.get("max_new") or 3),
-                    pick=str(p.get("pick") or "deep"))
+                    pick=str(p.get("pick") or "deep"),
+                    ladder=lad)
             except Exception:
                 import traceback
                 traceback.print_exc()
@@ -382,7 +393,8 @@ class Handler(BaseHTTPRequestHandler):
         sk = b.get("sort") or "exit_date"
         valid_keys = {"exit_date", "entry_date", "signal_date", "code", "name",
                       "net", "ret", "excess", "bench", "buy", "sell", "hold",
-                      "fin_rev", "fin_rev_yoy", "fin_np", "fin_np_yoy"}
+                      "fin_rev", "fin_rev_yoy", "fin_np", "fin_np_yoy",
+                      "w"}   # w = 该笔占账户资金比例（阶梯建仓）
         if sk not in valid_keys:
             sk = "exit_date"
         rev = (b.get("order") or "desc").lower() != "asc"

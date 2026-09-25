@@ -796,7 +796,7 @@ class Engine:
 
     # ============================================================ 容量约束回测
     def capacity_plan(self, mask, hold=20, max_pos=10, max_new=3, pick="deep",
-                      seed0=42, dedupe=True):
+                      seed0=42, dedupe=True, ladder=None):
         """只算「实际建仓计划」，不算净值 —— 供 `trades()` 复用。
 
         为什么单独抽出来
@@ -805,9 +805,17 @@ class Engine:
         确定性计划。所以这里做轻量版：一次 `plan_positions`，并补齐
         `pick_name` / `drop_pct` 等展示字段。
 
+        `ladder`（每批买入只数）：非空时启用阶梯建仓，语义见
+        `LADDER_PRESETS` / `v3b_lib.plan_positions(ladder=...)`。
+        ⚠️ 此时**同时持仓上限 = sum(序列)**、每日买入由序列推出，传入的
+        `max_pos` / `max_new` 都会让位。
+
         返回：`plan_positions()` 的结果 + max_pos/max_new/pick_name/drop_pct
         """
         from v3b_lib import plan_positions  # noqa: PLC0415
+        lad = parse_ladder(ladder)
+        mp_eff = int(sum(lad)) if lad else int(max_pos)
+        mn_eff = int(max(lad)) if lad else int(max_new)   # 阶梯：每日买入上限 = 单批最大只数
         rule = PICK_RULES.get(str(pick), PICK_RULES["deep"])
         col = rule["col"]
         if col is None:
@@ -817,17 +825,41 @@ class Engine:
         else:
             pk = np.asarray(self.df[col].values, np.float64)
         pl = plan_positions(mask, self.D, self.nd, int(hold),
-                            max_pos=max_pos, max_new=max_new,
+                            max_pos=mp_eff, max_new=mn_eff,
                             pick=pk, pick_asc=rule["asc"], rng_seed=seed0,
-                            stock_of_row=self.sid, dedupe=dedupe)
+                            stock_of_row=self.sid, dedupe=dedupe, ladder=lad)
         ns = max(pl["n_signal"], 1)
-        pl.update(max_pos=int(max_pos), max_new=int(max_new),
+        pl.update(max_pos=int(mp_eff), max_new=int(mn_eff),
                   pick=str(pick), pick_name=rule["name"],
                   drop_pct=float(pl["n_drop"]) / ns)
         return pl
 
+    def _daily_invested(self, pl, hold):
+        """每日「投入权重之和」（占账户总资金比例）；非阶梯模式返回 None。
+
+        为什么单独算：`nav_from_holds` 只回传每日**持仓只数**（cnt），
+        但阶梯口径下用户真正关心的是「钱有多少在外面」——持仓 3 只可能只占
+        3 成，也可能占 8 成。这里按与 `nav_from_holds` 完全同源的存活规则
+        （`entry + j < exit_d`）把权重铺到日度上。
+        """
+        if not pl.get("ladder") or not pl["holds"]:
+            return None
+        w = np.asarray(pl["weights"], np.float64)
+        h = np.asarray(pl["holds"], np.int64)
+        ent, ext, rw = h[:, 0], h[:, 1], h[:, 2]
+        out = np.zeros(self.nd)
+        for j in range(int(hold)):
+            alive = (ent + j) < ext
+            if not alive.any():
+                continue
+            dd = self.D[rw[alive]] + j
+            ww = w[alive]
+            ok = dd < self.nd
+            np.add.at(out, dd[ok], ww[ok])
+        return out
+
     def capacity(self, mask, hold=20, max_pos=10, max_new=3, pick="deep",
-                 n_sim=200, seed0=42, dedupe=True):
+                 n_sim=200, seed0=42, dedupe=True, ladder=None):
         """在「同时持仓上限 + 每日新开仓上限」下模拟，回答「实盘真能这么干吗」。
 
         `dedupe=True`（默认）：同一只票在**未平仓期间不得再次买入**，卖掉之后才
@@ -849,19 +881,32 @@ class Engine:
         · `on_capital`（账户资金口径）：日收益 = 持仓收益之和 / max_pos
             → **这才是账户里真实看到的收益率**，被资金利用率摊薄。
 
+        ⚠️ **阶梯建仓**（`ladder`，默认 None = 等权）
+        ----------------------------------------------
+        传只数数组（如 `[1,2,2,2,3]`）后改成「**每批买几只**」的口径：第 k 批买
+        `ladder[k]` 只、每只等分资金，`sum(ladder)` 即满仓只数（= 同时持仓上限）。
+        全部纪律见 `LADDER_PRESETS` / `v3b_lib.plan_positions(ladder=...)`。
+        两个口径随之改为**加权**：
+          · on_invested：分母 = 当日投入权重之和（回答「投出去的钱赚了多少」）
+          · on_capital ：分母 = 1.0 = 全部资金（回答「整个账户赚了多少」）
+        ⚠️ 启用阶梯后 `max_pos` 被 `sum(ladder)` 覆盖、`max_new` 由序列推出，
+        `out["max_pos"]` 回传的是**实际生效值**。
+
         ⚠️ 排序只用信号日 T 当日可见字段（`PICK_RULES`），无前视偏差。
            实测「最超跌优先」显著优于随机（详见 PICK_RULES 注释）。
 
         参数
         ----
         mask     : bool[n]   原始信号掩码（不限仓位口径下会被全部买入的股票）
-        max_pos  : int       同时持仓上限
-        max_new  : int       每日最多新建仓数
+        max_pos  : int       同时持仓上限（阶梯模式下被 sum(ladder) 覆盖）
+        max_new  : int       每日最多新建仓数（阶梯模式下由序列推出，不再使用）
         pick     : str       PICK_RULES 的键
         n_sim    : int       pick="rand" 时的随机模拟次数（用于给出分布的均值/分位）
         seed0    : int       随机种子起点
+        ladder   : list|str|None  每批买入只数（如 [1,2,2,2,3] 或 "1,2,2,2,3"）；
+                             None/非法 → 等权。见 parse_ladder()
 
-        返回 dict：两种口径的指标 + 容量诊断 + （rand 时）随机分布对照
+        返回 dict：两种口径的指标 + 容量诊断 + 阶梯诊断 +（rand 时）随机分布对照
         """
         from v3b_lib import (plan_positions, nav_from_holds,  # noqa: PLC0415
                              capacity_stats, ann_stats)
@@ -869,6 +914,9 @@ class Engine:
         rule = PICK_RULES.get(str(pick), PICK_RULES["deep"])
         col = rule["col"]
         n = self.C["n"]
+        lad = parse_ladder(ladder)
+        mp_eff = int(sum(lad)) if lad else int(max_pos)
+        mn_eff = int(max(lad)) if lad else int(max_new)   # 阶梯：每日买入上限 = 单批最大只数
 
         def _run(pick_key, asc, seed):
             if pick_key is None:
@@ -878,22 +926,34 @@ class Engine:
             else:
                 pk = np.asarray(self.df[pick_key].values, np.float64)
             pl = plan_positions(mask, self.D, self.nd, int(hold),
-                                max_pos=max_pos, max_new=max_new,
+                                max_pos=mp_eff, max_new=mn_eff,
                                 pick=pk, pick_asc=asc, rng_seed=seed,
-                                stock_of_row=self.sid, dedupe=dedupe)
-            netA, cnt = nav_from_holds(pl["holds"], self.D, self.nd,
-                                       self.oret_sig, self.C, hold=int(hold))
-            netB, _ = nav_from_holds(pl["holds"], self.D, self.nd,
-                                     self.oret_sig, self.C, hold=int(hold),
-                                     capital_slots=int(max_pos))
+                                stock_of_row=self.sid, dedupe=dedupe, ladder=lad)
+            if lad is None:
+                netA, cnt = nav_from_holds(pl["holds"], self.D, self.nd,
+                                           self.oret_sig, self.C, hold=int(hold))
+                netB, _ = nav_from_holds(pl["holds"], self.D, self.nd,
+                                         self.oret_sig, self.C, hold=int(hold),
+                                         capital_slots=int(mp_eff))
+            else:
+                # 阶梯口径：权重要传下去，账户口径的分母换成「全部资金」= 1.0
+                ww = pl["weights"]
+                netA, cnt = nav_from_holds(pl["holds"], self.D, self.nd,
+                                           self.oret_sig, self.C, hold=int(hold),
+                                           weights=ww)
+                netB, _ = nav_from_holds(pl["holds"], self.D, self.nd,
+                                         self.oret_sig, self.C, hold=int(hold),
+                                         weights=ww, capital_slots=1.0)
             return pl, netA, netB, cnt
 
         pl, netA, netB, cnt = _run(col, rule["asc"], seed0)
         sA, sB = ann_stats(netA, self.nd), ann_stats(netB, self.nd)
-        cs = capacity_stats(pl, self.nd, cnt, netA)
+        cs = capacity_stats(pl, self.nd, cnt, netA,
+                            daily_w=self._daily_invested(pl, hold))
 
         out = dict(
-            max_pos=int(max_pos), max_new=int(max_new),
+            max_pos=int(mp_eff), max_new=int(mn_eff),
+            ladder=pl.get("ladder"), ladder_total=pl.get("ladder_total"),
             pick=str(pick), pick_name=rule["name"], pick_desc=rule["desc"],
             # ---- 已投资金口径（与 stats() 基线可比）
             cagr=sA["cagr"], mdd=sA["mdd"], sharpe=sA["sharpe"],
@@ -908,6 +968,11 @@ class Engine:
             fill_pct=float(cs["fill_pct"]),
             avg_pos=float(cs["avg_pos"]), max_pos_seen=int(cs["max_pos_seen"]),
             empty_pct=float(cs["empty_pct"]), active_pct=float(cs["active_pct"]),
+            # ---- 阶梯建仓诊断（等权时全为 None）
+            # avg_invested = 有持仓的日子里，平均有多少比例的资金在外面
+            # full_pct     = 满仓（投入 100%）的交易日占比
+            avg_invested=cs.get("avg_invested"), full_pct=cs.get("full_pct"),
+            max_invested=cs.get("max_invested"),
             # ---- 分段表现
             yearly=self._seg_yearly(netB),
             segs=self._seg_periods(netB),
@@ -1027,10 +1092,14 @@ class Engine:
 
         # ---- 容量约束：只保留真正建仓的那批（⚠️ 必须在任何统计之前切）
         plan_info = None
+        wmap = {}          # 面板行号 → 该笔占账户资金的百分比（仅阶梯建仓时非空）
         if plan is not None:
             held_rows = np.asarray([h[2] for h in plan["holds"]], np.int64)
             keep = np.isin(pos, held_rows) if len(held_rows) else np.zeros(len(pos), bool)
             n_open = int(len(held_rows) - keep.sum())
+            if plan.get("ladder") and len(held_rows):
+                wmap = {int(hr): float(x) * 100.0
+                        for hr, x in zip(held_rows.tolist(), plan.get("weights") or [])}
             r, ed, pos = r[keep], ed[keep], pos[keep]
             if len(r) == 0:
                 return None
@@ -1038,6 +1107,7 @@ class Engine:
                 max_pos=int(plan.get("max_pos") or 0),
                 max_new=int(plan.get("max_new") or 0),
                 pick=plan.get("pick"), pick_name=plan.get("pick_name"),
+                ladder=plan.get("ladder"), ladder_total=plan.get("ladder_total"),
                 n_signal=int(plan.get("n_signal") or 0),
                 n_drop=int(plan.get("n_drop") or 0),
                 drop_pct=float(plan.get("drop_pct") or 0.0),
@@ -1098,6 +1168,7 @@ class Engine:
                     fend = str(self.day_str[self.fin_asof_d[p_i]])
             rows.append(dict(
                 seq=i + 1,
+                w=(round(wmap[int(p_i)], 3) if int(p_i) in wmap else None),
                 code=str(self.code[p_i]), name=str(self.stk_name[p_i]),
                 ind=str(self.ind_name[p_i]), ex=str(self.exchange[p_i]),
                 board=str(self.board[p_i]),
@@ -1442,6 +1513,71 @@ class Engine:
         )
 
 
+# ================================================================ 阶梯建仓
+# 「每批买入只数」序列：序列里的每个数 = **那一批买入的股票只数**。
+# 语义与全部纪律见 v3b_lib.plan_positions 的 `ladder` 参数，摘要：
+#   · `sum(ladder)` = 满仓只数 = 同时持仓上限（用户填的 max_pos 会被覆盖）
+#   · 累计目标 `cumsum(ladder)` 决定补仓档位：每次建仓补到「下一个累计目标」
+#   · 每只等分资金：w = 1/sum(ladder)，满仓时 Σw = 1.0 → **绝不超配**
+#   · 满仓即停：持仓只数 ≥ sum(ladder) 后不再开新仓
+# 因为同时持仓与每日买入都由序列推出，两者在前端会被**接管并置灰**，
+# 用户只需给出这一个序列。
+LADDER_PRESETS = [
+    dict(id="l12223", name="1 / 2 / 2 / 2 / 3", ladder=[1, 2, 2, 2, 3],
+         tag="满仓 10 只", desc="空仓先买 1 只试探，之后每批 2 只，最后一批提速到 3 只，"
+                               "5 批正好买满 10 只 —— 开局最轻。"),
+    dict(id="l11235", name="1 / 1 / 2 / 3 / 3", ladder=[1, 1, 2, 3, 3],
+         tag="满仓 10 只", desc="前两批各 1 只（更保守的开局），后段提速到 3 只，5 批满仓。"),
+    dict(id="l1234", name="1 / 2 / 3 / 4", ladder=[1, 2, 3, 4],
+         tag="满仓 10 只", desc="4 批买满 10 只，建仓更快、批次更少（每批都在加码）。"),
+    dict(id="l12345", name="1 / 2 / 3 / 4 / 5", ladder=[1, 2, 3, 4, 5],
+         tag="满仓 15 只", desc="严格等差递增，5 批共 15 只，每只占 6.7% 资金 —— "
+                               "持仓更分散、单票风险更低。"),
+    dict(id="l22222", name="2 / 2 / 2 / 2 / 2", ladder=[2, 2, 2, 2, 2],
+         tag="满仓 10 只 · 对照", desc="每批固定 2 只，5 批买满 10 只 —— "
+                                      "数值上等价于「等权 10 只 / 每日 2 只」，用来做对照。"),
+]
+
+
+def parse_ladder(x):
+    """把前端传来的阶梯序列规范成 `list[int]`；未启用/非法 → None（= 等权）。
+
+    每个元素 = **该批买入的只数**（正整数）。宽容处理字符串
+    （`"1,2,2,2,3"` / `"1/2/2"` / 全角逗号 / 空格），因为这是人手输入的框。
+    非整数会四舍五入（如 `1.6,2.4` → `2,2`）；取整后 < 1 视为非法。
+    非法输入**静默退回等权**而不是报错 —— 用户在输入框里打字时中间态必然非法
+    （比如刚删到只剩 `"1,"`），弹错误会打断输入。
+    """
+    if x is None or x is False:
+        return None
+    if isinstance(x, str):
+        s = x.strip()
+        if not s:
+            return None
+        for ch in ("，", "、", "/", "|", ";", "；", " ", "\t"):
+            s = s.replace(ch, ",")
+        parts = [t for t in s.split(",") if t.strip()]
+        try:
+            vals = [float(t) for t in parts]
+        except ValueError:
+            return None
+    elif isinstance(x, (list, tuple, np.ndarray)):
+        if len(x) == 0:
+            return None
+        try:
+            vals = [float(v) for v in x]
+        except (TypeError, ValueError):
+            return None
+    else:
+        return None
+    if not vals or len(vals) > 50:
+        return None
+    cnt = [int(round(v)) for v in vals]
+    if any(c < 1 for c in cnt):
+        return None
+    return cnt
+
+
 # ================================================================ 默认参数（K3 最优）
 DEFAULT_PARAMS = {
     "px_ma60_min": 1, "px_ma60_max": 1,   # 距MA60 D1
@@ -1457,6 +1593,13 @@ DEFAULT_PARAMS = {
     "max_pos": 0,
     "max_new": 3,
     "pick": "deep",      # 信号超额时的选股规则，见 PICK_RULES
+    # ---- 阶梯建仓（建仓节奏）
+    #   None = 等权（每笔一样大，研究报告原始口径）
+    #   给出只数数组（如 [1,2,2,2,3]）时，改为「**每批买几只**」：
+    #   第 1 批买 1 只 → 第 2 批买 2 只 → …，每只等分资金，sum = 满仓只数。
+    #   详见 LADDER_PRESETS / parse_ladder 与 v3b_lib.plan_positions(ladder=...)。
+    #   ⚠️ 启用后 max_pos 被覆盖为 sum(cap_ladder)，max_new 由序列推出不再使用。
+    "cap_ladder": None,
     # ---- 退市风险过滤（默认全关 = 研究报告原始口径）
     #   三条判据只用买入日 T 已公开的信息，见 build_mask 的「退市风险过滤」段。
     "delist": {"financial": False, "loss2y": False, "penny": False},

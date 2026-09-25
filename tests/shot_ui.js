@@ -1,7 +1,13 @@
-/* 行业两级树的视觉核对：滚动左栏到第 ⑥ 组并截图。
- * 用法：node tests/_shot_ind.js <输出png> [展开的门类代码]
+/* 前端视觉核对：用真实 Chrome（CDP）打开页面并截图。
+ *
+ * 用法：
+ *   node tests/shot_ui.js <输出png> [门类代码] [top|bottom]
+ *     node tests/shot_ui.js output/_shot/ind.png C          # 展开门类 C 后截图
+ *     node tests/shot_ui.js output/_shot/bottom.png A bottom # 收起全部、滚到门类清单底部
+ *     node tests/shot_ui.js output/_shot/top.png C top       # 只截顶部标题栏（核对图标）
+ *
  * 需要一个已在运行的 app/server.py（默认 8770）与本机 Chrome。
- * 仅用于人工视觉核对，不参与 CI。
+ * 仅用于人工视觉核对，不参与 CI —— jsdom 能验 DOM 与事件，但渲染不出布局。
  */
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -94,6 +100,22 @@ function cdp(ws) {
     throw new Error('等待超时: ' + expr);
   };
   await waitFor('!!document.querySelector("#inds .igt")');
+
+  // 模式 top：只截顶部标题栏（核对 .brand 图标 / 标题排版），不碰行业树
+  if (process.argv[4] === 'top') {
+    const m = await S('Page.getLayoutMetrics');
+    const shot = await S('Page.captureScreenshot', {
+      format: 'png',
+      clip: { x: 0, y: 0, width: Math.min(1400, m.cssLayoutViewport.clientWidth),
+              height: 58, scale: 2 },
+    });
+    fs.mkdirSync(path.dirname(OUT), { recursive: true });
+    fs.writeFileSync(OUT, Buffer.from(shot.data, 'base64'));
+    console.log('已写出（顶部标题栏）', OUT);
+    ws.close();
+    chrome.kill();
+    process.exit(0);
+  }
 
   // 展开目标门类，并把左栏滚到行业筛选处
   const code = JSON.stringify(OPEN_CODE);
