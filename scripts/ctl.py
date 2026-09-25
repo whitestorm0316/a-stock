@@ -60,6 +60,12 @@ IS_WIN = os.name == "nt"
 LOG_DIR = ROOT / "logs"
 DEFAULT_PORT = 8770
 
+# 必须在第一次 print 之前：中文 Windows 的 cmd.exe 默认 GBK 代码页，
+# print 中文会乱码（双击 .cmd 的用户最常见）。详见 scripts/_console.py。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _console import bootstrap  # noqa: E402
+bootstrap()
+
 # 启动必需 vs 可选（缺失只降级，不崩）
 REQUIRED = ["data/processed/v2_panel.parquet"]
 OPTIONAL = {
@@ -301,6 +307,8 @@ def cmd_start(args: argparse.Namespace) -> int:
     print("=" * 56)
 
     kw = dict(cwd=str(ROOT), stdin=subprocess.DEVNULL)
+    # 子进程脱离控制台后拿不到代码页，显式钉死 UTF-8，避免日志里中文变乱码
+    kw["env"] = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8:replace")
     if IS_WIN:
         kw["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
     else:
@@ -412,7 +420,11 @@ def cmd_update(args: argparse.Namespace) -> int:
     print("  输出如下：\n" + "-" * 56)
 
     t0 = time.time()
-    rc = subprocess.run(cmd, cwd=str(ROOT)).returncode
+    # 子脚本同样要钉 UTF-8：它们在 GBK 控制台下 print emoji 会崩
+    rc = subprocess.run(
+        cmd, cwd=str(ROOT),
+        env=dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8:replace"),
+    ).returncode
     print("-" * 56)
     if rc != 0:
         print(f"!! 更新失败（code={rc}），耗时 {time.time() - t0:.0f}s")

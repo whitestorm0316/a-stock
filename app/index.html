@@ -653,6 +653,43 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
       </div>
     </div>
 
+    <div class="grp" data-page-node-id="zDLqK9vTx4mRbNpF3sWy7h">
+      <h2 data-page-node-id="Kq7wPm2nRvTgHbXcE5uY9a">⑨ 退市风险过滤 <span class="tag" data-page-node-id="Lm4nQr8sTvWxYzA1bC2dE3">公开数据 · 无前视</span></h2>
+      <div class="body" data-page-node-id="Nm5pRs9tUwXyZaB2cD3eF4">
+        <div class="capwrap" data-page-node-id="On6qSt0uVxYzAbC3dE4fG5">
+          <div class="caphead" data-page-node-id="Po7rTu1vWyZaBcD4eF5gH6">
+            <span data-page-node-id="Qp8sUv2wXzAbCdE5fG6hI7">剔除可能退市的股票</span>
+            <span class="capbadge" id="dl_badge" data-page-node-id="Rq9tVw3xYaBcDeF6gH7iJ8">已关闭</span>
+          </div>
+          <div class="caphint" data-page-node-id="Sr0uWx4yZbCdEfG7hI8jK9">
+            三条判据<b>全部只用买入日当天已经公开的信息</b>：财报取<b>实际披露日 ≤ 买入日</b>的最新一期，
+            面值用<b>未复权</b>收盘价。不预测谁会退市，只剔除<b>规则上已踩到退市红线</b>的票。
+          </div>
+          <label class="chk" data-page-node-id="Ts1vXy5zAcDeFgH8iJ9kL0"><input type="checkbox" id="dl_fin" data-page-node-id="Ut2wYz6aBdEfGhI9jK0lM1"><span data-page-node-id="Vu3xZa7bCeFgHiJ0kL1mN2"><span class="t" data-page-node-id="Wv4yAb8cDfGhIjK1lM2nO3">财务类退市风险</span><span class="d" data-page-node-id="Xw5zBc9dEgHiJkL2mN3oP4">年化归母净利 &lt; 0 且 年化营收 &lt; 门槛（退市新规组合指标）</span></span></label>
+          <label class="chk" data-page-node-id="Yx6aCd0eFhIjKlM3nO4pQ5"><input type="checkbox" id="dl_loss2y" data-page-node-id="Zy7bDe1fGiJkLmN4oP5qR6"><span data-page-node-id="Az8cEf2gHjKlMnO5pQ6rS7"><span class="t" data-page-node-id="Ba9dFg3hIkLmNoP6qR7sT8">连续两年亏损</span><span class="d" data-page-node-id="Cb0eGh4iJlMnOpQ7rS8tU9">最近两个年度的年报归母净利均为负</span></span></label>
+          <label class="chk" data-page-node-id="Dc1fHi5jKmNoPqR8sT9uV0"><input type="checkbox" id="dl_penny" data-page-node-id="Ed2gIj6kLnOpQrS9tU0vW1"><span data-page-node-id="Fe3hJk7lMoPqRsT0uV1wX2"><span class="t" data-page-node-id="Gf4iKl8mNpQrStU1vW2xY3">面值退市倒计时</span><span class="d" data-page-node-id="Hg5jLm9nOqRsTuV2wX3yZ4">近 20 日收盘价（未复权）持续低于 1 元</span></span></label>
+          <div class="caprow" data-page-node-id="Nm1pRs5tUwXyZaB8cD9eF0">
+            <label data-page-node-id="On2qSt6uVxYzAbC9dE0fG1">营收门槛</label>
+            <input type="number" id="dl_rev_floor" value="1" min="0.1" max="10" step="0.1" data-page-node-id="Po3rTu7vWyZaBcD0eF1gH2">
+            <span class="unit" data-page-node-id="Qp4sUv8wXzAbCdE1fG2hI3">亿元</span>
+          </div>
+          <label class="chk" data-page-node-id="Rq5tVw9xYaBcDeF2gH3iJ4"><input type="checkbox" id="dl_main2024" data-page-node-id="Sr6uWx0yZbCdEfG3hI4jK5"><span data-page-node-id="Ts7vXy1zAcDeFgH4iJ5kL6"><span class="t" data-page-node-id="Ut8wYz2aBdEfGhI5jK6lM7">主板按 2024 新规</span><span class="d" data-page-node-id="Vu9xZa3bCeFgHiJ6kL7mN8">主板营收门槛改为 3 亿（双创仍 1 亿）</span></span></label>
+          <div class="caprow" data-page-node-id="Wv0yAb4cDfGhIjK7lM8nO9">
+            <label data-page-node-id="Xw1zBc5dEgHiJkL8mN9oP0">面值天数</label>
+            <input type="number" id="dl_penny_days" value="10" min="1" max="20" step="1" data-page-node-id="Yx2aCd6eFhIjKlM9nO0pQ1">
+            <span class="unit" data-page-node-id="Zy3bDe7fGiJkLmN0oP1qR2">/20 日</span>
+          </div>
+          <div class="cap" id="dl_stat" style="margin-top:9px" data-page-node-id="Az4cEf8gHjKlMnO1pQ2rS3">未启用（默认口径 = 研究报告原始口径）</div>
+          <div class="cap" style="margin-top:7px" data-page-node-id="Ba5dFg9hIkLmNoP2qR3sT4">
+            <b>为什么没有「剔除 ST」这一项</b>：面板里 <code>is_st_now</code> 是按<b>当前</b>股票名称
+            判断的，含未来信息；而清洗环节已经据此默认剔除了「截至今天仍是 ST」的 <b>204 只</b>票。
+            要按「当时是否 ST」过滤需要历史名称数据，本数据源没有。曾试过用涨跌幅限制 5% 反推，
+            实测 40% 的行被误判（那是「从未触及涨跌停」的兜底值），故放弃。
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="btnrow" data-page-node-id="YbAaaLGUA4wVFeVuIfigHr">
       <button class="btn" id="run" data-page-node-id="oCNdjot8A6QMDVqdBnTUfD">运行回测</button>
       <button class="btn ghost" id="reset" style="flex:0 0 74px" data-page-node-id="9KtDuxfmifhIropoJi16DR">重置</button>
@@ -807,7 +844,16 @@ function collect() {
     rev_yoy_min: toFrac(fnum('fin_ry_min')), rev_yoy_max: toFrac(fnum('fin_ry_max')),
     np_min: toYuan(fnum('fin_np_min')), np_max: toYuan(fnum('fin_np_max')),
     np_yoy_min: toFrac(fnum('fin_ny_min')), np_yoy_max: toFrac(fnum('fin_ny_max')),
-    fin_period: $('#fin_period').value || 'latest'
+    fin_period: $('#fin_period').value || 'latest',
+    // ---- 退市风险过滤（全部基于买入日已公开的财报 / 行情）
+    delist: {
+      financial: !!($('#dl_fin') && $('#dl_fin').checked),
+      loss2y: !!($('#dl_loss2y') && $('#dl_loss2y').checked),
+      penny: !!($('#dl_penny') && $('#dl_penny').checked),
+    },
+    delist_rev_floor: (() => { const e = $('#dl_rev_floor'); const v = e ? parseFloat(e.value) : NaN; return isFinite(v) ? v * 1e8 : null; })(),
+    delist_main_2024: !!($('#dl_main2024') && $('#dl_main2024').checked),
+    delist_penny_days: (() => { const e = $('#dl_penny_days'); const v = e ? parseInt(e.value, 10) : NaN; return isFinite(v) ? v : null; })()
   };
 }
 /* 财务条件生效状态提示 */
@@ -832,6 +878,33 @@ function updateFinBadge() {
     el.innerHTML = `已启用 ${q.length} 项 · ${q.join(' + ')}`;
     el.style.color = '#0d7a3a';
   }
+}
+/* 退市风险过滤生效状态提示 */
+function updateDelistBadge() {
+  const bg = $('#dl_badge'), st = $('#dl_stat');
+  if (!bg) return;
+  const on = {
+    '财务类退市风险': !!($('#dl_fin') && $('#dl_fin').checked),
+    '连续两年亏损': !!($('#dl_loss2y') && $('#dl_loss2y').checked),
+    '面值退市': !!($('#dl_penny') && $('#dl_penny').checked),
+  };
+  const act = Object.keys(on).filter(k => on[k]);
+  if (act.length === 0) {
+    bg.textContent = '已关闭'; bg.style.color = ''; bg.style.background = '';
+    if (st) { st.textContent = '未启用（默认口径 = 研究报告原始口径）'; st.style.color = ''; }
+    return;
+  }
+  bg.textContent = `已启用 ${act.length} 项`; bg.style.color = '#0d7a3a';
+  const parts = [act.join(' + ')];
+  if (on['财务类退市风险']) {
+    const fl = parseFloat(($('#dl_rev_floor') || {}).value);
+    parts.push(`营收门槛 ${isFinite(fl) ? fl : 1} 亿${$('#dl_main2024') && $('#dl_main2024').checked ? '（主板 3 亿）' : ''}`);
+  }
+  if (on['面值退市']) {
+    const d = parseInt(($('#dl_penny_days') || {}).value, 10);
+    parts.push(`近20日中 ≥${isFinite(d) ? d : 20} 日收盘 < 1 元`);
+  }
+  if (st) { st.textContent = '已剔除：' + parts.join('；'); st.style.color = '#0d7a3a'; }
 }
 /* 财务快捷按钮 */
 function setFinQuick(kind) {
@@ -894,9 +967,18 @@ function applyParams(p) {
   $$('.capquick button').forEach(b =>
     b.classList.toggle('on', b.dataset.cap === `${mp},${p.max_new ?? 3}`));
   $$('.finquick button').forEach(b => b.classList.remove('on'));
+  // ---- 退市风险过滤
+  const dl = p.delist || {};
+  const setChk = (id, v) => { const e = $('#' + id); if (e) e.checked = !!v; };
+  setChk('dl_fin', dl.financial); setChk('dl_loss2y', dl.loss2y);
+  setChk('dl_penny', dl.penny);
+  setChk('dl_main2024', p.delist_main_2024);
+  if (isFinite(p.delist_rev_floor)) $('#dl_rev_floor').value = p.delist_rev_floor / 1e8;
+  if (isFinite(p.delist_penny_days)) $('#dl_penny_days').value = p.delist_penny_days;
   syncLabels();
   syncCap();
   updateModeBadge();
+  updateDelistBadge();
   updateFinBadge();
 }
 function syncLabels() {
@@ -2138,6 +2220,13 @@ $('#fin_period').addEventListener('change', updateFinBadge);
 $$('.finquick button').forEach(b => b.addEventListener('click', () => {
   setFinQuick(b.dataset.fin);
 }));
+/* ---- 退市风险过滤 ---- */
+['#dl_fin', '#dl_loss2y', '#dl_penny', '#dl_main2024'].forEach(s => {
+  const e = $(s); if (e) e.addEventListener('change', updateDelistBadge);
+});
+['#dl_rev_floor', '#dl_penny_days'].forEach(s => {
+  const e = $(s); if (e) e.addEventListener('input', updateDelistBadge);
+});
 /* ---------------- 容量约束（实盘可执行性） ---------------- */
 /* 口径单选：不限仓位 / 限制持仓。选「限制持仓」时才把容量参数发给后端。 */
 $$('#seg-cap button').forEach(b => b.addEventListener('click', () => {
@@ -2258,7 +2347,7 @@ $('#reset').addEventListener('click', () => {
   $('#poolcustom').style.display = 'none';
   updateModeBadge(); runAll();
 });
-syncLabels(); updateModeBadge();
+syncLabels(); updateModeBadge(); updateFinBadge(); updateDelistBadge();
 init();
 </script>
 </body>

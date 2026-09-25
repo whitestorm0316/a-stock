@@ -114,6 +114,10 @@ def load():
         "thscode", "date", "name", "board", "list_date", "days_since_list",
         "is_st_now", "can_buy_open", "can_sell_open", "limit_pct",
         "open_price", "high_price", "low_price", "close_price",
+        # 未复权收盘价：面值退市（连续20日收盘<1元）必须用它判断。
+        # 前复权价因分红送转会被整体调低，用它判 <1 元会大幅误判
+        # （实测前复权 <1 占比 0.016% vs 未复权 0.004%，差 4 倍）。
+        "close_price_raw",
         "volume", "turnover", "ret",
         "ma5", "ma20", "ma30", "ma60", "ma120",
         "vol5", "vol10", "vol20", "vol60",
@@ -424,6 +428,7 @@ def main():
     keep_meta = ["thscode", "date", "name", "board", "days_since_list",
                  "is_st_now", "can_buy_open", "can_sell_open", "limit_pct",
                  "open_price", "high_price", "low_price", "close_price",
+                 "close_price_raw",
                  "volume", "turnover", "ret", "ind_code", "ind_name", "size_grp"]
     keep_feat = [
         # volume 结构

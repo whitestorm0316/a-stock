@@ -76,7 +76,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 
-sys.stdout.reconfigure(encoding="utf-8")  # Windows 控制台中文不炸
+# 中文 Windows 控制台是 GBK：只 reconfigure 成 utf-8 仍会在 emoji（⚠）上崩，
+# 必须带 errors="replace"，且 stderr 也要处理。统一交给 scripts/_console.py。
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _console import bootstrap, mark  # noqa: E402
+bootstrap()
 
 BASE = "https://fuyao.aicubes.cn"
 KEY = os.environ.get("FUYAO_KEY", "sk-fuyao-LcCu-ioaupkOIvh4ucQ_Ab6wJhefxdQG")
@@ -224,7 +228,7 @@ def incremental_fetch(since_ms=None):
 
     print(f"     待更新 {len(jobs)} 只（其中新股/无本地记录 {n_new} 只拉全历史）")
     if n_new:
-        print("     ⚠ 新股全历史较慢，属正常一次性开销，之后每只都只增量")
+        print(f"     {mark('⚠', '!')} 新股全历史较慢，属正常一次性开销，之后每只都只增量")
 
     rows, done, err = [], 0, 0
     t0 = time.time()

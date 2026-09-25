@@ -28,6 +28,13 @@ from urllib.parse import urlparse, parse_qs, quote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# 必须在第一次 print 之前：中文 Windows 的 cmd.exe 默认 GBK 代码页，
+# print 中文会乱码、print emoji（✅ 🚀）会直接 UnicodeEncodeError 崩掉。
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+from _console import bootstrap, mark  # noqa: E402
+bootstrap()
+
 from engine import Engine, DEFAULT_PARAMS, PICK_RULES  # noqa: E402
 
 import numpy as np  # noqa: E402
@@ -39,7 +46,7 @@ print("=" * 72)
 print("  正在加载面板并预计算（约 60~90 秒，请稍候）...")
 print("=" * 72, flush=True)
 ENGINE = Engine()
-print(f"  ✅ 就绪：{ENGINE.C['n']:,} 行 / {len(ENGINE.C['starts']):,} 只 / "
+print(f"  {mark('✅', '[OK]')} 就绪：{ENGINE.C['n']:,} 行 / {len(ENGINE.C['starts']):,} 只 / "
       f"{ENGINE.nd:,} 交易日 / 耗时 {ENGINE.build_ms/1000:.1f}s", flush=True)
 
 # 净值曲线按周采样（前端足够平滑，体积降 80%）
@@ -708,7 +715,7 @@ def main():
     srv = ThreadingHTTPServer((host, port), Handler)
     srv.daemon_threads = True
     print("=" * 72)
-    print(f"  🚀 界面已启动： http://{host}:{port}/")
+    print(f"  {mark('🚀', '[>>]')} 界面已启动： http://{host}:{port}/")
     print(f"     默认参数 = K3 最优 3 条件（已在报告第12节验证）")
     print("=" * 72, flush=True)
     try:

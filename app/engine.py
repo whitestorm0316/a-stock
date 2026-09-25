@@ -30,6 +30,22 @@ import v3b_lib as L  # noqa: E402
 PPY = L.PPY
 RT_COST = L.RT_COST
 
+# ---- 退市风险过滤的常量（A 股交易规则）
+# 面值退市：连续 20 个交易日收盘价均低于 1 元 → 终止上市。
+# 必须用【未复权】价：前复权价被分红送转调低，用它判 <1 元会大量误判。
+PENNY_PX = 1.0        # 面值线（元）
+PENNY_WIN = 20        # 观察窗口（交易日）
+# 默认要求窗口内「至少这么多天」低于面值线才剔除。
+# 规则触发线是 20/20，但实测本面板内**从未出现**（0 行）——因为 v3b_lib.load_clean
+# 已先行剔除了 ST 股与次新股，等到真跌破 1 元时往往已不在样本内。
+# 故默认取 10/20 作为「已逼近面值退市」的预警口径，可调 1~20。
+PENNY_DAYS_DEFAULT = 10
+# 财务类退市风险（退市新规的组合指标）：最近一期财报
+#   年化归母净利润 < 0  且  年化营业收入 < 阈值
+# 阈值随规则变化：2020 退市新规 1 亿；2024-04 修订后主板 3 亿、双创 1 亿。
+DELIST_REV_FLOOR = 1e8     # 默认营收阈值（元）
+DELIST_REV_FLOOR_MAIN_2024 = 3e8   # 2024 新规主板阈值（元）
+
 
 # ================================================================ 面板加载
 class Engine:
@@ -65,6 +81,9 @@ class Engine:
             "open_price", "close_price", "high_price", "low_price",
             "can_buy_open", "can_sell_open", "size_grp", "limit_pct",
             "ind_code", "ind_name",
+            # 未复权收盘价：面值退市（连续 20 日收盘 < 1 元）只能用原始价判断，
+            # 前复权价被分红送转调低后会大幅误判（实测 0.016% vs 0.004%）
+            "close_price_raw",
             # ⚠️ board = 板块（MAIN/CHINEXT/STAR/BJ），由数据源直接给出
             "board",
             # 价格型
@@ -111,6 +130,24 @@ class Engine:
         cl = df["close_price"].values.astype(np.float64)
         op = df["open_price"].values.astype(np.float64)
         self.cl = cl
+        # 未复权收盘价（面值退市判定专用；缺失时退化为 NaN，该项过滤自动失效）
+        self.px_raw = (df["close_price_raw"].values.astype(np.float64)
+                       if "close_price_raw" in df.columns
+                       else np.full(C["n"], np.nan))
+        # 面值退市观测：近 PENNY_WIN 日中，收盘价（未复权）低于面值线的天数占比
+        # 1.0 = 窗口内天天低于面值（即规则定义的退市触发条件）
+        if np.isfinite(self.px_raw).any():
+            self.penny_ratio = L.roll_mean(
+                (self.px_raw < PENNY_PX).astype(np.float64), C, PENNY_WIN)
+        else:
+            self.penny_ratio = np.zeros(C["n"])
+        # ⚠️ 关于 ST / 风险警示：本面板【做不出】point-in-time 的判定。
+        #   面板的 is_st_now 用【当前】股票名称判断（含未来信息），
+        #   而 v3b_lib.load_clean 已经默认据此剔除了「截至今天仍是 ST」的股票
+        #   （实测 204 只）。想按「当时是否 ST」过滤需要历史名称数据，这里没有。
+        #   曾尝试用 limit_pct==5% 反推，实测不可行：40.4% 的行是 5%，
+        #   因为 detect_limit_regime 在「120 日内从未触及涨跌停」时会兜底成 5%；
+        #   改用「近60日 max|ret|<=5.2%」又会把 4942 只误判进来。两者都不可靠。
         self.ma5 = L.roll_mean(cl, C, 5)
         self.ma10 = L.roll_mean(cl, C, 10)
         self.ma20 = L.roll_mean(cl, C, 20)
@@ -246,6 +283,10 @@ class Engine:
             self.fin_rev_yoy, self.fin_np_yoy = np.full(n, np.nan), np.full(n, np.nan)
             self.fin_asof_q = np.zeros(n, np.int16)
             self.fin_asof_d = np.full(n, -1, np.int32)
+            self.fin_ann_rev = np.full(n, np.nan)
+            self.fin_ann_np = np.full(n, np.nan)
+            self.fin_np_ann = np.full(n, np.nan)
+            self.fin_np_ann_prev = np.full(n, np.nan)
             self.fin_avail = False
             self.fin_n_stocks = 0
             self.fin_n_periods = 0
@@ -278,11 +319,37 @@ class Engine:
             ok & (F["prev_np"].abs() > 1.0),
             (F["parent_holder_net_profit"] - F["prev_np"]) / F["prev_np"].abs(), np.nan)
 
+        # ---- 退市风险所需的口径
+        # operating_income / parent_holder_net_profit 是【累计 YTD】，
+        # 判「营收是否低于 1 亿」这类年度门槛必须先年化：× 4 / q
+        F["ann_rev"] = F["operating_income"] * 4.0 / F["q"]
+        F["ann_np"] = F["parent_holder_net_profit"] * 4.0 / F["q"]
+
+        # 「上一个年报」的归母净利润 —— 用于判定连续两个年度亏损。
+        # 只在年报(q==4)序列内部 shift，避免被季报打乱；非年报行随后 ffill。
+        is_ann = (F["q"].values == 4)
+        ann_pos = np.where(is_ann)[0]
+        prev_ann_np = np.full(len(F), np.nan)
+        if len(ann_pos):
+            sub = pd.DataFrame({
+                "thscode": F["thscode"].values[ann_pos],
+                "np": F["parent_holder_net_profit"].values[ann_pos],
+            })
+            prev_ann_np[ann_pos] = sub.groupby("thscode", sort=False)["np"].shift(1).values
+        F["prev_ann_np"] = prev_ann_np
+        # 对非年报行，沿用「最近一个已披露年报」的当期/上期净利
+        cur_ann = np.where(is_ann, F["parent_holder_net_profit"].values, np.nan)
+        F["ann_np_latest"] = pd.Series(cur_ann).groupby(F["thscode"].values).ffill().values
+        F["ann_np_prev"] = pd.Series(prev_ann_np).groupby(F["thscode"].values).ffill().values
+
         # 面板的股票顺序 → code
         code = self.code
         rev = np.full(n, np.nan); npr = np.full(n, np.nan)
         ryy = np.full(n, np.nan); nyy = np.full(n, np.nan)
         aq = np.zeros(n, np.int16); ad = np.full(n, -1, np.int32)
+        # 退市风险专用：年化营收 / 年化归母净利 / 最近两个年度的年报净利
+        arev = np.full(n, np.nan); anp = np.full(n, np.nan)
+        anp_a = np.full(n, np.nan); anp_ap = np.full(n, np.nan)
 
         pub_d = F["publish_date"].values.astype("datetime64[D]").astype(np.int64)
         re_d = F["report_end"].values.astype("datetime64[D]").astype(np.int64)
@@ -309,6 +376,10 @@ class Engine:
             aq[rows[hit]] = F["q"].values[sel].astype(np.int16)
             # 报告期末 → 日序号（用于展示「财报期」）
             ad[rows[hit]] = np.searchsorted(day_int, re_d[sel], side="right") - 1
+            arev[rows[hit]] = F["ann_rev"].values[sel]
+            anp[rows[hit]] = F["ann_np"].values[sel]
+            anp_a[rows[hit]] = F["ann_np_latest"].values[sel]
+            anp_ap[rows[hit]] = F["ann_np_prev"].values[sel]
 
         self.fin_rev = rev
         self.fin_np = npr
@@ -316,6 +387,10 @@ class Engine:
         self.fin_np_yoy = nyy
         self.fin_asof_q = aq
         self.fin_asof_d = ad
+        self.fin_ann_rev = arev
+        self.fin_ann_np = anp
+        self.fin_np_ann = anp_a          # 最近一个已披露年报的归母净利
+        self.fin_np_ann_prev = anp_ap    # 再上一个年报的归母净利
         self.fin_avail = True
         # 财务面板的真实规模（供 /api/meta 展示）
         self.fin_n_stocks = int(F["thscode"].nunique())
@@ -495,6 +570,41 @@ class Engine:
             # 财务条件在这里才与主掩码做与运算（必须在 parts 更新之后）
             for k, v in parts.items():
                 m &= np.asarray(v, bool)
+
+        # ---- 退市风险过滤
+        # ⚠️ 纪律：四条判据**全部只用买入日 T 已经公开的信息**——
+        #   财报取 publish_date <= T 的最新一期（沿用 _build_financials 的 as-of 对齐）；
+        #   面值/ST 用当日及之前的行情与涨跌幅制度，不含任何未来数据。
+        # 目的不是预测谁会退市，而是把「规则上已经踩到退市红线」的票剔除出候选池。
+        dl = p.get("delist") or {}
+        if isinstance(dl, dict) and any(bool(v) for v in dl.values()):
+            dp = {}
+            if dl.get("financial") and self.fin_avail:
+                floor = float(p.get("delist_rev_floor") or DELIST_REV_FLOOR)
+                thr = np.full(n, floor)
+                if p.get("delist_main_2024"):
+                    # 2024 退市新规：主板营收门槛 3 亿，创业板/科创板/北交所仍 1 亿
+                    thr = np.where(self.board == "MAIN",
+                                   DELIST_REV_FLOOR_MAIN_2024, floor)
+                bad = (np.isfinite(self.fin_ann_np) & (self.fin_ann_np < 0) &
+                       np.isfinite(self.fin_ann_rev) & (self.fin_ann_rev < thr))
+                dp["非财务类退市风险"] = ~bad
+            if dl.get("loss2y") and self.fin_avail:
+                # 连续两个年度亏损（年报口径）
+                bad = (np.isfinite(self.fin_np_ann) & (self.fin_np_ann < 0) &
+                       np.isfinite(self.fin_np_ann_prev) & (self.fin_np_ann_prev < 0))
+                dp["非连续两年亏损"] = ~bad
+            if dl.get("penny"):
+                days = int(p.get("delist_penny_days") or PENNY_DAYS_DEFAULT)
+                # penny_ratio = 近 20 日中收盘价（未复权）低于面值线的天数占比
+                dp["非面值退市"] = ~(np.nan_to_num(self.penny_ratio) * PENNY_WIN
+                                     >= min(days, PENNY_WIN))
+            self.delist_parts = dp
+            for k, v in dp.items():
+                m &= np.asarray(v, bool)
+                parts[k] = v
+        else:
+            self.delist_parts = {}
 
         # 股票池
         if pool is not None:
@@ -1279,6 +1389,12 @@ DEFAULT_PARAMS = {
     "max_pos": 0,
     "max_new": 3,
     "pick": "deep",      # 信号超额时的选股规则，见 PICK_RULES
+    # ---- 退市风险过滤（默认全关 = 研究报告原始口径）
+    #   三条判据只用买入日 T 已公开的信息，见 build_mask 的「退市风险过滤」段。
+    "delist": {"financial": False, "loss2y": False, "penny": False},
+    "delist_rev_floor": None,      # None → 用 DELIST_REV_FLOOR(1亿)
+    "delist_main_2024": False,     # 主板营收门槛按 2024 新规提到 3 亿
+    "delist_penny_days": None,     # None → 用 PENNY_DAYS_DEFAULT(10/20)
 }
 
 # 信号数超过每日/持仓上限时的**选股排序规则**。

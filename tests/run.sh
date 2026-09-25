@@ -4,23 +4,34 @@
 # 用法：
 #   bash tests/run.sh              # 跑全部 jsdom 套件（离线，用 fixtures）
 #   bash tests/run.sh cap          # 只跑仓位约束
+#   bash tests/run.sh delist       # 只跑退市风险过滤
 #   bash tests/run.sh cdp          # 跑真实 Chrome 端到端（需先启动 app/server.py）
 #
-# ⚠️ 为什么逐条串行跑：4 套 jsdom 同时驻留内存会触发 OOM（SIGTERM 137）。
+# ⚠️ 为什么逐条串行跑：5 套 jsdom 同时驻留内存会触发 OOM（SIGTERM 137）。
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
-NODE="${NODE:-/Users/chenqifeng/.workbuddy-ai/binaries/node/versions/22.22.2-2/bin/node}"
-command -v "$NODE" >/dev/null 2>&1 || NODE=node
+NODE="${NODE:-}"
+if [ -z "$NODE" ] || ! command -v "$NODE" >/dev/null 2>&1; then
+  # Windows：优先用 WorkBuddy 托管的 node；macOS/Linux 退化到 PATH 里的 node
+  for cand in \
+    "/c/Users/50651/.workbuddy/binaries/node/versions/22.22.2-3/node.exe" \
+    "C:/Users/50651/.workbuddy/binaries/node/versions/22.22.2-3/node.exe" \
+    "$HOME/.workbuddy-ai/binaries/node/versions/22.22.2-2/bin/node"; do
+    if [ -x "$cand" ]; then NODE="$cand"; break; fi
+  done
+fi
+[ -n "$NODE" ] || NODE=node
 
 case "${1:-all}" in
   cap)    SETS="test_cap" ;;
   board)  SETS="test_board" ;;
   fin)    SETS="test_fin" ;;
+  delist) SETS="test_delist" ;;
   trades) SETS="test_trades" ;;
   cdp)    SETS="__CDP__" ;;
-  all)    SETS="test_cap test_board test_fin test_trades" ;;
-  *) echo "未知参数：$1（可选 cap|board|fin|trades|cdp|all）"; exit 2 ;;
+  all)    SETS="test_cap test_board test_fin test_delist test_trades" ;;
+  *) echo "未知参数：$1（可选 cap|board|fin|delist|trades|cdp|all）"; exit 2 ;;
 esac
 
 if [ "$SETS" = "__CDP__" ]; then

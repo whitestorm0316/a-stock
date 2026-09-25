@@ -25,9 +25,14 @@ URL = "http://127.0.0.1:" + (sys.argv[1] if len(sys.argv) > 1 else "8772")
 
 POOL = {"mode": "all", "boards": ["MAIN", "CHINEXT", "STAR"], "exchanges": ["SH", "SZ"]}
 
+# ⚠️ 本机若设了 HTTP_PROXY（企业/工具代理很常见），urllib 会把 127.0.0.1 的请求
+#    也送去代理，代理连不上本地服务就回 502 Bad Gateway —— 看起来像「服务没起」。
+#    这里给本机地址显式开直连。
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 
 def get(path):
-    with urllib.request.urlopen(URL + path, timeout=120) as r:
+    with _OPENER.open(URL + path, timeout=120) as r:
         return json.loads(r.read().decode())
 
 
@@ -35,7 +40,7 @@ def post(path, body, timeout=600):
     req = urllib.request.Request(
         URL + path, data=json.dumps(body).encode(),
         headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with _OPENER.open(req, timeout=timeout) as r:
         return json.loads(r.read().decode())
 
 
