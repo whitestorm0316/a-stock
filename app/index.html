@@ -90,6 +90,36 @@ input[type=range]{width:100%;accent-color:var(--blue)}
   border-radius:var(--rmd);padding:3px}
 .chks::-webkit-scrollbar{width:7px}
 .chks::-webkit-scrollbar-thumb{background:#d8dbe0;border-radius:4px}
+/* ---------- 行业两级树（门类 → 细分行业） ---------- */
+.indsearch{position:relative;margin-bottom:6px}
+.indsearch input{width:100%;padding:5px 24px 5px 8px;font-size:12px;font-family:inherit;
+  border:1px solid var(--line2);border-radius:var(--rmd);outline:none;color:var(--tx)}
+.indsearch input:focus{border-color:var(--blue)}
+.indsearch .clr{position:absolute;right:5px;top:50%;transform:translateY(-50%);
+  width:16px;height:16px;line-height:14px;text-align:center;border:0;padding:0;display:none;
+  background:#e6e8ec;color:var(--tx2);border-radius:50%;font-size:12px;cursor:pointer}
+.indsearch.on .clr{display:block}
+.igt{border-bottom:1px solid #f0f1f4}
+.igt:last-child{border-bottom:0}
+.igh{display:flex;align-items:center;gap:6px;padding:4px 6px;cursor:pointer;
+  border-radius:6px;user-select:none}
+.igh:hover{background:#f7f8fa}
+.igc{margin:0;accent-color:var(--blue);flex:0 0 auto;cursor:pointer}
+.igcode{flex:0 0 13px;text-align:center;font-size:10.5px;font-weight:700;color:var(--blue);
+  background:var(--blue2);border-radius:4px;padding:0 2px;line-height:15px}
+.ignm{flex:1;font-size:12.5px;color:var(--tx);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.igh.some .ignm{color:var(--tx);font-weight:600}
+.igcnt{font-size:10.5px;color:var(--tx3);white-space:nowrap}
+.igarrow{flex:0 0 auto;width:10px;font-size:9px;color:var(--tx3);transition:transform .15s}
+.igt.indopen .igarrow{transform:rotate(90deg)}
+.igb{display:none;padding:1px 0 5px 19px}
+.igt.indopen .igb{display:block}
+.igb .chk{padding:3px 6px}
+.iga{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 25px;opacity:.55;cursor:help}
+.iga .igcode{background:#eef0f3;color:var(--tx3)}
+.iga .ignm{color:var(--tx3)}
+.igmark{font-size:11.5px;color:var(--tx3)}
 .poolcls{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
 .poolcls button{font-size:11px;padding:3px 8px;border:1px solid var(--line2);background:#fff;
   border-radius:12px;cursor:pointer;color:var(--tx2);font-family:inherit}
@@ -503,8 +533,17 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
         <div class="poolcls" data-page-node-id="jvzZUcct8vzSICXZyXNl0b">
           <button data-act="allind" data-page-node-id="Ufgwc08VtKc5wRfs68lwoK">全选</button>
           <button data-act="noneind" data-page-node-id="Bqb5GRYUKhDtVIW7CKfzC3">清空</button>
+          <button data-act="expandind" data-page-node-id="Crd6Ih3nFwGkBpYqVe2s8A">展开全部</button>
         </div>
-        <div class="chks" id="inds" style="max-height:190px" data-page-node-id="o9ayDASEqsThnizZqZhQHM"></div>
+        <div class="indsearch" id="indsearch" data-page-node-id="Dse7Ji4oGxHlCqZrWf3t9B">
+          <input type="text" id="ind_q" placeholder="搜索细分行业：半导体 / 医药 / 银行 …" data-page-node-id="Etf8Kj5pHxImDrAsXg4u0C">
+          <button class="clr" id="ind_q_clr" title="清空搜索" data-page-node-id="Fug9Lk6qIyJnEsBtYh5v1D">×</button>
+        </div>
+        <div class="chks" id="inds" style="max-height:240px" data-page-node-id="o9ayDASEqsThnizZqZhQHM"></div>
+        <div class="cap" style="margin-top:7px" data-page-node-id="Gvh0Ml7rJzKoFuCuZi6w2E">
+          两级归类：<b>门类</b>（证监会 A~S）→ <b>细分行业</b>（同花顺 88 个）。
+          勾门类左侧的方框 = 选中该门类下全部细分行业；点门类名称行可展开/收起。
+        </div>
 
         <div style="font-size:12px;color:var(--tx2);margin:11px 0 5px" data-page-node-id="kqMKUgEeEqdm9IotkO7GeC">板块筛选
           <span style="color:var(--tx3);font-size:11px" id="bdcnt" data-page-node-id="UvC7YhIBogfhCYQRRilJiP">（0 选中 = 不限）</span></div>
@@ -1074,10 +1113,8 @@ async function init() {
     fillPickRules(d.pick_rules);
     applyParams(PRESETS[0].params);
     CFG = { ...DEFAULT_PARAMS, ...PRESETS[0].params };
-    // 行业
-    $('#inds').innerHTML = m.industries.map(n =>
-      `<label class="chk"><input type="checkbox" value="${n}">
-       <span><span class="t">${n}</span></span></label>`).join('');
+    // 行业（两级：门类 → 细分行业）
+    renderIndustryTree(m);
     // 板块数量徽章（来自 meta.board_counts，仅供提示；未连接时留空）
     const bc = m.board_counts || {};
     ['MAIN', 'CHINEXT', 'STAR', 'BJ'].forEach(k => {
@@ -1092,12 +1129,114 @@ async function init() {
   }
 }
 
+/* ---------------- 行业两级树（门类 → 细分行业） ----------------
+   数据源只有同花顺 88 个细分行业，没有门类字段。门类是后端按
+   app/industry_tree.json 做的**人工归并**（局限见该文件头部说明）。
+   前端只做展示与交互：请求体里仍然只发**细分行业名**的扁平清单
+   （pool.industries），所以后端过滤逻辑完全不用改。 */
+const ITREE = { groups: [], absent: [], unlisted: [], unlisted_n: null };
+const esc = s => String(s).replace(/[&<>"]/g,
+  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function _indGroupHTML(code, name, subs, nstock, title) {
+  return `
+    <div class="igt" data-code="${esc(code)}">
+      <div class="igh" data-code="${esc(code)}"${title ? ` title="${esc(title)}"` : ''}>
+        <input type="checkbox" class="igc" data-grp="${esc(code)}" title="全选本门类下的全部细分行业">
+        <span class="igcode">${esc(code)}</span>
+        <span class="ignm">${esc(name)}</span>
+        <span class="igcnt">${subs.length} 行业${nstock != null ? ' · ' + NUM(nstock) + ' 只' : ''}</span>
+        <span class="igarrow">▶</span>
+      </div>
+      <div class="igb" data-code="${esc(code)}">
+        ${subs.map(s => `<label class="chk"><input type="checkbox" class="ibx" value="${esc(s)}"><span><span class="t">${esc(s)}</span></span></label>`).join('')}
+      </div>
+    </div>`;
+}
+
+function renderIndustryTree(m) {
+  const box = $('#inds');
+  if (!box) return;
+  ITREE.groups = m.industry_tree || [];
+  ITREE.absent = m.industry_absent || [];
+  ITREE.unlisted = m.industry_unlisted || [];
+  ITREE.unlisted_n = m.industry_unlisted_n;
+
+  // 兜底：后端没给出树（配置缺失等）→ 退回原来的单层行业列表，功能不丢
+  if (!ITREE.groups.length) {
+    box.innerHTML = (m.industries || []).map(n =>
+      `<label class="chk"><input type="checkbox" class="ibx" value="${esc(n)}"><span><span class="t">${esc(n)}</span></span></label>`).join('');
+    syncGrpState(); syncIndCnt();
+    return;
+  }
+
+  let html = ITREE.groups.map(g => _indGroupHTML(g.code, g.name, g.subs, g.n_stock)).join('');
+  // 兜底分组：面板里有、配置却没归类的细分行业单独成组 —— 绝不静默丢弃。
+  // 实测必然包含「未知」（个股缺行业映射时的兜底值），这行能让缺失量级可见。
+  if (ITREE.unlisted.length) {
+    html += _indGroupHTML('—', '未归类', ITREE.unlisted, ITREE.unlisted_n,
+      '面板里有、但行业归类配置未覆盖的细分行业。含「未知」= 该股缺行业映射（数据源未收录）。');
+  }
+  // 数据源没有细分行业的门类：如实列出并说明原因（悬停看详情）
+  html += ITREE.absent.map(a => `
+    <div class="iga" title="${esc(a.why || '')}">
+      <span class="igcode">${esc(a.code)}</span>
+      <span class="ignm">${esc(a.name)}</span>
+      <span class="igmark">本数据源无细分行业</span>
+    </div>`).join('');
+
+  box.innerHTML = html;
+  syncGrpState();
+  syncIndCnt();
+}
+
+/* 门类复选框的三态：全选 / 半选(indeterminate) / 未选 */
+function syncGrpState() {
+  $$('#inds .igt').forEach(g => {
+    const head = g.querySelector('.igh'), gbox = g.querySelector('.igc');
+    const subs = [...g.querySelectorAll('.ibx')];
+    const on = subs.filter(i => i.checked).length;
+    if (gbox) {
+      gbox.checked = subs.length > 0 && on === subs.length;
+      gbox.indeterminate = on > 0 && on < subs.length;
+    }
+    if (head) head.classList.toggle('some', on > 0);
+  });
+}
+
+/* 行业搜索：过滤细分行业；命中则自动展开所属门类，清空后恢复原展开状态 */
+function filterInds(q) {
+  q = String(q || '').trim();
+  const wrap = $('#indsearch');
+  if (wrap) wrap.classList.toggle('on', !!q);
+  const needle = q.toLowerCase();
+  $$('#inds .igt').forEach(g => {
+    if (q && g.dataset.was === undefined) {      // 进入搜索前先记住展开状态
+      g.dataset.was = g.classList.contains('indopen') ? '1' : '0';
+    }
+    let hit = 0;
+    g.querySelectorAll('.ibx').forEach(i => {
+      const lab = i.closest('label');
+      const m = !q || lab.textContent.toLowerCase().indexOf(needle) >= 0;
+      lab.hidden = !m;
+      if (m) hit++;
+    });
+    g.hidden = hit === 0;
+    if (q) {
+      g.classList.add('indopen');
+    } else {
+      g.classList.toggle('indopen', g.dataset.was === '1');
+      delete g.dataset.was;
+    }
+  });
+}
+
 /* ---------------- 主流程 ---------------- */
 function currentPool() {
   const p = { ...POOL };
   p.mode = segv('#seg-pool') || 'all';
   p.codes_text = $('#pool_codes').value;
-  p.industries = $$('#inds input:checked').map(i => i.value);
+  p.industries = $$('#inds input.ibx:checked').map(i => i.value);
   p.boards = $$('#seg-board button.on').map(b => b.dataset.v);
   p.exchanges = $$('#seg-ex button.on').map(b => b.dataset.v);
   return p;
@@ -2277,15 +2416,47 @@ function fillPickRules(rules) {
   ).join('');
 }
 function syncIndCnt() {
-  const n = $$('#inds input:checked').length;
-  $('#indcnt').textContent = n ? `（选中 ${n} 个）` : '（0 选中 = 不限）';
+  const n = $$('#inds input.ibx:checked').length;
+  const el = $('#indcnt');
+  if (el) el.textContent = n ? `（选中 ${n} 个）` : '（0 选中 = 不限）';
 }
 function syncBdCnt() {
   const n = $$('#seg-board button.on').length;
   $('#bdcnt').textContent = n ? `（选中 ${n} 个）` : '（0 选中 = 不限）';
 }
-$$('#inds input').forEach(i => i.addEventListener('change', syncIndCnt));
-/* ⚠️ 这里挂的是所有 .poolcls 按钮（行业 全选/清空 与 板块 全选/清空 共用样式），
+/* 行业树的事件委托。
+   ⚠️ 不能像原来那样在解析期用 $$('#inds input') 逐个挂监听：那些复选框是 init()
+   异步渲染出来的，解析期 #inds 还是空的 → 一个监听都挂不上，
+   表现为「单独勾一个行业时计数不更新」。委托到容器上就没这个问题。 */
+const INDS = $('#inds');
+if (INDS) {
+  INDS.addEventListener('change', e => {
+    const t = e.target;
+    if (t.classList.contains('ibx')) {            // 细分行业
+      syncGrpState(); syncIndCnt();
+    } else if (t.classList.contains('igc')) {     // 门类 = 全选/全不选本组
+      const g = t.closest('.igt');
+      if (g) g.querySelectorAll('.ibx').forEach(i => { i.checked = t.checked; });
+      syncGrpState(); syncIndCnt();
+    }
+  });
+  // 点门类名称行 = 展开/收起（点复选框本身不触发，否则会和勾选打架）
+  INDS.addEventListener('click', e => {
+    if (e.target.tagName === 'INPUT') return;
+    const head = e.target.closest('.igh');
+    if (head) head.closest('.igt').classList.toggle('indopen');
+  });
+}
+/* 行业搜索框 */
+const IND_Q = $('#ind_q');
+if (IND_Q) {
+  IND_Q.addEventListener('input', () => filterInds(IND_Q.value));
+  const clr = $('#ind_q_clr');
+  if (clr) clr.addEventListener('click', () => {
+    IND_Q.value = ''; filterInds(''); IND_Q.focus();
+  });
+}
+/* ⚠️ 这里挂的是所有 .poolcls 按钮（行业 全选/清空/展开 与 板块 全选/清空 共用样式），
    必须按 data-act 分流，否则板块按钮会去勾行业复选框。 */
 $$('.poolcls button').forEach(b => b.addEventListener('click', () => {
   const act = b.dataset.act;
@@ -2295,8 +2466,16 @@ $$('.poolcls button').forEach(b => b.addEventListener('click', () => {
     syncBdCnt();
     return;
   }
+  if (act === 'expandind') {
+    // 有任意一组是收起的就全展开，否则全收起
+    const all = $$('#inds .igt');
+    const expand = !all.every(g => g.classList.contains('indopen'));
+    all.forEach(g => g.classList.toggle('indopen', expand));
+    return;
+  }
   const on = act === 'allind';
-  $$('#inds input').forEach(i => i.checked = on);
+  $$('#inds input.ibx').forEach(i => i.checked = on);
+  syncGrpState();
   syncIndCnt();
 }));
 /* 板块是多选：点击即切换，不是单选 */
@@ -2336,7 +2515,9 @@ $('#reset').addEventListener('click', () => {
   $('#presetdesc').textContent = PRESETS[0].desc;
   POOL = { mode: 'all', codes_text: '', industries: [], boards: ['MAIN', 'CHINEXT', 'STAR'], exchanges: ['SH', 'SZ'] };
   $('#pool_codes').value = '';
-  $$('#inds input').forEach(i => i.checked = false);
+  $$('#inds input.ibx').forEach(i => i.checked = false);
+  if (IND_Q) { IND_Q.value = ''; filterInds(''); }
+  syncGrpState();
   syncIndCnt();
   // 板块恢复默认：主板 + 创业板 + 科创板（北交所不选）
   $$('#seg-board button').forEach(b =>

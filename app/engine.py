@@ -47,6 +47,67 @@ DELIST_REV_FLOOR = 1e8     # 默认营收阈值（元）
 DELIST_REV_FLOOR_MAIN_2024 = 3e8   # 2024 新规主板阈值（元）
 
 
+# ---- 行业两级归类（同花顺细分行业 → 证监会门类）
+#  数据源只有同花顺行业指数(881xxx.TI)的 88 个细分行业，没有门类字段，
+#  所以门类这一层是**人工归并**，配置在 app/industry_tree.json（该文件头部写明了局限）。
+#  用 scripts/check_industry_tree.py 校验覆盖率，避免配置漂移导致行业静默消失。
+TREE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "industry_tree.json")
+
+
+def industry_tree(industries, ind_last=None):
+    """把扁平的细分行业清单整理成「门类 → 细分行业」两级结构。
+
+    参数
+      industries  面板里实际存在的细分行业（扁平清单，来自 Engine.industries）
+      ind_last    最新交易日每只股票的细分行业数组（用于统计各门类股票数，可省）
+
+    返回 (groups, absent, unlisted, unlisted_n)
+      groups   [{code, name, subs, n_sub, n_stock, notes}, ...]
+               只保留 subs 非空的门类；subs 已按面板实际情况过滤
+      absent   [{code, name, why}, ...] 本数据源无细分行业的门类（界面要如实说明）
+      unlisted 面板里有、但配置未归类的细分行业 —— 兜底分组的依据，
+               **绝不能静默丢弃**（配置漂移时用户会莫名其妙选不到某些行业）。
+               实测面板里必然有「未知」（个股缺行业映射时的兜底值），属正常。
+      unlisted_n  unlisted 在最新交易日的股票数合计（供界面显示量级）
+
+    配置读不到时退化：全部行业进 unlisted，前端仍按单层列表渲染。
+    """
+    have = set(industries)
+    try:
+        with open(TREE_PATH, encoding="utf-8") as f:
+            cfg = json.load(f)
+    except Exception as e:  # noqa: BLE001
+        print(f"[engine] 行业归类配置读取失败（{e}），退化为单层行业列表")
+        return [], [], sorted(have), 0
+
+    # 各细分行业在最新交易日的股票数（用于门类计数）
+    n_of = {}
+    if ind_last is not None:
+        names, counts = np.unique(np.asarray(ind_last, dtype=str),
+                                  return_counts=True)
+        n_of = dict(zip(names.tolist(), counts.tolist()))
+
+    groups = []
+    for g in cfg.get("groups") or []:
+        # 只保留面板里真实存在的细分行业（配置可能领先/落后于数据）
+        subs = [s for s in (g.get("subs") or []) if s in have]
+        if not subs:
+            continue
+        n_stock = sum(n_of.get(s, 0) for s in subs) if ind_last is not None else None
+        groups.append(dict(code=g.get("code"), name=g.get("name"), subs=subs,
+                           n_sub=len(subs), n_stock=n_stock,
+                           notes=g.get("notes") or []))
+
+    claimed = {s for g in groups for s in g["subs"]}
+    unlisted = sorted(have - claimed)
+    unlisted_n = sum(n_of.get(s, 0) for s in unlisted)
+
+    absent = [dict(code=a.get("code"), name=a.get("name"), why=a.get("why"))
+              for a in (cfg.get("absent") or [])]
+    return groups, absent, unlisted, unlisted_n
+
+
 # ================================================================ 面板加载
 class Engine:
     def __init__(self):
@@ -1350,6 +1411,9 @@ class Engine:
         stocks.sort(key=lambda x: x["code"])
         # 各板块股票数（供前端提示）
         _bc = {b: int((self.board == b).sum()) for b in self.boards}
+        # 行业两级归类（门类 → 细分行业），按最新交易日统计各门类股票数
+        _g, _absent, _unlisted, _unlisted_n = industry_tree(self.industries,
+                                                            self.ind_name[idx])
         return dict(
             n_rows=int(self.C["n"]), n_stocks=int(len(self.C["starts"])),
             n_days=int(self.nd),
@@ -1357,6 +1421,10 @@ class Engine:
             last_date=str(self.day_str[last]),
             build_ms=self.build_ms,
             industries=self.industries,
+            industry_tree=_g,
+            industry_absent=_absent,
+            industry_unlisted=_unlisted,
+            industry_unlisted_n=_unlisted_n,
             boards=self.boards,
             board_names={"MAIN": "主板", "CHINEXT": "创业板", "STAR": "科创板",
                          "BJ": "北交所"},
