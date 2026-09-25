@@ -5,10 +5,11 @@
 #   bash tests/run.sh              # 跑全部 jsdom 套件（离线，用 fixtures）
 #   bash tests/run.sh cap          # 只跑仓位约束
 #   bash tests/run.sh ind          # 只跑行业两级树
+#   bash tests/run.sh icon         # 只跑图标体系
 #   bash tests/run.sh delist       # 只跑退市风险过滤
 #   bash tests/run.sh cdp          # 跑真实 Chrome 端到端（需先启动 app/server.py）
 #
-# ⚠️ 为什么逐条串行跑：5 套 jsdom 同时驻留内存会触发 OOM（SIGTERM 137）。
+# ⚠️ 为什么逐条串行跑：7 套 jsdom 同时驻留内存会触发 OOM（SIGTERM 137）。
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
@@ -28,12 +29,13 @@ case "${1:-all}" in
   cap)    SETS="test_cap" ;;
   board)  SETS="test_board" ;;
   ind)    SETS="test_indtree" ;;
+  icon)   SETS="test_icon" ;;
   fin)    SETS="test_fin" ;;
   delist) SETS="test_delist" ;;
   trades) SETS="test_trades" ;;
   cdp)    SETS="__CDP__" ;;
-  all)    SETS="test_cap test_board test_indtree test_fin test_delist test_trades" ;;
-  *) echo "未知参数：$1（可选 cap|board|ind|fin|delist|trades|cdp|all）"; exit 2 ;;
+  all)    SETS="test_cap test_board test_indtree test_icon test_fin test_delist test_trades" ;;
+  *) echo "未知参数：$1（可选 cap|board|ind|icon|fin|delist|trades|cdp|all）"; exit 2 ;;
 esac
 
 if [ "$SETS" = "__CDP__" ]; then

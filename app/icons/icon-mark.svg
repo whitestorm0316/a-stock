@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="118 90 300 300" width="300" height="300" role="img" aria-label="A股超跌反转选股器">
+  <title>A股超跌反转选股器 · 无底字形</title>
+  <!-- 透明底版本：用于页面头部、README 徽标等有自己背景的场合。
+       viewBox 裁到字形紧邻范围，比 icon.svg 在同样显示尺寸下大一圈。 -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M154 152 L244 318" stroke="#2ea06a" stroke-width="42"/>
+    <path d="M244 318 L358 182" stroke="#e04a4a" stroke-width="42"/>
+  </g>
+  <g transform="translate(360,180) rotate(39.5)">
+    <path d="M-36 4 L0 -50 L36 4 Z" fill="#e04a4a" stroke="#e04a4a"
+          stroke-width="12" stroke-linejoin="round"/>
+  </g>
+</svg>

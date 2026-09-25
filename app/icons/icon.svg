@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="A股超跌反转选股器">
+  <title>概念 A · 反转钩</title>
+  <defs>
+    <linearGradient id="a-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#152238"/>
+      <stop offset="0.55" stop-color="#22406e"/>
+      <stop offset="1" stop-color="#3266ad"/>
+    </linearGradient>
+    <radialGradient id="a-glow" cx="0.22" cy="0.08" r="0.95">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="116" fill="url(#a-bg)"/>
+  <rect width="512" height="512" rx="116" fill="url(#a-glow)"/>
+  <!-- 细边：深色标签栏上也能与背景分离 -->
+  <rect x="3" y="3" width="506" height="506" rx="114" fill="none"
+        stroke="#ffffff" stroke-opacity="0.16" stroke-width="6"/>
+
+  <!-- 因子刻度：大尺寸下的纹理，小尺寸自然消失 -->
+  <g stroke="#ffffff" stroke-opacity="0.09" stroke-width="5" stroke-linecap="round">
+    <line x1="104" y1="188" x2="408" y2="188"/>
+    <line x1="104" y1="256" x2="408" y2="256"/>
+    <line x1="104" y1="324" x2="408" y2="324"/>
+  </g>
+
+  <!-- 超跌（绿）→ 反转向上（红） -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M154 152 L244 318" stroke="#2ea06a" stroke-width="42"/>
+    <path d="M244 318 L358 182" stroke="#e04a4a" stroke-width="42"/>
+  </g>
+  <g transform="translate(360,180) rotate(39.5)">
+    <path d="M-36 4 L0 -50 L36 4 Z" fill="#e04a4a" stroke="#e04a4a"
+          stroke-width="12" stroke-linejoin="round"/>
+  </g>
+</svg>

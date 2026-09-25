@@ -42,6 +42,22 @@ import numpy as np  # noqa: E402
 APP = os.path.dirname(os.path.abspath(__file__))
 _html_cache = {}
 
+# /static/ 的扩展名 → Content-Type 映射。
+# 容器（BaseHTTPRequestHandler）默认靠 extensions_map 猜类型，但对 .svg /
+# .webmanifest 会退回 application/octet-stream —— 浏览器拿到 octet-stream 的
+# favicon 会直接拒绝渲染，所以这里显式指定。
+_STATIC_CTYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".webmanifest": "application/manifest+json; charset=utf-8",
+    ".svg": "image/svg+xml; charset=utf-8",
+    ".png": "image/png",
+    ".ico": "image/x-icon",
+    ".woff2": "font/woff2",
+}
+
 print("=" * 72)
 print("  正在加载面板并预计算（约 60~90 秒，请稍候）...")
 print("=" * 72, flush=True)
@@ -642,7 +658,10 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------ 静态
     def _serve_file(self, name, ctype):
-        path = os.path.join(APP, name)
+        path = os.path.realpath(os.path.join(APP, name))
+        # 目录穿越防护：/static/..%2f..%2fxxx 这类请求必须挡在 APP 之外
+        if not path.startswith(os.path.realpath(APP) + os.sep):
+            return self._json({"error": "forbidden"}, 403)
         if not os.path.isfile(path):
             return self._json({"error": f"{name} not found"}, 404)
         key = (name, os.path.getmtime(path))
@@ -654,10 +673,8 @@ class Handler(BaseHTTPRequestHandler):
                 _html_cache[key] = f.read()
         body = _html_cache[key]
         if ctype is None:
-            ctype = ("text/html; charset=utf-8" if name.endswith(".html")
-                     else "application/javascript; charset=utf-8" if name.endswith(".js")
-                     else "text/css; charset=utf-8" if name.endswith(".css")
-                     else "application/octet-stream")
+            ctype = _STATIC_CTYPES.get(os.path.splitext(name)[1].lower(),
+                                       "application/octet-stream")
         self._send(200, body, ctype)
 
 

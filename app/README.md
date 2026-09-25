@@ -593,7 +593,7 @@ Q1−Q5 = **+1.58pp（t=9.01, p=2.07e-19）**，单调递增；
 
 ```bash
 bash tests/run.sh          # 全部 jsdom 套件（离线，用 fixtures 快照）
-bash tests/run.sh cap      # 只跑仓位约束（cap | board | ind | fin | delist | trades）
+bash tests/run.sh cap      # 只跑仓位约束（cap | board | ind | icon | fin | delist | trades）
 bash tests/run.sh cdp      # 真实 Chrome 端到端（需先启动 app/server.py）
 ```
 
@@ -601,7 +601,8 @@ bash tests/run.sh cdp      # 真实 Chrome 端到端（需先启动 app/server.p
 |---|---|---|
 | `test_cap.js` | ⑧ 仓位约束：口径切换 / 快捷预设 / 参数透传 / 双口径渲染 / 随机对照 | 50 |
 | `test_board.js` | ⑥ 板块筛选（多选语义、分区请求体、数量徽章） | 32 |
-| `test_indtree.js` | ⑥ 行业两级树（三态门类复选框、展开/搜索、**请求体只发细分行业**的契约） | 47 |
+| `test_indtree.js` | ⑥ 行业两级树（三态门类复选框、展开/搜索、**请求体只发细分行业**的契约） | 48 |
+| `test_icon.js` | 图标体系（head 资源齐全、头部内联字形、**PNG 实际尺寸=文件名**、manifest 路径落地） | 30 |
 | `test_fin.js` | 财务筛选（动态对齐、列格式化、图表） | 23 |
 | `test_delist.js` | ⑨ 退市风险过滤（开关文案、参数单位换算、ST 开关已下线） | 29 |
 | `test_trades.js` | 交易明细（分页/排序/筛选/导出 + **容量口径**） | 85 |
@@ -629,7 +630,7 @@ node tests/shot_ui.js output/_shot/bottom.png A bottom # 收起全部、滚到�
    忘了刷新的话，新加的字段在快照里不存在，断言会误报失败。
    容量口径的那份是 `fixture_trades_cap.json`（前端按 `params.max_pos` 分流取不同快照）。
 
-2. **六套 jsdom 不要并行跑** —— 同时驻留内存会触发 OOM（`SIGTERM 137`）。
+2. **七套 jsdom 不要并行跑** —— 同时驻留内存会触发 OOM（`SIGTERM 137`）。
    `run.sh` 已做成逐条串行。
 
 3. **CDP 测试先等按钮可用**：前端 `init()` 会自动跑一次回测（约 14s），
@@ -669,6 +670,79 @@ node tests/shot_ui.js output/_shot/bottom.png A bottom # 收起全部、滚到�
 | K3BIG | K3 + 营收>10亿（剔除微盘） |
 | K3Q | K3 + 营收>10亿 + 归母同比>0（稳健） |
 
+## 图标
+
+浏览器标签页、手机主屏、PWA 独立窗口共用 `app/icons/` 一套，**没有构建步骤**：
+`icon.svg` 是手写的矢量源，PNG 由 `scripts/make_icons.py` 用 headless Chrome 光栅化。
+
+| 文件 | 用途 |
+|---|---|
+| `icons/icon.svg` | 主图标（512 视口）。**装了哪一套，改这一个文件就行** |
+| `icons/icon-mark.svg` | 无底字形，viewBox 裁到边缘。页面头部内联用的就是同一形状 |
+| `icons/icon-16/32/64.png` | 标签页兜底（Safari 对 SVG favicon 支持不稳） |
+| `icons/icon-180.png` | `apple-touch-icon`，iOS 加到主屏 |
+| `icons/icon-192/512.png` | PWA 清单用，512 同时声明为 `maskable` |
+| `icons/concept-a/b/c.svg` | 三个设计方向（见下），几何完全一致，可互换 |
+| `site.webmanifest` | PWA 清单：`display:standalone`、`theme_color` 同图标底色 |
+
+### 设计
+
+```
+   ╲                       绿色跌段（--dn #2ea06a）：超跌
+    ╲
+     ╲___
+         ╲╱  ← 反转点       深色圆角底（--blue #3266ad → 深蓝渐变）
+         ╱
+        ╱  ↗                红色涨段（--up #e04a4a）+ 箭头：反转向上
+```
+
+- **配色直接取自页面 `:root`**，不是另起一套。注意**红涨绿跌**是中国市场惯例，
+  别按欧美习惯反过来。
+- **只用图形不用文字**：中文字形在 16px 下必然糊掉。
+- 底部圆角 116/512（≈22.7%），接近 iOS 的 squircle 曲率；外加一道
+  `stroke-opacity=.16` 的白色细边，**深色标签栏上才不会糊成一团**。
+- 内容全部落在中心 80% 的圆形安全区内，`maskable` 裁切成圆形也不会切到图形。
+- 头部 h1 里的字形是**内联 SVG 而非 `<img>`** —— `index.html` 保持单文件可用，
+  直接用 `file://` 打开也不会缺图。
+
+### 三个候选方案
+
+| 方案 | 隐喻 | 小尺寸（16px）表现 |
+|---|---|---|
+| `concept-a` ★ **当前** | **反转钩**：绿段超跌 → 红段带箭头反转向上 | 最好，箭头在任何尺寸都读得出方向 |
+| `concept-b` | **阈值突破**：一排候选柱，只有最右一支越过虚线阈值 | 一般，虚线在 16px 下消失 |
+| `concept-c` | **A 字**：绿腿 + 红腿 + 白横杠组成「A」 | 好，「A」辨识度高，但语义偏品牌不偏功能 |
+
+换方案（三案几何一致，换完视觉体量不跳）：
+
+```bash
+cp app/icons/concept-c.svg app/icons/icon.svg
+python scripts/make_icons.py app/icons/icon.svg app/icons 16 32 64 180 192 512
+bash tests/run.sh icon          # 必须过
+```
+
+### 重新光栅化 / 改样式后人工核对
+
+```bash
+python scripts/make_icons.py app/icons/icon.svg app/icons 16 32 64 180 192 512
+python scripts/make_icons.py --sheet app/icons output/icon-sheet.png
+```
+
+**为什么用 Chrome 而不是 Python 库**：SVG 里有渐变、圆角、透明度，纯 Python 侧没有可靠
+渲染器（cairosvg 需要 cairo 原生库，Windows 上很折腾）。Chrome 本来就要跑前端测试，直接复用。
+
+⚠️ **`--force-device-scale-factor=1` 不能去掉**：一旦失效，512 的图会被渲成 1024 或 384，
+肉眼在浏览器里看不出来，但 iOS 主屏图标会糊。`tests/test_icon.js` 直接读 PNG 的 IHDR
+块比对文件名尺寸，就是守这条。
+
+### 服务端要为图标做的两件事
+
+1. **Content-Type**：`/static/` 原先把未知扩展名回 `application/octet-stream`，
+   而浏览器拿到 `octet-stream` 的 favicon 会**直接拒绝渲染**。已在 `server.py`
+   的 `_STATIC_CTYPES` 里显式声明 `svg / png / webmanifest / ico / woff2`。
+2. **目录穿越防护**：`/static/` 会拼接到磁盘路径，`/static/../server.py` 这类请求
+   本来能读到源码。`_serve_file()` 现在用 `realpath` 校验解析后的路径必须落在 `app/` 内。
+
 ## 架构
 ```
 app/
@@ -683,6 +757,12 @@ app/
 ├── index.html       单文件前端（ECharts + 原生 JS，无构建步骤）
 ├── industry_tree.json  ★ 行业两级归类配置（门类 → 同花顺细分行业的人工归并）
 │                        人工维护，头部写明局限；改完必跑 check_industry_tree.py
+├── icons/            ★ 图标（favicon / apple-touch / PWA）
+│                    · icon.svg         主图标（= 某个 concept-*.svg，装了哪套有测试守）
+│                    · icon-mark.svg    无底字形，页面头部内联的就是同一形状
+│                    · concept-a/b/c.svg 三个设计方向，几何一致、可一行命令互换
+│                    · icon-16/32/64/180/192/512.png  由 make_icons.py 光栅化
+├── site.webmanifest  PWA 清单（Android 加到主屏 / 独立窗口运行）
 ├── start.sh         启动脚本（macOS/Linux；委派到 scripts/ctl.py）
 └── README.md
 
@@ -692,6 +772,7 @@ scripts/
 │                           + nav_from_holds() 双口径净值
 │                           + capacity_stats() 容量诊断
 ├── ctl.py                  ★ 统一控制入口：start / stop / restart / update / status
+├── make_icons.py           SVG 图标光栅化为 PNG（headless Chrome，无额外依赖）
 ├── check_industry_tree.py  ★ 校验行业归类配置覆盖率（防配置漂移导致行业静默消失）
 ├── verify_delist.py        退市过滤判据的剔除量核对（直接走 Engine）
 ├── verify_delist_http.py   退市过滤的 HTTP 端到端核对（打真实服务）
@@ -703,7 +784,8 @@ tests/
 ├── run.sh                  统一入口（jsdom 串行 / CDP）
 ├── test_cap.js             ⑧ 仓位约束（50 项）
 ├── test_board.js           ⑥ 板块筛选（32 项）
-├── test_indtree.js         ⑥ 行业两级树（47 项）
+├── test_indtree.js         ⑥ 行业两级树（48 项）
+├── test_icon.js            图标体系（30 项）
 ├── test_fin.js             财务筛选（23 项）
 ├── test_delist.js          ⑨ 退市风险过滤（29 项）
 ├── test_trades.js          交易明细（85 项）

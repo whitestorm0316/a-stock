@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="A股超跌反转选股器">
+  <title>概念 B · 阈值突破</title>
+  <defs>
+    <linearGradient id="b-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#152238"/>
+      <stop offset="0.55" stop-color="#22406e"/>
+      <stop offset="1" stop-color="#3266ad"/>
+    </linearGradient>
+    <radialGradient id="b-glow" cx="0.22" cy="0.08" r="0.95">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="116" fill="url(#b-bg)"/>
+  <rect width="512" height="512" rx="116" fill="url(#b-glow)"/>
+  <rect x="3" y="3" width="506" height="506" rx="114" fill="none"
+        stroke="#ffffff" stroke-opacity="0.16" stroke-width="6"/>
+
+  <!-- 因子阈值线 -->
+  <line x1="96" y1="214" x2="416" y2="214" stroke="#eaf0fb" stroke-opacity="0.55"
+        stroke-width="8" stroke-linecap="round" stroke-dasharray="28 22"/>
+
+  <!-- 候选：只有最右一支越过阈值 -->
+  <g>
+    <rect x="108" y="320" width="44" height="84"  rx="12" fill="#ffffff" fill-opacity="0.28"/>
+    <rect x="173" y="296" width="44" height="108" rx="12" fill="#ffffff" fill-opacity="0.36"/>
+    <rect x="238" y="276" width="44" height="128" rx="12" fill="#ffffff" fill-opacity="0.44"/>
+    <rect x="303" y="252" width="44" height="152" rx="12" fill="#ffffff" fill-opacity="0.54"/>
+    <rect x="368" y="128" width="44" height="276" rx="14" fill="#e04a4a"/>
+  </g>
+</svg>
