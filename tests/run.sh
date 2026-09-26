@@ -8,9 +8,10 @@
 #   bash tests/run.sh icon         # 只跑图标体系
 #   bash tests/run.sh ladder       # 只跑建仓节奏（阶梯建仓）
 #   bash tests/run.sh delist       # 只跑退市风险过滤
+#   bash tests/run.sh presets      # 只跑市值区间 + 我的方案
 #   bash tests/run.sh cdp          # 跑真实 Chrome 端到端（需先启动 app/server.py）
 #
-# ⚠️ 为什么逐条串行跑：8 套 jsdom 同时驻留内存会触发 OOM（SIGTERM 137）。
+# ⚠️ 为什么逐条串行跑：多套 jsdom 同时驻留内存会触发 OOM（SIGTERM 137）。
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
@@ -35,9 +36,10 @@ case "${1:-all}" in
   delist) SETS="test_delist" ;;
   ladder) SETS="test_ladder" ;;
   trades) SETS="test_trades" ;;
+  presets) SETS="test_presets" ;;
   cdp)    SETS="__CDP__" ;;
-  all)    SETS="test_cap test_board test_indtree test_icon test_ladder test_fin test_delist test_trades" ;;
-  *) echo "未知参数：$1（可选 cap|board|ind|icon|ladder|fin|delist|trades|cdp|all）"; exit 2 ;;
+  all)    SETS="test_cap test_board test_indtree test_icon test_ladder test_fin test_delist test_trades test_presets" ;;
+  *) echo "未知参数：$1（可选 cap|board|ind|icon|ladder|fin|delist|trades|presets|cdp|all）"; exit 2 ;;
 esac
 
 if [ "$SETS" = "__CDP__" ]; then

@@ -475,7 +475,9 @@ class Engine:
           px_ma120_min/max  : 距MA120 分位区间
           ret20_min/max     : ret20 分位区间
           ret60_min/max     : ret60 分位区间
-          size_max          : 市值分组上界（0~9），2 = 最小30%
+          size_min/size_max : 市值分位区间（序号 0~9，0 = 最小10%，9 = 最大10%）
+                              如 [0,1] = 最小10%~20%、[0,2] = 最小30%、[2,9] = 剔除最小20%
+                              （size_min 缺省 0；只给 size_max 等价于旧的「市值上限」口径）
           mkt_state         : "any" | "bear" | "bull"   市场净值 vs MA60
           mkt_hv            : "any" | "high" | "low"   市场HV20 vs 中位
           breadth_max/min   : Breadth 区间
@@ -517,10 +519,15 @@ class Engine:
                 np.isfinite(B["ret40"]) & np.isfinite(B["ret60"]) & np.isfinite(B["px_ma60"]) &
                 ((B["ret40"] == 1) | (B["ret60"] == 1) | (B["px_ma60"] == 1)))
 
-        # 市值
-        smax = p.get("size_max")
-        if smax is not None and smax < 9:
-            parts[f"市值≤D{smax+1}"] = np.isfinite(self.size_grp) & (self.size_grp <= smax)
+        # 市值区间：size_min / size_max 都是「分位序号」0~9（0 = 最小10%）
+        #   · 只给 size_max      → 上界筛选（旧口径，向后兼容）
+        #   · size_min > 0       → 同时卡下界，可选「10%~20%」这种区间
+        #   ⚠️ 必须用 `is not None` 判断：0 是合法取值但为假值
+        smin, smax = norm_size_band(p.get("size_min"), p.get("size_max"))
+        if smin > 0 or smax < 9:
+            parts[size_band_label(smin, smax)] = (
+                np.isfinite(self.size_grp) &
+                (self.size_grp >= smin) & (self.size_grp <= smax))
 
         # 市场状态
         ms = p.get("mkt_state", "any")
@@ -1578,10 +1585,56 @@ def parse_ladder(x):
     return cnt
 
 
+# ================================================================ 市值区间
+SIZE_N = 10          # 市值分位共 10 档（每档 10%），序号 0..9，0 = 最小
+SIZE_PCT = ["10%", "20%", "30%", "40%", "50%",
+            "60%", "70%", "80%", "90%", "100%"]
+
+
+def norm_size_band(smin, smax):
+    """把 (下限, 上限) 规范化成两个合法序号，并保证 `smin <= smax`。
+
+    · 缺省：下限 0（最小10%），上限 9（全部）—— 只给上限时等价于旧口径
+    · 越界值夹到 [0, 9]；非数字 → 用缺省
+    · 传反了（下限 > 上限）自动交换，而不是返回空集
+      （用户在双滑块上把两个把手拖过头是常见操作，静默纠正比报错友好）
+    """
+    def _one(v, default):
+        if v is None or v == "":
+            return default
+        try:
+            n = int(round(float(v)))
+        except (TypeError, ValueError):
+            return default
+        return max(0, min(SIZE_N - 1, n))
+
+    a = _one(smin, 0)
+    b = _one(smax, SIZE_N - 1)
+    return (b, a) if a > b else (a, b)
+
+
+def size_band_label(smin, smax):
+    """市值区间的中文标签（条件名 / 寻优结果行都用它，保证口径一致）。"""
+    smin, smax = norm_size_band(smin, smax)
+    if smin <= 0 and smax >= SIZE_N - 1:
+        return "市值全部"
+    lo = f"D{smin + 1}"
+    hi = f"D{smax + 1}"
+    band = f"{SIZE_PCT[smin - 1]}~{SIZE_PCT[smax]}"     # D_a~D_b 覆盖的百分比跨度
+    if smin <= 0:
+        return f"市值≤{hi}（最小{SIZE_PCT[smax]}）"
+    if smin == smax:                                     # 单个分位，别写成 D2~D2
+        return f"市值{lo}（{band}）"
+    if smax >= SIZE_N - 1:
+        return f"市值≥{lo}（剔除最小{SIZE_PCT[smin - 1]}）"
+    return f"市值{lo}~{hi}（{band}）"
+
+
 # ================================================================ 默认参数（K3 最优）
 DEFAULT_PARAMS = {
     "px_ma60_min": 1, "px_ma60_max": 1,   # 距MA60 D1
-    "size_max": 2,                        # 最小 30%
+    "size_min": 0,                        # 市值区间下限（0 = 最小10%）
+    "size_max": 2,                        # 市值区间上限（2 = 最小30%）
     "mkt_state": "bear",                  # 市场净值 < MA60
     "mkt_hv": "any",
     "deep_any": False,

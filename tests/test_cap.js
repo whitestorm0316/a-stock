@@ -185,15 +185,21 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   ok(h.includes('已投资金口径'), '应含「已投资金口径」');
   ok(h.includes('账户资金口径'), '应含「账户资金口径」');
 
-  // 数值：cap_cagr = 0.3124 → 31.2%；cagr = 0.3539 → 35.4%
-  ok(h.includes('31.2'), `账户口径 CAGR 应出现 31.2%，片段: ${h.match(/账户资金口径[\s\S]{0,200}/)?.slice(0,110)}`);
-  ok(h.includes('35.4'), '已投资金口径 CAGR 应出现 35.4%');
-  ok(h.includes('787'), '实际建仓数 787 应出现');
-  ok(h.includes('99.2'), '丢弃率 99.2% 应出现');
-  ok(h.includes('8.6'), '平均持仓 8.6 应出现');
-  ok(h.includes('3.98') || h.includes('4.0'), 'z 值应出现');
-  ok(h.includes('100.0') || h.includes('100%'), '随机百分位 100% 应出现');
-  ok(h.includes('显著优于随机'), 'z=3.98 时应给出「显著优于随机」结论');
+  // 数值全部**从 fixture 反推期望值**，不写死 —— 面板一更新数据，
+  // cap_cagr / z 就会变，写死的断言每刷新一次 fixtures 就要手改一次。
+  const cap = F('backtest_cap').capacity;
+  const p1 = v => (v * 100).toFixed(1);
+  ok(h.includes(p1(cap.cap_cagr)),
+    `账户口径 CAGR 应出现 ${p1(cap.cap_cagr)}%，片段: ${h.match(/账户资金口径[\s\S]{0,200}/)?.slice(0,110)}`);
+  ok(h.includes(p1(cap.cagr)), `已投资金口径 CAGR 应出现 ${p1(cap.cagr)}%`);
+  ok(h.includes(String(cap.n_hold)), `实际建仓数 ${cap.n_hold} 应出现`);
+  ok(h.includes(p1(cap.drop_pct)), `丢弃率 ${p1(cap.drop_pct)}% 应出现`);
+  ok(h.includes(cap.avg_pos.toFixed(1)), `平均持仓 ${cap.avg_pos.toFixed(1)} 应出现`);
+  ok(h.includes(cap.z.toFixed(2)), `z 值 ${cap.z.toFixed(2)} 应出现`);
+  ok(h.includes(p1(cap.rand_pctile) + '%') || h.includes('100%'),
+    `随机百分位 ${p1(cap.rand_pctile)}% 应出现`);
+  ok(h.includes('显著优于随机'),
+    `z=${cap.z.toFixed(2)}（>2）时应给出「显著优于随机」结论`);
   ok(h.includes('最超跌优先'), '应显示选股规则名');
 
   // 逐年图带受限系列

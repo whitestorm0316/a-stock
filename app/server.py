@@ -9,11 +9,16 @@ server.py —— 「A股超跌反转」交互式选股器 本地服务
 接口：
   GET  /                    前端界面
   GET  /api/meta            元信息（交易日范围/行业/股票清单）
+  GET  /api/defaults        默认参数 + 内置预设 + 「我的方案」
   POST /api/scan            今日选股
   POST /api/backtest        策略回测
   POST /api/tune            参数寻优（简单网格）
   GET  /api/stock?code=xxx  单股透视
   POST /api/export          导出候选股 CSV
+  POST /api/presets/save    保存当前参数为自定义方案（同名覆盖）
+  POST /api/presets/delete  删除自定义方案
+
+「我的方案」落在 data/user_presets.json（跟着数据目录走，不丢在浏览器缓存里）。
 """
 import os
 import sys
@@ -35,7 +40,8 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 from _console import bootstrap, mark  # noqa: E402
 bootstrap()
 
-from engine import Engine, DEFAULT_PARAMS, PICK_RULES, LADDER_PRESETS, parse_ladder  # noqa: E402
+from engine import (Engine, DEFAULT_PARAMS, PICK_RULES, LADDER_PRESETS,  # noqa: E402
+                    parse_ladder, SIZE_N, SIZE_PCT, norm_size_band, size_band_label)
 
 import numpy as np  # noqa: E402
 
@@ -153,6 +159,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(dict(
                     defaults=DEFAULT_PARAMS,
                     presets=PRESETS,
+                    # 「我的方案」：用户在界面上保存的自定义参数
+                    user_presets=load_user_presets(),
+                    # 市值区间的合法范围（前端双滑块用，避免两端各写一份百分比表）
+                    size_bands=dict(n=SIZE_N, pct=SIZE_PCT),
                     # 容量约束：选股规则清单（供前端下拉）
                     pick_rules=[dict(id=k, name=v["name"], desc=v["desc"],
                                      default=(k == DEFAULT_PARAMS.get("pick")))
@@ -186,6 +196,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._tune(b)
             if p == "/api/export":
                 return self._export(b)
+            if p == "/api/presets/save":
+                return self._preset_save(b)
+            if p == "/api/presets/delete":
+                return self._preset_delete(b)
             return self._json({"error": "not found"}, 404)
         except Exception as e:
             import traceback
@@ -488,6 +502,8 @@ class Handler(BaseHTTPRequestHandler):
                         d["px_ma60_min"], d["px_ma60_max"] = v
                     elif k == "ret20":
                         d["ret20_min"], d["ret20_max"] = v
+                    elif k == "size_band":
+                        d["size_min"], d["size_max"] = v
                     else:
                         d[k] = v
                     nxt.append(d)
@@ -514,11 +530,10 @@ class Handler(BaseHTTPRequestHandler):
                 label.append(f"距MA60 D{a}~D{bb}")
             if p.get("ret20_min") or p.get("ret20_max"):
                 label.append(f"ret20 D{p.get('ret20_min')}~D{p.get('ret20_max')}")
-            ss = p.get("size_max")
-            if ss is not None and ss < 9:
-                label.append({0: "最小10%", 1: "最小20%", 2: "最小30%", 3: "最小40%",
-                              4: "最小50%", 6: "最小70%",
-                              9: "全部"}.get(int(ss), f"市值≤D{int(ss)+1}"))
+            # 市值区间：统一走 size_band_label，避免这里和 build_mask 的口径漂移
+            smin, smax = norm_size_band(p.get("size_min"), p.get("size_max"))
+            if smin > 0 or smax < SIZE_N - 1:
+                label.append(size_band_label(smin, smax).replace("市值", ""))
             ms = p.get("mkt_state")
             if ms == "bear":
                 label.append("熊市")
@@ -548,6 +563,47 @@ class Handler(BaseHTTPRequestHandler):
         rows.sort(key=lambda r: (-(r["sharpe"] or -9)))
         return self._json(dict(ms=int((time.time() - t0) * 1000),
                                n_combo=len(rows), rows=rows[:120]))
+
+    # ------------------------------------------------------------ 我的方案
+    def _preset_save(self, b):
+        """保存当前参数为自定义方案。
+
+        请求体： name（必填，同名即覆盖）、params（必填）、
+                 pool（可选，股票池：板块/行业/自定义代码/交易所）、desc（可选）
+        返回：   ok / id / name / presets（保存后的全量列表，前端直接重绘）
+
+        ⚠️ pool 必须单独接收 —— 它不在 params 白名单里，早期版本漏收，
+           导致整套「股票池」筛选存不下来。
+        ⚠️ 失败一律用 `ok:false + msg`，**不要**用 `error` 键：
+           前端的 api() 见到 error 就直接 throw，那样「名称为空」这种
+           可预期的表单错误会变成异常，前端拿不到干净的提示。
+        """
+        name = str(b.get("name") or "").strip()
+        if not name:
+            return self._json({"ok": False, "msg": "请先给这套参数起个名"}, 200)
+        if len(name) > PRESET_NAME_MAX:
+            return self._json(
+                {"ok": False, "msg": f"名称最长 {PRESET_NAME_MAX} 个字符"}, 200)
+        params = clean_params(b.get("params"))
+        if not params:
+            return self._json({"ok": False, "msg": "参数为空，无法保存"}, 200)
+        pool = clean_pool(b.get("pool"))
+        existed = any(x["name"] == name for x in load_user_presets())
+        hit, lst = upsert_user_preset(name, params, str(b.get("desc") or ""), pool)
+        return self._json({"ok": True, "id": hit["id"], "name": hit["name"],
+                           "overwrote": existed,
+                           "msg": (f"已覆盖同名方案「{name}」" if existed
+                                   else f"已保存方案「{name}」"),
+                           "presets": lst})
+
+    def _preset_delete(self, b):
+        pid = str(b.get("id") or "")
+        if not pid:
+            return self._json({"ok": False, "msg": "缺少 id"}, 200)
+        if not any(x["id"] == pid for x in load_user_presets()):
+            return self._json({"ok": False, "msg": "该方案不存在"}, 200)
+        lst = delete_user_preset(pid)
+        return self._json({"ok": True, "msg": "已删除", "presets": lst})
 
     def _export(self, b):
         # 两种导出：candidates（今日候选股） / trades（回测逐笔明细）
@@ -736,6 +792,184 @@ PRESETS = [
          desc="基本面双确认：有规模 + 利润改善。信号 7,406；CAGR 21.2% / MDD −46.4% / Sharpe 0.75",
          params=dict(DEFAULT_PARAMS, rev_min=1e9, np_yoy_min=0.0)),
 ]
+
+
+# ================================================================ 我的方案
+# 用户在前端调好参数后「保存为自定义方案」，落到 data/user_presets.json。
+#
+# ⚠️ 为什么不放 localStorage：这是本地服务，方案应该跟着**数据目录**走 ——
+#    换浏览器 / 清缓存不该丢，也应该能被脚本（make_fixtures / 回测复现）读到。
+# ⚠️ 何不用「名称当主键」：名称可以中文、含空格、随时改；用稳定的 U 编号做 id，
+#    名称只用于「同名即覆盖」的判定与展示。
+USER_PRESET_FILE = os.path.join(ROOT, "data", "user_presets.json")
+
+# 允许被保存的参数键（白名单）。
+# 只收 build_mask / capacity / plan_positions 认识的键，拒绝一切杂项，
+# 免得前端手滑把 UI 状态（比如当前 Tab）也存进方案里。
+PRESET_PARAM_KEYS = {
+    "px_ma60_min", "px_ma60_max", "px_ma120_min", "px_ma120_max",
+    "ret20_min", "ret20_max", "ret60_min", "ret60_max", "deep_any",
+    "size_min", "size_max",
+    "mkt_state", "mkt_hv", "breadth_min", "breadth_max",
+    "rs_sz_min", "rs_sz_max", "hv_min", "hv_max", "rvol_min", "rvol_max",
+    "confirm", "hold",
+    "max_pos", "max_new", "pick", "cap_ladder",
+    "rev_min", "rev_max", "rev_yoy_min", "rev_yoy_max",
+    "np_min", "np_max", "np_yoy_min", "np_yoy_max", "fin_period",
+    "delist", "delist_rev_floor", "delist_main_2024", "delist_penny_days",
+}
+
+# 「股票池」不在 params 里 —— 它走请求体独立的 pool 字段（build_pool 的 spec）。
+# ⚠️ 这里必须单列一份白名单：早期版本保存预设时只存了 params，
+#    于是**整个股票池组都没存下来**（板块 / 行业 / 自定义代码 / 交易所），
+#    表现为「保存后切走再切回来，板块筛选丢了」。
+POOL_KEYS = ("mode", "codes_text", "industries", "boards", "exchanges")
+POOL_MODES = ("all", "custom")
+POOL_CODES_MAX = 20000       # 代码清单可以很长，不能用 _jsonable 的 400 字符限制
+POOL_LIST_MAX = 500          # 行业树细分条目数上限（面板约 100+，留足余量）
+
+PRESET_NAME_MAX = 40
+
+
+def _jsonable(v, depth=0):
+    """递归判断值能否安全落盘（拒绝 NaN / 自定义对象 / 过深嵌套）。"""
+    if depth > 6:
+        return False
+    if v is None or isinstance(v, bool):
+        return True
+    if isinstance(v, str):
+        return len(v) <= 400
+    if isinstance(v, (int, float)):
+        return not (isinstance(v, float) and (v != v or v in (float("inf"), float("-inf"))))
+    if isinstance(v, (list, tuple)):
+        return len(v) <= 200 and all(_jsonable(x, depth + 1) for x in v)
+    if isinstance(v, dict):
+        return len(v) <= 60 and all(
+            isinstance(k, str) and _jsonable(x, depth + 1) for k, x in v.items())
+    return False
+
+
+def clean_params(raw):
+    """把前端提交的参数字典洗成可安全保存/复用的子集。"""
+    if not isinstance(raw, dict):
+        return None
+    out = {}
+    for k, v in raw.items():
+        if k not in PRESET_PARAM_KEYS or not _jsonable(v):
+            continue
+        out[k] = list(v) if isinstance(v, tuple) else v
+    return out or None
+
+
+def clean_pool(raw):
+    """把前端提交的「股票池」洗成可安全保存/复用的子集。
+
+    和 clean_params 平行：股票池走的是请求体的 pool 字段，键名与 build_pool
+    的 spec 一致。返回 None 表示「这份方案没有记录股票池」—— 前端据此
+    **保持页面现有池子不动**（内置预设与早期方案都没有 pool，行为不变）。
+    """
+    if not isinstance(raw, dict):
+        return None
+    mode = str(raw.get("mode") or "all").strip().lower()
+    txt = raw.get("codes_text")
+
+    def _strlist(key, cap):
+        v = raw.get(key)
+        if not isinstance(v, (list, tuple)):
+            return []
+        seen, res = set(), []
+        for x in v:
+            s = str(x).strip()
+            if not s or s in seen:
+                continue
+            seen.add(s)
+            res.append(s[:80])
+            if len(res) >= cap:
+                break
+        return res
+
+    return {
+        "mode": mode if mode in POOL_MODES else "all",
+        "codes_text": txt[:POOL_CODES_MAX] if isinstance(txt, str) else "",
+        "industries": _strlist("industries", POOL_LIST_MAX),
+        # 板块 / 交易所取值固定为大写代码，统一归一，免得 'main' 存进去读不出来
+        "boards": [b.upper() for b in _strlist("boards", 8)],
+        "exchanges": [e.upper() for e in _strlist("exchanges", 8)],
+    }
+
+
+def load_user_presets():
+    try:
+        with open(USER_PRESET_FILE, "r", encoding="utf-8") as f:
+            d = json.load(f)
+    except FileNotFoundError:
+        return []
+    except Exception as e:
+        print(f"  {mark('⚠️', '[!]')} user_presets.json 读取失败（忽略）：{e}", flush=True)
+        return []
+    if not isinstance(d, list):
+        return []
+    # 读的时候也做一次清洗：文件可能被手改坏
+    out = []
+    for x in d:
+        if not isinstance(x, dict):
+            continue
+        nm = str(x.get("name") or "").strip()
+        ps = clean_params(x.get("params"))
+        if not nm or not ps:
+            continue
+        # 「pool」键缺失（内置预设形态 / 早期保存的方案）→ None，
+        # 前端据此保持页面现有股票池不动，行为与老版本一致。
+        po = clean_pool(x.get("pool")) if "pool" in x else None
+        out.append(dict(id=str(x.get("id") or f"U{len(out)+1}"),
+                        name=nm[:PRESET_NAME_MAX],
+                        desc=str(x.get("desc") or ""),
+                        saved_at=str(x.get("saved_at") or ""),
+                        params=ps, pool=po))
+    return out
+
+
+def save_user_presets(lst):
+    """原子写：先写 .tmp 再 os.replace，避免写到一半进程被杀导致文件半截。"""
+    os.makedirs(os.path.dirname(USER_PRESET_FILE), exist_ok=True)
+    tmp = USER_PRESET_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(lst, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, USER_PRESET_FILE)
+
+
+def upsert_user_preset(name, params, desc="", pool=None):
+    """同名覆盖（保留原 id），否则追加一个新 U 编号。返回 (记录, 全量列表)。"""
+    name = (name or "").strip()[:PRESET_NAME_MAX]
+    lst = load_user_presets()
+    hit = next((x for x in lst if x["name"] == name), None)
+    if hit is None:
+        used = {x["id"] for x in lst}
+        i = 1
+        while f"U{i}" in used:
+            i += 1
+        hit = dict(id=f"U{i}", name=name, desc=desc or "", saved_at="",
+                   params=params, pool=pool)
+        lst.append(hit)
+    else:
+        hit["params"] = params
+        # pool=None 表示「本次没提交股票池」（脚本直连 API 的形态）→ 保留原值；
+        # 前端永远会发一份完整 pool，所以想清空也清得掉。
+        if pool is not None:
+            hit["pool"] = pool
+        if desc:
+            hit["desc"] = desc
+    hit["saved_at"] = time.strftime("%Y-%m-%d %H:%M")
+    save_user_presets(lst)
+    return hit, lst
+
+
+def delete_user_preset(pid):
+    lst = load_user_presets()
+    rest = [x for x in lst if x["id"] != pid]
+    if len(rest) != len(lst):
+        save_user_presets(rest)
+    return rest
 
 
 def main():

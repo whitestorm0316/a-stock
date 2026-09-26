@@ -84,7 +84,7 @@ python scripts/ctl.py update --since 2026-09-01    # 回补某段区间
 | 条件 | 取值 |
 |---|---|
 | ① 超跌 | 距MA60 处于当日横截面 **D1**（最弱 10%） |
-| ② 市值 | **最小 30%**（size_grp ≤ 2） |
+| ② 市值 | **最小 30%**（`size_min=0, size_max=2`，即 `size_grp ≤ 2`） |
 | ③ 市场 | 全A等权净值 **< 其 MA60**（熊市） |
 | 持有 | **20 日**（T+1 开盘买 → T+21 开盘卖），成本 0.3% 双边 |
 
@@ -317,6 +317,40 @@ python scripts/check_industry_tree.py
 `size_grp` 是面板给的**分位序号**（0 = 最小 10%），不是十分位**档位编号**。
 早期版本直接渲染成 `D0`/`D2`，与旁边真正的档位列「距MA60 D1~D10」混淆，
 现统一显示为 `M1`~`M10`（M1 = 最小 10%，M10 = 最大 10%）。
+
+## 市值区间（左侧第 ② 组）
+
+界面上是**双把手滑块**，选的是「市值分位区间」，闭区间：
+
+| 滑块 | 含义 | 序号 |
+|---|---|---|
+| 下限 | 最小的第几档起 | 0 = 最小 10% |
+| 上限 | 最大的第几档止 | 9 = 最大 10% |
+
+| 想要的效果 | 下限 | 上限 | 请求参数 | 界面读数 |
+|---|---|---|---|---|
+| 只买最小 10% | 0 | 0 | `size_min=0, size_max=0` | 最小10% |
+| **只买 10%~20%** | 1 | 1 | `size_min=1, size_max=1` | 10%~20% |
+| 最小 30%（报告口径） | 0 | 2 | `size_min=0, size_max=2` | 最小30% |
+| 10%~30% | 1 | 2 | `size_min=1, size_max=2` | 10%~30% |
+| 剔除最小 20% | 2 | 9 | `size_min=2, size_max=9` | 剔除最小20% |
+| 不筛市值 | 0 | 9 | `size_min=0, size_max=9` | 全部 |
+
+> **两个把手可以重叠** —— 「只买 10%~20%」就是下限=上限=D2（一个分位的宽度正好是 10%）。
+> 拖过头会被**夹住**（不允许下限越过上限），不会产生空集。
+
+几个容易踩的点：
+
+1. **`size_min = 0` 是合法值也是"设置过"**。后端用 `is not None` 判断，
+   绝不能用 `if p.get("size_min")` —— 否则「最小 10%~20%」这种下限为 0 的区间会被整段吞掉。
+2. **向后兼容**：老方案/老请求只给 `size_max`（没有 `size_min`）时，下限按 0 处理，
+   语义与旧版「市值上限」完全一致（实测 `{size_max:2}` ≡ `{size_min:0, size_max:2}`）。
+3. **上限写反、越界、非数字**：`norm_size_band` 统一兜底 —— 写反自动交换、越界夹到
+   `[0,9]`、非数字按缺省。用户在双滑块上把两个把手拖过头是很常见的操作，
+   静默纠正比弹错误友好。
+4. 「全部」**不产生任何市值条件**（不筛选），条件徽标里也不会出现「市值」。
+5. 百分比口径：`M(N)` 覆盖 `(N-1)*10% ~ N*10%`，所以 `D2` = **10%~20%**。
+   条件名与寻优表的文案都由 `size_band_label()` 统一生成，避免两处各写一份而对不上。
 
 ## 财务筛选（动态 · 无前视偏差）
 
@@ -721,7 +755,8 @@ Q1−Q5 = **+1.58pp（t=9.01, p=2.07e-19）**，单调递增；
 
 ```bash
 bash tests/run.sh          # 全部 jsdom 套件（离线，用 fixtures 快照）
-bash tests/run.sh cap      # 只跑仓位约束（cap | board | ind | icon | fin | delist | trades）
+bash tests/run.sh cap      # 只跑仓位约束
+                           # （cap | board | ind | icon | ladder | fin | delist | trades | presets）
 bash tests/run.sh cdp      # 真实 Chrome 端到端（需先启动 app/server.py）
 ```
 
@@ -735,9 +770,11 @@ bash tests/run.sh cdp      # 真实 Chrome 端到端（需先启动 app/server.p
 | `test_delist.js` | ⑨ 退市风险过滤（开关文案、参数单位换算、ST 开关已下线） | 29 |
 | `test_ladder.js` | ⑧ 建仓节奏：预设/自定义/宽容解析、**满仓只数=序列之和**、同时持仓与每日买入双接管、快捷预设自动关闭阶梯、「不限仓位」必须发 null 的契约、诊断卡阶梯口径 | 53 |
 | `test_trades.js` | 交易明细（分页/排序/筛选/导出 + **容量口径** + 仓位列） | 87 |
+| `test_presets.js` | ② 市值区间（双滑块夹取、重叠选单档、快捷档位、`collect()` 带 size_min/size_max、徽标文案）+ 预设方案（分组渲染、保存/覆盖/删除、空名称不发请求、内置方案不可删）+ **股票池随方案存取**（pool 一起发、无 pool 不篡改、切回完整回填） | 72 |
 | `cdp_cap.js` | 真实 Chrome：交互→回测→双口径渲染 + ECharts 画布 + **明细容量口径** | 34 |
 | `shot_ui.js` | 人工视觉核对：真实 Chrome 打开页面、展开指定门类、截图（**不参与 CI**） | — |
 | `shot_ladder.js` | 人工视觉核对：截⑧「容量约束」整组并切到阶梯 `1/2/2/2/3`（**不参与 CI**） | — |
+| `shot_presets.js` | 人工视觉核对：截「预设方案」组、②「市值区间」组、③「板块」组（走真实接口存一份带 pool 的方案再截，结束即删；**不参与 CI**） | — |
 
 `shot_ui.js` 是给 CSS / 布局改动做人工核对用的 —— jsdom 能验 DOM 与事件，但**渲染不出布局**：
 
@@ -745,13 +782,15 @@ bash tests/run.sh cdp      # 真实 Chrome 端到端（需先启动 app/server.p
 node tests/shot_ui.js output/_shot/ind.png C          # 展开门类 C 后截图
 node tests/shot_ui.js output/_shot/bottom.png A bottom # 收起全部、滚到门类清单底部
 node tests/shot_ladder.js                              # 截⑧「容量约束」整组（阶梯模式）
+node tests/shot_presets.js                             # 截「预设方案」+②「市值区间」+③「板块」三组
+node tests/shot_presets.js output/_shot "10%~20%"      # 换档位（单档：两个把手重叠）
 ```
 
 **两层测试的分工**：jsdom 快、可离线、能覆盖 DOM 与事件逻辑，但**不渲染真实 ECharts**、
 也跑不了耗时几十秒的接口；CDP 层用真实浏览器补齐这两点（含真实画布尺寸、
 真实 `fetch`、真实长时间回测）。
 
-### 五个必须知道的注意点
+### 七个必须知道的注意点
 
 1. **fixtures 是快照，改了后端响应就要刷新**：
    ```bash
@@ -760,8 +799,12 @@ node tests/shot_ladder.js                              # 截⑧「容量约束�
    ```
    忘了刷新的话，新加的字段在快照里不存在，断言会误报失败。
    容量口径的那份是 `fixture_trades_cap.json`（前端按 `params.max_pos` 分流取不同快照）。
+   ⚠️ **刷新快照本身会暴露真 bug** —— 旧快照里缺失的键在新快照里变成显式 `null`，
+   「缺失」和「显式为 null」在前端走的分支完全不同（见第 6 条，本仓库踩过）。
+   顺带一条：**别在断言里写死涨跌数字**（`cap_cagr=31.2%` 之类），
+   面板一更新数据就全红；从 fixture 反推期望值（`(cap.cap_cagr*100).toFixed(1)`）才扛得住刷新。
 
-2. **七套 jsdom 不要并行跑** —— 同时驻留内存会触发 OOM（`SIGTERM 137`）。
+2. **多套 jsdom 不要并行跑** —— 同时驻留内存会触发 OOM（`SIGTERM 137`）。
    `run.sh` 已做成逐条串行。
 
 3. **CDP 测试先等按钮可用**：前端 `init()` 会自动跑一次回测（约 14s），
@@ -786,7 +829,42 @@ node tests/shot_ladder.js                              # 截⑧「容量约束�
    `bash app/start.sh 8772`；② 用 `nohup ... &` 起的进程会**随 shell 退出被回收**，
    要用后台任务方式启动。
 
+6. **`isFinite(null) === true`** —— 判空不要用它，用 `!= null`。
+   后端返回的「未设置」是 JSON `null`，而 `Number(null) === 0`，
+   于是 `if (isFinite(p.delist_rev_floor)) …` 会把输入框的默认值 **1 亿冲成 0**。
+   这个坑长期潜伏：旧 fixture 里这些键是**缺失**的（`isFinite(undefined) === false`，
+   恰好绕过），刷新 fixtures 让它们变成显式 `null` 之后才暴露。
+   同类写法在 `applyParams` 里一律改成 `p.x != null && isFinite(p.x)`。
+
+7. **快捷小按钮的 class 不能混用**：`$$('.capquick button')` 是⑧仓位约束的
+   快捷预设选择器（读 `data-cap`、绑点击、切高亮）。②市值区间的档位按钮
+   **必须用另一个 class**（`.chips`，样式共用），否则会被当成仓位预设遍历到 ——
+   `data-cap` 为 `undefined` → `Number(undefined)` = `NaN` → 两个输入框被清空
+   （CDP 里表现为「点了快捷预设但输入框空了」）。
+   这是 `test_ladder.js` 的「点快捷预设 → 同时持仓 = 10」抓出来的。
+
 ## 预设方案
+
+下拉分两组：**内置方案（报告已验证）** 与 **我的方案（本地保存）**。
+调好参数后，在名称框里起个名 → 点「保存」即可；名称重复就是**覆盖**（id 不变）。
+选中「我的方案」时「删除」按钮才可用，内置方案不可删。
+
+- 落盘位置：**`data/user_presets.json`**（跟着数据目录走，不是 localStorage）
+  → 换浏览器不丢，脚本（回测复现 / `make_fixtures`）也能直接读到。
+- 一份方案存**两样东西**，缺一个就不完整：
+  | 字段 | 内容 | 白名单 |
+  |---|---|---|
+  | `params` | 选股条件 / 财务门槛 / 仓位约束 / 退市过滤 | `PRESET_PARAM_KEYS` |
+  | `pool` | **股票池**：板块 / 行业 / 自定义代码 / 交易所 | `POOL_KEYS` |
+  ⚠️ 股票池**不在 params 里**（它走请求体独立的 `pool` 字段，对应 `build_pool` 的 spec）。
+  早期版本保存时只发了 `params`，于是**整套股票池都没存下来** ——
+  表现为「保存后切走再切回来，板块筛选没了」。现已改为两个都发、两个都存。
+- 前端手滑带上的 UI 状态（当前 Tab 之类）不会混进方案 —— 两张白名单都会拦。
+- 名称最长 40 字符；空名称 / 空参数会被拒绝并给出红字提示，且**不会发请求**。
+- 同一份方案既能手工点，也能在 `POST /api/backtest` 里手动传它的 `params` + `pool` 复现。
+- **向后兼容**：内置预设与早期保存的方案没有 `pool` 键 → 切过去时
+  **保持页面现有股票池不动**（不会被清空，也不会被强行复位）。
+
 | ID | 说明 |
 |---|---|
 | K3 ★ | 距MA60 D1 + 小市值30% + 熊市 — **默认，最优** |
@@ -800,6 +878,26 @@ node tests/shot_ladder.js                              # 截⑧「容量约束�
 | K3P | K3 + 归母净利润同比>0（盈利改善，回撤最小） |
 | K3BIG | K3 + 营收>10亿（剔除微盘） |
 | K3Q | K3 + 营收>10亿 + 归母同比>0（稳健） |
+
+> **「我的方案」的接口**：
+> ```bash
+> # 保存（同名即覆盖）
+> curl --noproxy '*' -s -X POST http://127.0.0.1:8770/api/presets/save \
+>   -H 'Content-Type: application/json' \
+>   -d '{"name":"我的小盘试验","params":{"px_ma60_min":1,"px_ma60_max":1,
+>        "size_min":1,"size_max":1,"mkt_state":"bear","hold":20},
+>        "pool":{"mode":"custom","codes_text":"000001.SZ, 600519",
+>                "industries":["半导体","中药"],
+>                "boards":["MAIN","BJ"],"exchanges":["SH"]}}'
+> # 删除
+> curl --noproxy '*' -s -X POST http://127.0.0.1:8770/api/presets/delete \
+>   -H 'Content-Type: application/json' -d '{"id":"U1"}'
+> ```
+> `pool` 可省略（脚本只想存参数时）—— 省略 = **保留原有股票池**，不会误清。
+> `boards` / `exchanges` 大小写不敏感（读回时统一大写），行业列表自动去重。
+> ⚠️ 失败时返回的是 `{"ok":false,"msg":"…"}`，**不是** `error` 键 ——
+> 前端的 `api()` 一见到 `error` 就抛异常，那样「名称为空」这种可预期的表单错误
+> 会变成未捕获异常，前端拿不到干净的提示。
 
 ## 图标
 

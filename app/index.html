@@ -81,6 +81,33 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .slide{display:flex;align-items:center;gap:7px;margin-bottom:9px}
 .slide .nm{font-size:12px;color:var(--tx2);flex:0 0 62px}
 .slide .vl{font-size:12px;font-family:var(--mono);color:var(--blue);flex:0 0 46px;text-align:right;font-weight:500}
+/* 双把手区间滑块（市值区间）—— 两个 range 叠在同一条轨道上，
+   轨道本身 pointer-events:none，只有把手可抓，否则上层 input 会吃掉下层的事件。 */
+.dual{position:relative;flex:1;height:22px;min-width:96px}
+.dual input[type=range]{position:absolute;left:0;top:0;width:100%;height:22px;margin:0;
+  background:transparent;accent-color:var(--blue);pointer-events:none;
+  -webkit-appearance:none;appearance:none}
+.dual input[type=range]:focus{outline:none}
+.dual input[type=range]::-webkit-slider-runnable-track{height:22px;background:transparent;border:0}
+.dual input[type=range]::-moz-range-track{height:22px;background:transparent;border:0}
+.dual input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;
+  width:14px;height:14px;border-radius:50%;background:var(--blue);border:2px solid #fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.32);cursor:grab;margin-top:4px}
+.dual input[type=range]::-moz-range-thumb{pointer-events:auto;width:12px;height:12px;
+  border-radius:50%;background:var(--blue);border:2px solid #fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.32);cursor:grab}
+.dtrack{position:absolute;left:7px;right:7px;top:50%;height:4px;margin-top:-2px;
+  background:var(--line2);border-radius:2px}
+.dfill{position:absolute;top:0;bottom:0;background:var(--blue);border-radius:2px}
+/* 「我的方案」保存行 */
+.saverow{display:flex;gap:6px;align-items:center;margin-top:8px}
+.saverow input[type=text]{flex:1;font-size:12px;padding:5px 8px;border:1px solid var(--line2);
+  border-radius:var(--rmd);outline:none;color:var(--tx);font-family:inherit;min-width:0}
+.saverow .btn{width:auto;flex:0 0 auto;padding:5px 11px;font-size:12px}
+.saverow .btn.danger{background:#fff;color:#c0392b;border:1px solid var(--line2)}
+.saverow .btn.danger:hover{background:#fdf0ee;border-color:#e0a49c}
+.saverow .btn:disabled{opacity:.45;cursor:not-allowed}
+#preset_stat{font-size:11px;color:var(--tx3);margin-top:6px;min-height:15px;line-height:1.4}
 .btn{width:100%;padding:9px;font-size:13px;font-weight:500;border:0;border-radius:var(--rmd);
   background:var(--blue);color:#fff;cursor:pointer;font-family:inherit;transition:.15s}
 .btn:hover{background:#2a5globals}
@@ -330,11 +357,15 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
 .ladbar em{font-size:9px;color:var(--tx3);font-style:normal;font-family:var(--mono)}
 .ladsum{font-size:11px;color:var(--tx3);line-height:1.6;margin-top:5px}
 .ladsum b{color:#a8622c;font-family:var(--mono);font-weight:600}
-.capquick{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
-.capquick button{font-size:10.5px;padding:4px 9px;border:1px solid var(--line2);
+/* 快捷档位小按钮：.capquick（⑧仓位约束）与 .chips（②市值区间）共用同一套外观。
+   ⚠️ 两者**必须是不同的 class** —— 代码里多处用 `$$('.capquick button')` 遍历
+   仓位快捷预设（读 data-cap / 高亮 / 绑定点击）。市值档位按钮若也挂 capquick，
+   就会被这些遍历当成仓位预设：`data-cap` 为 undefined → mp=NaN → 输入框被清空。 */
+.capquick,.chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.capquick button,.chips button{font-size:10.5px;padding:4px 9px;border:1px solid var(--line2);
   background:#fff;border-radius:11px;color:var(--tx2);cursor:pointer}
-.capquick button:hover{background:#eef4ff;border-color:var(--blue);color:var(--blue)}
-.capquick button.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.capquick button:hover,.chips button:hover{background:#eef4ff;border-color:var(--blue);color:var(--blue)}
+.capquick button.on,.chips button.on{background:var(--blue);border-color:var(--blue);color:#fff}
 /* 双口径对比卡 */
 .vs{display:grid;grid-template-columns:1fr 26px 1fr;gap:0;align-items:stretch;
   border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
@@ -390,10 +421,18 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
   <aside id="side" data-page-node-id="4ho6uBsDuzVRaOEamfqDVu">
 
     <div class="grp" data-page-node-id="pHoBzDSaLp1HW2dbvmbVKF">
-      <h2 data-page-node-id="4fZaCxp2xw1vZ2dPyhQBQv">预设方案 <span class="hint" data-page-node-id="78LV6VwcpE8DlvfPgjb3kr">报告已验证</span></h2>
+      <h2 data-page-node-id="4fZaCxp2xw1vZ2dPyhQBQv">预设方案 <span class="hint" data-page-node-id="78LV6VwcpE8DlvfPgjb3kr">报告已验证 · 可存自己的</span></h2>
       <div class="body" data-page-node-id="shVjJtFcNXbGkOp0PXUjxe">
         <select id="preset" data-page-node-id="LmGdx7ifXMZvJpBjIf7MNG"></select>
         <div class="desc" id="presetdesc" style="font-size:11.5px;color:var(--tx3);margin:7px 0 0;line-height:1.6" data-page-node-id="Q8PnrCXBiRjAxeKB1HZ4Ai"></div>
+        <div class="saverow" data-page-node-id="SvR0w1QpXl2Tb9YcNhKmEa">
+          <input type="text" id="preset_name" maxlength="40" placeholder="给当前这套参数起个名…"
+                 data-page-node-id="SvR0w1QpXl2Tb9YcNhKmEb">
+          <button class="btn" id="preset_save" data-page-node-id="SvR0w1QpXl2Tb9YcNhKmEc">保存</button>
+          <button class="btn danger" id="preset_del" title="删除当前选中的「我的方案」"
+                  data-page-node-id="SvR0w1QpXl2Tb9YcNhKmEd">删除</button>
+        </div>
+        <div id="preset_stat" data-page-node-id="SvR0w1QpXl2Tb9YcNhKmEe"></div>
       </div>
     </div>
 
@@ -439,12 +478,26 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
     <div class="grp" data-page-node-id="zZkxgop7NP807hAiUAFG5O">
       <h2 data-page-node-id="jMK4F6b0AAknfiFDiYD4XQ">② 市值 <span class="hint" data-page-node-id="LiJ8j7sep9xbtwwV8G79Te">最强增强项</span></h2>
       <div class="body" data-page-node-id="SP8ZgznPLo0Bn78rGtYOZU">
-        <div class="slide" data-page-node-id="SIwN7Op58XUhDTZUQ5xBl4">
-          <span class="nm" data-page-node-id="CvfL6y2WdWNAF49wTk6a8P">上限</span>
-          <input type="range" id="size_max" min="0" max="9" step="1" value="2" data-page-node-id="RUiRhXos8WFOEJYsAXthkh">
-          <span class="vl" id="size_v" data-page-node-id="EBGfbyXn42cc8pIWgNRYZL">30%</span>
+        <div class="row" data-page-node-id="SIwN7Op58XUhDTZUQ5xBl4">
+          <label style="flex:0 0 62px;white-space:nowrap" data-page-node-id="CvfL6y2WdWNAF49wTk6a8P">市值区间</label>
+          <div class="dual" id="size_dual" data-page-node-id="RUiRhXos8WFOEJYsAXthkh">
+            <div class="dtrack"><div class="dfill" id="size_fill"></div></div>
+            <input type="range" id="size_min" min="0" max="9" step="1" value="0"
+                   aria-label="市值区间下限" data-page-node-id="Smn0Rt0PqXc2LbYzV1NkQd">
+            <input type="range" id="size_max" min="0" max="9" step="1" value="2"
+                   aria-label="市值区间上限" data-page-node-id="RUiRhXos8WFOEJYsAXthkhQ">
+          </div>
+          <span class="vl" id="size_v" style="flex:0 0 72px" data-page-node-id="EBGfbyXn42cc8pIWgNRYZL">最小30%</span>
         </div>
-        <div class="cap" data-page-node-id="Cg6xA2JlwfZ0ztCnxS1es8">市值组 ≤ M(N+1)。M1=最小10% · M3=最小30% · M10=全部。<br data-page-node-id="XDMsjE8DMAik3QEGaomhks">
+        <div class="chips" id="size_quick" data-page-node-id="Sq1Kp9ZmVt0Rh3WcLb8XyN">
+          <button data-smin="0" data-smax="0" data-page-node-id="Sq0a">最小10%</button>
+          <button data-smin="1" data-smax="1" data-page-node-id="Sq0b">10%~20%</button>
+          <button data-smin="0" data-smax="2" data-page-node-id="Sq0c">最小30%</button>
+          <button data-smin="1" data-smax="2" data-page-node-id="Sq0d">10%~30%</button>
+          <button data-smin="0" data-smax="5" data-page-node-id="Sq0e">最小60%</button>
+          <button data-smin="0" data-smax="9" data-page-node-id="Sq0f">全部</button>
+        </div>
+        <div class="cap" data-page-node-id="Cg6xA2JlwfZ0ztCnxS1es8">双滑块选区间：两个把手可重叠（如「10%~20%」= 只取第 2 个分位）。<br data-page-node-id="XDMsjE8DMAik3QEGaomhks">
           报告第8节：超跌反转几乎全部来自小市值（最小10% vs 最大10% 差 2.5pp/日）。</div>
       </div>
     </div>
@@ -803,7 +856,7 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
             报告的核心发现是「越简单越好」，所以先只勾 2~3 个维度。</div>
           <div class="chks" id="axes" style="max-height:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:2px" data-page-node-id="yBbUkoRCJlnKyCjiVFmMf8">
             <label class="chk" data-page-node-id="RuYRi5SWBNERWHlaYQx0hO"><input type="checkbox" value="px_ma60" checked data-page-node-id="xyoOremWAEERGjqwS27OGo"><span data-page-node-id="0sYD7ZrEF7mUxFV8jCVaKN"><span class="t" data-page-node-id="3oeX9Bf3WkCndeel48iatK">距MA60 分位区间</span><span class="d" data-page-node-id="dktWS6DKihPdaqERZGfCBE">D1 / D1~2 / D1~3 / D2~3 / D1~5 / D1~10</span></span></label>
-            <label class="chk" data-page-node-id="PUb8A41UcJzPTF2CMuOCNP"><input type="checkbox" value="size_max" checked data-page-node-id="LGiqoyk7czr6JHiukGto6G"><span data-page-node-id="ZogWmHgj3PMCBfgBqTOGbI"><span class="t" data-page-node-id="UbCcFYwHBKU7fAX54Ol4A8">市值上限</span><span class="d" data-page-node-id="PFCkRUKzHmjarYyr7IWXD4">最小10% ~ 全部（7 档）</span></span></label>
+            <label class="chk" data-page-node-id="PUb8A41UcJzPTF2CMuOCNP"><input type="checkbox" value="size_band" checked data-page-node-id="LGiqoyk7czr6JHiukGto6G"><span data-page-node-id="ZogWmHgj3PMCBfgBqTOGbI"><span class="t" data-page-node-id="UbCcFYwHBKU7fAX54Ol4A8">市值区间</span><span class="d" data-page-node-id="PFCkRUKzHmjarYyr7IWXD4">最小10% / 10~20% / 最小30% / 10~30% / 20~50% / 全部（6 档）</span></span></label>
             <label class="chk" data-page-node-id="ADE6kHSSKtIechCXTwViEX"><input type="checkbox" value="mkt_state" checked data-page-node-id="myGA5YBK3ZpSbL8F5DCOEB"><span data-page-node-id="rG7aT3bckReK2KQzbwO6Uc"><span class="t" data-page-node-id="QxxgaChishZy43BmUtABS8">市场环境</span><span class="d" data-page-node-id="5g6PAcNYdMHmlI1XSKUDMB">熊市 / 不限 / 牛市</span></span></label>
             <label class="chk" data-page-node-id="qpQUThDb7Rw2CbmlYf91Ci"><input type="checkbox" value="mkt_hv" data-page-node-id="vpSMXnhR2QSkAE19HdoyHK"><span data-page-node-id="d3ZN2JhAHa0m8ZuLScidQq"><span class="t" data-page-node-id="IDr467vo4JwanvlKtNaezX">市场波动</span><span class="d" data-page-node-id="d46MsposF7ZYljbpnWpTJJ">不限 / 高 / 低</span></span></label>
             <label class="chk" data-page-node-id="HKcGmQjsFNEfQOUtTFbH1c"><input type="checkbox" value="ret20" data-page-node-id="3UbTzUIJ3Qu2170EerfwTv"><span data-page-node-id="3HR2axIAmKPhTRFSMFWCp6"><span class="t" data-page-node-id="bm9tC3wm7jrcCtd5htQbvy">ret20 分位区间</span><span class="d" data-page-node-id="1YvAvQBJU2BnvfNIwQ7hwH">不限 / D1~3 / D2~6 / D1 / D1~5</span></span></label>
@@ -861,7 +914,11 @@ const MONEY = v => {
   return v.toFixed(0);
 };
 
-let META = null, LAST = null, DEFAULT_PARAMS = {}, PRESETS = [];
+let META = null, LAST = null, DEFAULT_PARAMS = {}, PRESETS = [], USER_PRESETS = [];
+// 市值分位：序号 0..9（每档 10%），0 = 最小；标签与后端 SIZE_PCT 同源（init 时用
+// /api/defaults 的 size_bands 覆盖，避免两端各写一份百分比表而对不上）
+let SIZE_PCT = ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'];
+const SIZE_N = 10;
 let POOL = { mode: 'all', codes_text: '', industries: [], boards: ['MAIN', 'CHINEXT', 'STAR'], exchanges: ['SH', 'SZ'] };
 let CFG = {};          // 当前参数
 let SCAN = null;       // 最近一次扫描结果
@@ -891,6 +948,69 @@ function nz(x) {
   if (x === null || x === undefined || x === '') return null;
   const n = parseInt(x, 10); return isNaN(n) ? null : n;
 }
+
+/* ---------------- 市值区间（双滑块） ----------------
+ * 语义与后端 norm_size_band / size_band_label 严格对齐：
+ *   序号 0..9，0 = 最小 10%，9 = 最大 10%；区间为闭区间。
+ *   「10%~20%」= 只取第 2 个分位 → smin = smax = 1。
+ * 两个把手允许重叠（单档筛选），拖过头（下限 > 上限）自动交换而不是变空集。
+ */
+function sizeBandRaw() {
+  const a = parseInt(($('#size_min') || {}).value, 10);
+  const b = parseInt(($('#size_max') || {}).value, 10);
+  return [isNaN(a) ? 0 : a, isNaN(b) ? SIZE_N - 1 : b];
+}
+function sizeBand() {
+  const [a, b] = sizeBandRaw();
+  return a > b ? [b, a] : [a, b];
+}
+function sizeBandText(smin, smax) {
+  smin = Math.max(0, Math.min(SIZE_N - 1, smin));
+  smax = Math.max(0, Math.min(SIZE_N - 1, smax));
+  if (smin <= 0 && smax >= SIZE_N - 1) return '全部';
+  if (smin <= 0) return '最小' + SIZE_PCT[smax];
+  if (smin === smax) return SIZE_PCT[smin - 1] + '~' + SIZE_PCT[smax];
+  if (smax >= SIZE_N - 1) return '剔除最小' + SIZE_PCT[smin - 1];
+  return SIZE_PCT[smin - 1] + '~' + SIZE_PCT[smax];
+}
+/* 从任意「参数字典」里取出规范化后的市值区间（老方案只有 size_max 也适用） */
+function sizeBandOf(p) {
+  const one = (v, d) => {
+    const n = parseInt(v, 10);
+    return isNaN(n) ? d : Math.max(0, Math.min(SIZE_N - 1, n));
+  };
+  const a = one((p || {}).size_min, 0), b = one((p || {}).size_max, SIZE_N - 1);
+  return a > b ? [b, a] : [a, b];
+}
+function syncSize() {
+  const [lo, hi] = sizeBand();
+  const v = $('#size_v');
+  if (v) v.textContent = sizeBandText(lo, hi);
+  const fill = $('#size_fill');
+  if (fill) {
+    // 轨道上把手的位置 = i/(N-1)（range 的原生行为），填充条按同一把尺子画，
+    // 但不能画成「两个把手之间」—— 两个把手重叠（smin = smax = 只取一档）时
+    // 宽度会变成 0，看上去像「什么都没选」。所以右边界固定用**该档的右沿**
+    // (hi+1)/(N-1)，保证任何区间都至少有一档的宽度。
+    const span = SIZE_N - 1;
+    const left = lo / span;
+    const right = Math.min(1, (hi + 1) / span);
+    fill.style.left = (left * 100) + '%';
+    fill.style.right = ((1 - right) * 100) + '%';
+  }
+  $$('#size_quick button').forEach(b => b.classList.toggle(
+    'on', Number(b.dataset.smin) === lo && Number(b.dataset.smax) === hi));
+}
+function applySize(smin, smax) {
+  const [lo, hi] = [smin, smax].map(v => {
+    const n = parseInt(v, 10);
+    return isNaN(n) ? null : Math.max(0, Math.min(SIZE_N - 1, n));
+  });
+  const a = lo === null ? 0 : lo, b = hi === null ? SIZE_N - 1 : hi;
+  $('#size_min').value = String(Math.min(a, b));
+  $('#size_max').value = String(Math.max(a, b));
+  syncSize();
+}
 function collect() {
   const c = [];
   $$('#confirms input:checked').forEach(i => c.push(i.value));
@@ -905,7 +1025,9 @@ function collect() {
     px_ma120_min: nz(m120 && m120.lo), px_ma120_max: nz(m120 && m120.hi),
     ret20_min: nz(r20 && r20.lo), ret20_max: nz(r20 && r20.hi),
     deep_any: $('#deep_any').checked,
-    size_max: parseInt($('#size_max').value, 10),
+    // 市值区间：两个序号都发（后端 norm_size_band 会再兜底一次交换/夹取）
+    size_min: sizeBand()[0],
+    size_max: sizeBand()[1],
     mkt_state: segv('#seg-mkt') || 'any',
     mkt_hv: segv('#seg-hv') || 'any',
     rs_sz_min: nz(rs && rs.lo), rs_sz_max: nz(rs && rs.hi),
@@ -1017,7 +1139,8 @@ function applyParams(p) {
   setSeg('#seg-ihv', p.hv_min, p.hv_max);
   setSeg('#seg-rv', p.rvol_min, p.rvol_max);
   $('#deep_any').checked = !!p.deep_any;
-  $('#size_max').value = p.size_max ?? 2;
+  // 市值区间：老方案只有 size_max（下限缺省 0）也要能正确落位
+  applySize(p.size_min ?? 0, p.size_max ?? (SIZE_N - 1));
   $('#hold').value = p.hold ?? 20;
   const setV = (id, v) => $$(id + ' button').forEach(b =>
     b.classList.toggle('on', (b.dataset.v || '') === String(v ?? 'any')));
@@ -1068,8 +1191,17 @@ function applyParams(p) {
   setChk('dl_fin', dl.financial); setChk('dl_loss2y', dl.loss2y);
   setChk('dl_penny', dl.penny);
   setChk('dl_main2024', p.delist_main_2024);
-  if (isFinite(p.delist_rev_floor)) $('#dl_rev_floor').value = p.delist_rev_floor / 1e8;
-  if (isFinite(p.delist_penny_days)) $('#dl_penny_days').value = p.delist_penny_days;
+  // ⚠️ 判空必须用 `!= null`（同时排除 null 与 undefined），不能用 isFinite：
+  //    内置预设的这两个键是**显式 null**，而 `isFinite(null)` 竟然是 true
+  //    （Number(null) === 0）→ 会把输入框的默认值 1 亿 / 10 日冲成 0 / 空。
+  //    这是靠刷新 fixtures 才暴露出来的：旧快照里这两个键是**缺失**的，
+  //    `isFinite(undefined)` 为 false，恰好绕过了这个坑。
+  if (p.delist_rev_floor != null && isFinite(p.delist_rev_floor)) {
+    $('#dl_rev_floor').value = p.delist_rev_floor / 1e8;
+  }
+  if (p.delist_penny_days != null && isFinite(p.delist_penny_days)) {
+    $('#dl_penny_days').value = p.delist_penny_days;
+  }
   syncLabels();
   syncCap();
   updateModeBadge();
@@ -1077,8 +1209,7 @@ function applyParams(p) {
   updateFinBadge();
 }
 function syncLabels() {
-  const sz = ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '全部'];
-  $('#size_v').textContent = sz[parseInt($('#size_max').value, 10)];
+  syncSize();
   $('#hold_v').textContent = $('#hold').value + '日';
 }
 
@@ -1090,34 +1221,49 @@ function bindSeg(id, multi) {
     updateModeBadge();
   }));
 }
-function updateModeBadge() {
-  const p = collect(); let n = 0; const L = [];
+/* 把一份参数（不依赖页面状态）摘要成「N 个条件 · 距MA60 D1 + 市值≤最小30% …」。
+ * 顶部徽标与「我的方案」的描述行共用它 —— 保存时看到的摘要，
+ * 之后从下拉里选回来必须是同一句话，否则用户没法确认自己存的是哪套。 */
+function paramSummary(p) {
+  let n = 0; const L = [];
   const rg = (a, b, nm) => {
     if (a === null && b === null) return;
     const x = a === null ? 1 : a, y = b === null ? 10 : b;
     L.push(x === y ? `${nm} D${x}` : `${nm} D${x}~D${y}`);
   };
-  if (p.px_ma60_min !== null || p.px_ma60_max !== null) { n++; rg(p.px_ma60_min, p.px_ma60_max, '距MA60'); }
-  if (p.px_ma120_min !== null || p.px_ma120_max !== null) { n++; rg(p.px_ma120_min, p.px_ma120_max, '距MA120'); }
-  if (p.ret20_min !== null || p.ret20_max !== null) { n++; rg(p.ret20_min, p.ret20_max, 'ret20'); }
+  const nn = v => (v === undefined ? null : v);
+  const sz = sizeBandOf(p);
+  if (nn(p.px_ma60_min) !== null || nn(p.px_ma60_max) !== null) { n++; rg(p.px_ma60_min, p.px_ma60_max, '距MA60'); }
+  if (nn(p.px_ma120_min) !== null || nn(p.px_ma120_max) !== null) { n++; rg(p.px_ma120_min, p.px_ma120_max, '距MA120'); }
+  if (nn(p.ret20_min) !== null || nn(p.ret20_max) !== null) { n++; rg(p.ret20_min, p.ret20_max, 'ret20'); }
   if (p.deep_any) { n++; L.push('深度超跌'); }
-  if (p.size_max < 9) { n++; L.push('市值≤最小' + ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%'][p.size_max]); }
-  if (p.mkt_state !== 'any') { n++; L.push(p.mkt_state === 'bear' ? '市场<MA60' : '市场>MA60'); }
-  if (p.mkt_hv !== 'any') { n++; L.push(p.mkt_hv === 'high' ? '市场高波动' : '市场低波动'); }
-  if (p.confirm.length) { n += p.confirm.length; L.push('确认×' + p.confirm.length); }
+  if (sz[0] > 0 || sz[1] < SIZE_N - 1) { n++; L.push('市值' + sizeBandText(sz[0], sz[1])); }
+  if (p.mkt_state && p.mkt_state !== 'any') { n++; L.push(p.mkt_state === 'bear' ? '市场<MA60' : '市场>MA60'); }
+  if (p.mkt_hv && p.mkt_hv !== 'any') { n++; L.push(p.mkt_hv === 'high' ? '市场高波动' : '市场低波动'); }
+  if ((p.confirm || []).length) { n += p.confirm.length; L.push('确认×' + p.confirm.length); }
   // 财务（动态）
   const fq = [];
-  if (p.rev_min !== null || p.rev_max !== null) fq.push('营收');
-  if (p.rev_yoy_min !== null || p.rev_yoy_max !== null) fq.push('营收同比');
-  if (p.np_min !== null || p.np_max !== null) fq.push('归母');
-  if (p.np_yoy_min !== null || p.np_yoy_max !== null) fq.push('归母同比');
+  if (nn(p.rev_min) !== null || nn(p.rev_max) !== null) fq.push('营收');
+  if (nn(p.rev_yoy_min) !== null || nn(p.rev_yoy_max) !== null) fq.push('营收同比');
+  if (nn(p.np_min) !== null || nn(p.np_max) !== null) fq.push('归母');
+  if (nn(p.np_yoy_min) !== null || nn(p.np_yoy_max) !== null) fq.push('归母同比');
   if (fq.length) { n += fq.length; L.push('财务:' + fq.join('/')); }
   // 仓位约束（不是选股条件，单独提示）
-  if (p.max_pos > 0) { L.push(`仓位≤${p.max_pos}只/日${p.max_new}只`); }
+  if ((p.max_pos || 0) > 0) { L.push(`仓位≤${p.max_pos}只/日${p.max_new}只`); }
+  if (p.cap_ladder) {
+    const cl = Array.isArray(p.cap_ladder) ? p.cap_ladder : String(p.cap_ladder).split(',');
+    const s = cl.map(Number).filter(x => x > 0).reduce((a, b) => a + b, 0);
+    if (s) L.push(`阶梯建仓满仓${s}只`);
+  }
+  return { n, L,
+    text: n ? `${n} 个条件 · ` + L.slice(0, 4).join(' + ') + (L.length > 4 ? ' …' : '')
+            : '无过滤 · 全市场基准' };
+}
+function updateModeBadge() {
+  const s = paramSummary(collect());
   const b = $('#bmode');
-  b.textContent = n ? `${n} 个条件 · ` + L.slice(0, 4).join(' + ') + (L.length > 4 ? ' …' : '')
-    : '无过滤 · 全市场基准';
-  b.className = 'badge ' + (n >= 5 ? 'warn' : 'ok');
+  b.textContent = s.text;
+  b.className = 'badge ' + (s.n >= 5 ? 'warn' : 'ok');
 }
 
 /* ---------------- 图形助手 ---------------- */
@@ -1151,6 +1297,91 @@ $$('#tabs button').forEach(b => b.addEventListener('click', () => {
   setTimeout(() => Object.values(charts).forEach(c => c.resize()), 40);
 }));
 
+/* ---------------- 预设方案（内置 + 我的方案） ----------------
+ * 「我的方案」存在服务端 data/user_presets.json（不是 localStorage）：
+ * 方案应该跟着数据目录走 —— 换浏览器不丢，脚本也能直接读到。
+ * 内置方案（报告已验证的 K 系列）只读，不允许删除。
+ */
+function presetById(id) {
+  return PRESETS.find(x => x.id === id) || USER_PRESETS.find(x => x.id === id) || null;
+}
+function isUserPreset(id) { return USER_PRESETS.some(x => x.id === id); }
+function curPreset() { return presetById($('#preset').value); }
+
+function renderPresets(want) {
+  const sel = $('#preset');
+  const keep = want !== undefined ? want : sel.value;
+  let html = '<optgroup label="内置方案（报告已验证）">' +
+    PRESETS.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('') +
+    '</optgroup>';
+  if (USER_PRESETS.length) {
+    html += '<optgroup label="我的方案（本地保存）">' +
+      USER_PRESETS.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('') +
+      '</optgroup>';
+  }
+  sel.innerHTML = html;
+  const ids = [...sel.options].map(o => o.value);
+  sel.value = ids.includes(keep) ? keep : (PRESETS[0] ? PRESETS[0].id : '');
+  syncPresetUI();
+}
+/* 下拉旁的文字区：内置方案显示报告结论，我的方案显示保存时间 + 参数摘要 */
+function syncPresetUI() {
+  const p = curPreset();
+  const mine = !!(p && isUserPreset(p.id));
+  if (p) {
+    $('#presetdesc').textContent = mine
+      ? `我的方案${p.saved_at ? ' · 保存于 ' + p.saved_at : ''} · ` + paramSummary(p.params).text
+        + (p.pool ? ' · ' + poolSummary(p.pool) : '')
+      : (p.desc || '');
+  }
+  // 选中「我的方案」时把原名字回填：此时点保存 = 覆盖同名方案
+  $('#preset_name').value = mine ? p.name : '';
+  $('#preset_name').placeholder = mine ? '改个新名字 = 另存为一份' : '给当前这套参数起个名…';
+  $('#preset_del').disabled = !mine;
+}
+function setPresetStat(msg, kind) {
+  const el = $('#preset_stat');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = kind === 'bad' ? '#c0392b' : (msg ? '#0d7a3a' : '');
+}
+/* 保存当前页面上的参数（不是「当前选中预设的参数」—— 用户可能已经改过几项）*/
+async function savePreset() {
+  const name = ($('#preset_name').value || '').trim();
+  if (!name) {
+    setPresetStat('先给这套参数起个名字', 'bad');
+    $('#preset_name').focus();
+    return;
+  }
+  const params = collect();
+  const pool = currentPool();          // ⚠️ 股票池必须单独发，不在 params 白名单里
+  setPresetStat('保存中…');
+  try {
+    const r = await api('/api/presets/save', { name, params, pool });
+    if (!r || r.ok === false) { setPresetStat((r && r.msg) || '保存失败', 'bad'); return; }
+    USER_PRESETS = r.presets || USER_PRESETS;
+    renderPresets(r.id);
+    setPresetStat((r.msg || '已保存') + ' · ' + paramSummary(params).text
+      + ' · ' + poolSummary(pool));
+  } catch (e) {
+    setPresetStat('保存失败：' + (e && e.message ? e.message : e), 'bad');
+  }
+}
+async function deletePreset() {
+  const p = curPreset();
+  if (!p || !isUserPreset(p.id)) { setPresetStat('内置方案不可删除', 'bad'); return; }
+  if (!confirm(`删除方案「${p.name}」？此操作不可撤销。`)) return;
+  try {
+    const r = await api('/api/presets/delete', { id: p.id });
+    if (!r || r.ok === false) { setPresetStat((r && r.msg) || '删除失败', 'bad'); return; }
+    USER_PRESETS = r.presets || [];
+    renderPresets(PRESETS[0] ? PRESETS[0].id : '');
+    setPresetStat(`已删除「${p.name}」`);
+  } catch (e) {
+    setPresetStat('删除失败：' + (e && e.message ? e.message : e), 'bad');
+  }
+}
+
 /* ---------------- 初始化 ---------------- */
 async function init() {
   try {
@@ -1161,10 +1392,11 @@ async function init() {
     $('#bdate').textContent = '数据截止 ' + m.date_end;
     $('#bdate').className = 'badge ok';
     LAST = m.last_date;
-    // 预设
-    $('#preset').innerHTML = PRESETS.map(p =>
-      `<option value="${p.id}">${p.name}</option>`).join('');
-    $('#presetdesc').textContent = PRESETS[0].desc;
+    // 市值分位的百分比表由后端给（避免两端各写一份对不上）
+    if (d.size_bands && Array.isArray(d.size_bands.pct)) SIZE_PCT = d.size_bands.pct;
+    // 预设：内置 + 我的方案
+    USER_PRESETS = d.user_presets || [];
+    renderPresets(PRESETS[0] ? PRESETS[0].id : '');
     // ⚠️ 必须在 applyParams 之前填充，否则 cap_pick 还没有 option，选不中
     fillPickRules(d.pick_rules);
     fillLadderPresets(d.ladder_presets);
@@ -1297,6 +1529,64 @@ function currentPool() {
   p.boards = $$('#seg-board button.on').map(b => b.dataset.v);
   p.exchanges = $$('#seg-ex button.on').map(b => b.dataset.v);
   return p;
+}
+/* ---------------- 股票池：默认值 / 摘要 / 回填 ----------------
+   ⚠️ 股票池不在 collect() 的 params 里（走 currentPool() 的 pool 字段）。
+      保存方案时必须**两个都发**：只发 params 的话，板块/行业/自定义代码/
+      交易所这一整组都会丢 —— 也就是「保存后切走再切回，板块筛选没了」。 */
+const EXN = { SH: '沪市', SZ: '深市', BJ: '北交所' };
+function defaultPool() {
+  return {
+    mode: 'all', codes_text: '', industries: [],
+    boards: ['MAIN', 'CHINEXT', 'STAR'],        // 北交所流动性与制度差异大，默认不选
+    exchanges: ['SH', 'SZ'],
+  };
+}
+/* 股票池的有效条件文案（只列真正收窄了范围的项） */
+function poolConds(p) {
+  p = p || {};
+  const L = [];
+  const bd = (p.boards || []).map(String);
+  if (bd.length && bd.length < 4) L.push('板块:' + bd.map(BD).join('/'));
+  const ex = (p.exchanges || []).map(String);
+  if (ex.length && ex.length < 3) L.push('交易所:' + ex.map(x => EXN[x] || x).join('/'));
+  const inds = p.industries || [];
+  if (inds.length) L.push(`行业×${inds.length}`);
+  if (p.mode === 'custom') {
+    const t = String(p.codes_text || '').replace(/[,，]/g, ' ').trim();
+    const n = t ? t.split(/\s+/).filter(Boolean).length : 0;
+    L.push(n ? `自选池 ${n} 只` : '自选池（空）');
+  }
+  return L;
+}
+function poolSummary(p) {
+  const L = poolConds(p);
+  return L.length ? '股票池 ' + L.join(' + ') : '股票池 不限';
+}
+/* 把方案里的股票池回填到页面。pool 为空（内置预设 / 早期保存的方案）时
+   **什么都不做**，保持页面现有池子不变 —— 刻意的向后兼容。 */
+function applyPool(q) {
+  if (!q) return false;
+  const p = Object.assign(defaultPool(), q);
+  const codes = String(p.codes_text || '');
+  $('#pool_codes').value = codes;
+  const nc = codes.replace(/[,，]/g, ' ').split(/\s+/).filter(Boolean).length;
+  $('#poolcnt').textContent = `已输入 ${nc} 个代码`;
+  const mode = p.mode === 'custom' ? 'custom' : 'all';
+  $$('#seg-pool button').forEach(b => b.classList.toggle('on', b.dataset.v === mode));
+  $('#poolcustom').style.display = mode === 'custom' ? 'block' : 'none';
+  // 行业树：先清搜索框，否则被过滤隐藏的复选框即使勾上也看不见
+  if (IND_Q) { IND_Q.value = ''; filterInds(''); }
+  const inds = new Set(p.industries || []);
+  $$('#inds input.ibx').forEach(i => i.checked = inds.has(i.value));
+  syncGrpState(); syncIndCnt();
+  const bd = new Set((p.boards || []).map(x => String(x).toUpperCase()));
+  $$('#seg-board button').forEach(b => b.classList.toggle('on', bd.has(b.dataset.v)));
+  syncBdCnt();
+  const ex = new Set((p.exchanges || []).map(x => String(x).toUpperCase()));
+  $$('#seg-ex button').forEach(b => b.classList.toggle('on', ex.has(b.dataset.v)));
+  POOL = Object.assign({}, p);
+  return true;
 }
 async function runAll() { await runBacktest(); await runScan(); }
 
@@ -2440,7 +2730,27 @@ bindSeg('#seg-ma60'); bindSeg('#seg-ma120'); bindSeg('#seg-ret20');
 bindSeg('#seg-rs'); bindSeg('#seg-ihv'); bindSeg('#seg-rv');
 bindSeg('#seg-mkt'); bindSeg('#seg-hv'); bindSeg('#seg-pool');
 bindSeg('#seg-ex', true);
-$('#size_max').addEventListener('input', () => { syncLabels(); updateModeBadge(); });
+/* ---- 市值区间双滑块 ----
+ * 拖动时把**被拖的那个把手**夹住，而不是事后交换两个值：
+ * 交换会让手指下的把手突然跳到对面，手感很差；夹住则允许两者重叠
+ * （重叠 = 只取某一个分位，如「10%~20%」就是下限=上限=D2）。 */
+function bindSizeSlider(id) {
+  const el = $('#' + id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    const lo = $('#size_min'), hi = $('#size_max');
+    if (id === 'size_min' && Number(lo.value) > Number(hi.value)) lo.value = hi.value;
+    if (id === 'size_max' && Number(hi.value) < Number(lo.value)) hi.value = lo.value;
+    syncSize(); updateModeBadge();
+  });
+}
+bindSizeSlider('size_min');
+bindSizeSlider('size_max');
+/* 市值区间快捷档位 */
+$$('#size_quick button').forEach(b => b.addEventListener('click', () => {
+  applySize(Number(b.dataset.smin), Number(b.dataset.smax));
+  updateModeBadge();
+}));
 $('#hold').addEventListener('input', syncLabels);
 $('#deep_any').addEventListener('change', updateModeBadge);
 $$('#confirms input').forEach(i => i.addEventListener('change', updateModeBadge));
@@ -2735,29 +3045,31 @@ $('#pool_load').addEventListener('click', () => {
   $('#poolcustom').style.display = 'block';
 });
 $('#preset').addEventListener('change', () => {
-  const p = PRESETS.find(x => x.id === $('#preset').value);
+  const p = curPreset();
   if (!p) return;
-  applyParams(p.params); $('#presetdesc').textContent = p.desc;
+  applyParams(p.params);
+  applyPool(p.pool);          // 无 pool（内置预设 / 早期方案）→ 保持现有池子不动
+  syncPresetUI();
+  setPresetStat('');
   updateModeBadge(); runAll();
 });
+/* ---- 我的方案：保存 / 删除 ---- */
+$('#preset_save').addEventListener('click', savePreset);
+$('#preset_del').addEventListener('click', deletePreset);
+// 回车 = 保存（输入框里按回车比移鼠标快）
+$('#preset_name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); savePreset(); }
+});
+$('#preset_name').addEventListener('input', () => setPresetStat(''));
 $('#run').addEventListener('click', () => { updateModeBadge(); runAll(); });
 $('#reset').addEventListener('click', () => {
-  $('#preset').value = PRESETS[0].id;
-  applyParams(PRESETS[0].params);
-  $('#presetdesc').textContent = PRESETS[0].desc;
-  POOL = { mode: 'all', codes_text: '', industries: [], boards: ['MAIN', 'CHINEXT', 'STAR'], exchanges: ['SH', 'SZ'] };
-  $('#pool_codes').value = '';
-  $$('#inds input.ibx').forEach(i => i.checked = false);
-  if (IND_Q) { IND_Q.value = ''; filterInds(''); }
-  syncGrpState();
-  syncIndCnt();
-  // 板块恢复默认：主板 + 创业板 + 科创板（北交所不选）
-  $$('#seg-board button').forEach(b =>
-    b.classList.toggle('on', b.dataset.v !== 'BJ'));
-  syncBdCnt();
-  $$('#seg-ex button').forEach(b => b.classList.toggle('on', b.dataset.v === 'SH' || b.dataset.v === 'SZ'));
-  $$('#seg-pool button').forEach(b => b.classList.toggle('on', b.dataset.v === 'all'));
-  $('#poolcustom').style.display = 'none';
+  const p0 = PRESETS[0];
+  $('#preset').value = p0.id;
+  applyParams(p0.params);
+  syncPresetUI();
+  setPresetStat('');
+  // 股票池整体复位（默认池 = 全部A股 · 主板+创业板+科创板 · 沪深，北交所不选）
+  applyPool(defaultPool());
   updateModeBadge(); runAll();
 });
 syncLabels(); updateModeBadge(); updateFinBadge(); updateDelistBadge();
