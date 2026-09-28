@@ -9,6 +9,8 @@ server.py —— 「A股超跌反转」交互式选股器 本地服务
 接口：
   GET  /                    前端界面
   GET  /api/meta            元信息（交易日范围/行业/股票清单）
+  GET  /api/market          市场环境序列（自建净值 vs 均线，口径/窗口可选）+ 真实指数对照
+                            查询参数：days / index（all|small50|…）/ ma（20|60|120）
   GET  /api/defaults        默认参数 + 内置预设 + 「我的方案」
   POST /api/scan            今日选股
   POST /api/backtest        策略回测
@@ -41,6 +43,7 @@ from _console import bootstrap, mark  # noqa: E402
 bootstrap()
 
 from engine import (Engine, DEFAULT_PARAMS, PICK_RULES, LADDER_PRESETS,  # noqa: E402
+                    RHYTHM_CANDS, CAP_KEYS, rhythm_label,
                     parse_ladder, SIZE_N, SIZE_PCT, norm_size_band, size_band_label)
 
 import numpy as np  # noqa: E402
@@ -102,6 +105,98 @@ def _clean(obj):
     return obj
 
 
+def _signal_sig(p):
+    """信号参数指纹 —— **容量参数（CAP_KEYS）不参与**。
+
+    为什么能这么切：容量参数（max_pos / max_new / pick / cap_ladder）只决定
+    「信号怎么变成持仓」，**完全不改变 mask**。所以寻优时同一批信号只需要算
+    一次 `stats()`，剩下的节奏变体各自跑一次轻量 `capacity()` 即可 ——
+    实测把「节奏 × 3 个信号轴」从 240 次 stats（约 3.5 分钟）压到 27 次（约 20 秒）。
+
+    ⚠️ 反过来，`mkt_index` / `mkt_ma` **必须**参与指纹 —— 它们改变市场过滤条件，
+       直接改变 mask。这里靠「只排除 CAP_KEYS」自动带上，不需要额外处理；
+       但若哪天有人把它们加进 CAP_KEYS，缓存会**静默串味**（换口径后仍返回旧结果）。
+
+    ⚠️ `sort_keys=True` 必须开：dict 顺序会随构造路径变化，不排序会得到
+       两个内容相同却指纹不同的键，缓存直接失效（命中率 0，白算一遍）。
+    """
+    d = {k: v for k, v in p.items() if k not in CAP_KEYS}
+    return json.dumps(d, sort_keys=True, default=str)
+
+
+# ---------------------------------------------------------------- 真实指数（对照用）
+# 用途：界面的「牛熊」结论来自**自建全A等权净值**（`engine.market_oret`，日度再平衡、
+# 无成本），它与上证/沪深300 这类**市值加权价格指数**在个别时段会明显分歧。
+# 分歧大时用户会直接质疑「今天明明是熊市，界面为什么说不是」——
+# 所以把真实指数的同口径（收盘 vs 自身 MA60）一并回传，让用户能自己对照。
+#
+# ⚠️ 这些文件只覆盖 2023 起（数据源窗口限制，见 scripts/01c_fetch_index.py），
+#    因此**不能**用作 11 年回测的市场过滤依据，只做展示/对照。
+# ⚠️ 文件缺失时静默跳过（它们是可选数据），不要让整个接口 500。
+_INDEX_FILES = [
+    ("上证指数", "index_sh000001.json"),
+    ("沪深300", "index_hs300.json"),
+    ("中证500", "index_zz500.json"),
+    ("中证1000", "index_zz1000.json"),
+]
+_index_cache = {}
+
+
+def _load_indices(days=310):
+    """真实指数 → [{name, last_date, close, ma60, dist, bull, series:[{date,close,ma60,dist}]}]。
+
+    结果按 `days` 缓存：文件只在取数时才变，没必要每个请求都读盘+算 MA60。
+    """
+    key = int(days)
+    if key in _index_cache:
+        return _index_cache[key]
+    out = []
+    for name, fn in _INDEX_FILES:
+        fp = os.path.join(ROOT, "data", "raw", fn)
+        try:
+            with open(fp, encoding="utf-8") as f:
+                raw = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(raw, list) or not raw:
+            continue
+        rows = []
+        for it in raw:
+            try:
+                ts = int(it["date_ms"]) / 1000.0
+                rows.append((time.strftime("%Y-%m-%d", time.gmtime(ts + 8 * 3600)),
+                             float(it["close_price"])))
+            except (KeyError, TypeError, ValueError):
+                continue
+        if len(rows) < 61:
+            continue
+        rows.sort(key=lambda x: x[0])
+        # 与引擎同口径：收盘价 vs 自身 60 日均线（简单均线，非指数均线）
+        closes = np.array([c for _, c in rows], float)
+        ma = np.full(len(closes), np.nan)
+        cs = np.cumsum(np.concatenate([[0.0], closes]))
+        for i in range(59, len(closes)):
+            ma[i] = (cs[i + 1] - cs[i + 1 - 60]) / 60.0
+        series = []
+        for i in range(max(0, len(rows) - key), len(rows)):
+            d, c = rows[i]
+            series.append(dict(
+                date=d, close=round(c, 2),
+                ma60=(round(float(ma[i]), 2) if np.isfinite(ma[i]) else None),
+                dist=(round((c / ma[i] - 1) * 100, 2) if np.isfinite(ma[i]) else None),
+            ))
+        last = series[-1]
+        out.append(dict(
+            name=name, last_date=last["date"], close=last["close"],
+            ma60=last["ma60"], dist=last["dist"],
+            # ma60 未成形时 bull 给 None（**不是 False**）——「没有均线」≠「跌破均线」
+            bull=(None if last["ma60"] is None else bool(last["close"] > last["ma60"])),
+            series=series,
+        ))
+    _index_cache[key] = out
+    return out
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -150,6 +245,19 @@ class Handler(BaseHTTPRequestHandler):
                 return self._serve_file("index.html", "text/html; charset=utf-8")
             if p == "/api/meta":
                 return self._json(ENGINE.meta())
+            if p == "/api/market":
+                q = parse_qs(u.query)
+                try:
+                    days = int((q.get("days") or ["250"])[0])
+                except (TypeError, ValueError):
+                    days = 250
+                days = max(30, min(days, 2000))
+                # 口径 / 窗口：非法值由 engine.mkt_cfg() 规范化回默认，不会 500
+                d = ENGINE.market_series(days, (q.get("index") or [None])[0],
+                                         (q.get("ma") or [None])[0])
+                # 真实指数一并回传（对照用；文件缺失时是空列表，不是错误）
+                d["indices"] = _load_indices(min(days + 60, 2000))
+                return self._json(d)
             if p == "/api/stock":
                 q = parse_qs(u.query)
                 code = (q.get("code") or [""])[0]
@@ -172,6 +280,15 @@ class Handler(BaseHTTPRequestHandler):
                     ladder_presets=[dict(id=x["id"], name=x["name"],
                                          ladder=x["ladder"], tag=x.get("tag", ""),
                                          desc=x["desc"]) for x in LADDER_PRESETS],
+                    # 建仓节奏：「参数寻优」页节奏轴的候选清单（供前端渲染说明文字）
+                    # ⚠️ 与 /api/tune 的 AX["rhythm"] 同源（都是 RHYTHM_CANDS），
+                    #    前端只负责显示，不自己维护一份候选 → 不会出现「说明写了 8 档、
+                    #    实际跑了 10 档」这种漂移。
+                    rhythm_cands=[dict(id=x["id"], name=rhythm_label(x),
+                                       max_pos=int(x.get("max_pos") or 0),
+                                       max_new=int(x.get("max_new") or 0),
+                                       ladder=(list(x["ladder"]) if x.get("ladder") else None))
+                                  for x in RHYTHM_CANDS],
                     optbest=ENGINE.meta()["last_date"]))
             if p.startswith("/static/"):
                 return self._serve_file(p[len("/static/"):], None)
@@ -467,7 +584,28 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(out)
 
     def _tune(self, b):
-        """参数寻优：对指定维度做小网格，返回按 Sharpe 排序的组合"""
+        """参数寻优：对指定维度做小网格，返回排序后的组合。
+
+        ⚠️ **两套口径，别混**（全站纪律：同一份结果被多处消费必须对齐口径）
+        ------------------------------------------------------------------
+        · 只勾**信号轴**（距MA60 / 市值 / 市场环境 / 波动 / ret20 / 确认）
+          → 走 `stats()`，**不限仓位**口径（信号全买，实测平均同时持仓 900+ 只），
+            按不限仓位 Sharpe 排序。研究报告口径。
+        · 勾了**建仓节奏轴**（`rhythm`），或左侧 ⑧ 已开仓位约束（`max_pos>0` /
+          `cap_ladder`）→ 每个组合额外跑 `capacity()`，改按**账户资金口径**
+          评估与排序，表格也换成容量列（账户 CAGR/Sharpe、已投 CAGR、平均持仓、建仓率）。
+
+        **为什么节奏必须走容量口径**：节奏（持几只 / 日买几只 / 阶梯）在
+        「信号全买」下**完全无效** —— 没有仓位上限时，任何节奏的净值都一模一样，
+        差异恒为 0。只有落到容量口径，节奏才是一个真参数。
+
+        性能
+        ----
+        节奏轴让组合数×N，但容量参数**不影响 mask**：同一批信号只算一次 `stats()`
+        （按信号参数指纹缓存），每个节奏变体只多跑一次 `capacity(n_sim=0)`
+        （实测 0.04s）。`n_sim=200` 的随机对照要 25s/次，寻优里必须关掉 ——
+        那是给单次回测做显著性检验用的，不是给网格搜索用的。
+        """
         t0 = time.time()
         pool, err = self._pool(b)
         if err:
@@ -479,18 +617,43 @@ class Handler(BaseHTTPRequestHandler):
         # 每个轴的候选
         AX = {
             "px_ma60": [[1, 1], [1, 2], [1, 3], [2, 3], [1, 5], [1, 10]],
-            "size_max": [0, 1, 2, 3, 4, 6, 9],
+            # ⚠️ 键名必须是 "size_band"（= 前端 checkbox 的 value）。
+            #    早期这里写成 "size_max"，而前端发的是 size_band →
+            #    `k in AX` 判不过被静默丢弃：勾「市值区间」完全无效，
+            #    只勾它还会报「请至少选择一个待寻优的维度」（实测）。
+            "size_band": [[0, 0], [0, 1], [0, 2], [1, 2], [2, 4], [0, 9]],
             "mkt_state": ["bear", "any", "bull"],
             "mkt_hv": ["any", "high", "low"],
             "confirm": [[], ["histup3"], ["ma5"], ["volup"], ["ma5", "histup3"]],
             "ret20": [[None, None], [1, 3], [2, 6], [1, 1], [1, 5]],
+            # ---- 建仓节奏（容量层参数，须在容量口径下评估）
+            "rhythm": RHYTHM_CANDS,
+            # ---- 超额选股规则（同为容量层参数）
+            # ⚠️ 容量口径下「先买哪只」往往比信号条件本身更决定成败：仓位只有 N 个，
+            #    而「最超跌优先」永远先从 D1 里挑 —— 所以把信号区间从 D1 放宽到
+            #    D1~D10 可能**一只都多买不到**（实测账户指标完全相同，见 n_distinct_cap）。
+            "pick": ["deep", "drop60", "small", "big", "amount", "rand", "none"],
         }
         # ⚠️ 默认必须是 False：前端只发「已勾选」的键（axes={key:true}），
         #    若用 axes.get(k, True)，未勾选的维度会被当成 True 一起寻优 →
         #    用户取消勾选完全无效（实测：只勾 mkt_state 仍跑了 240 个组合）。
-        sel = {k: v for k, v in AX.items() if axes.get(k, False) and k in AX}
+        sel = {k: v for k, v in AX.items() if axes.get(k, False)}
         if not sel:
             return self._json({"error": "请至少选择一个待寻优的维度"}, 200)
+
+        # 节奏轴被勾选 → 进入容量口径；左侧 ⑧ 已开约束时也跟随（与 /api/backtest 一致）
+        base_lad = parse_ladder(base.get("cap_ladder"))
+        has_base_cap = int(base.get("max_pos") or 0) > 0 or bool(base_lad)
+        cap_mode = ("rhythm" in sel) or has_base_cap
+        # ⚠️ `pick`（超额选股规则）**只在有仓位上限时才有意义**：
+        #    不限仓位时信号全买，「先买哪只」根本不影响结果 —— 7 个规则会给出
+        #    7 行完全相同的数字（实测）。所以单独勾它时自动补一个默认仓位，
+        #    并在响应里回传 auto_cap，让前端把这件事说清楚，而不是让用户对着
+        #    一排相同的数字猜。
+        auto_cap = False
+        if "pick" in sel and not cap_mode:
+            base = dict(base, max_pos=10, max_new=int(base.get("max_new") or 3))
+            auto_cap = cap_mode = True
 
         combos = [{}]
         for k, cands in sel.items():
@@ -504,26 +667,46 @@ class Handler(BaseHTTPRequestHandler):
                         d["ret20_min"], d["ret20_max"] = v
                     elif k == "size_band":
                         d["size_min"], d["size_max"] = v
+                    elif k == "rhythm":
+                        # 节奏是一个「打包参数」：展开成 max_pos / max_new / cap_ladder。
+                        # `_rhythm` 只带标签，进 p 之前会被剥掉（否则会污染参数指纹）。
+                        d["max_pos"] = int(v.get("max_pos") or 0)
+                        d["max_new"] = int(v.get("max_new") or 3)
+                        d["cap_ladder"] = (list(v["ladder"]) if v.get("ladder") else None)
+                        d["_rhythm"] = rhythm_label(v)
                     else:
                         d[k] = v
                     nxt.append(d)
             combos = nxt
+
         # 上限保护
+        # ⚠️ 不能直接 `combos[:MAXC]`：笛卡尔积是「越靠前的轴变化越慢」生成的，
+        #    硬截断会把**末尾几个轴的取值整片丢掉**（实测勾 4 个轴时被砍掉的
+        #    组合里 mkt_state 只剩第一个取值，另外两个永远搜不到）。
+        #    改成**等步长抽样**，让每个轴的每个取值都有机会进入结果。
+        n_grid = len(combos)
         MAXC = int(b.get("max_combos") or 240)
-        if len(combos) > MAXC:
-            combos = combos[:MAXC]
+        if n_grid > MAXC:
+            step = n_grid / MAXC
+            combos = [combos[int(i * step)] for i in range(MAXC)]
 
         rows = []
-        nfull = ENGINE.C["n"]
+        cache = {}                      # 信号指纹 → (mask, stats)，节奏变体直接复用
+        n_cap = 0
         for c in combos:
+            rname = c.get("_rhythm")
             p = dict(base)
-            p.update(c)
-            mask, _ = ENGINE.build_mask(p, pool)
-            if mask.sum() < 200:
-                continue
-            st = ENGINE.stats(mask, hold)
+            p.update({k: v for k, v in c.items() if k != "_rhythm"})
+            sig = _signal_sig(p)
+            if sig in cache:
+                mask, st = cache[sig]
+            else:
+                mask, _ = ENGINE.build_mask(p, pool)
+                st = (ENGINE.stats(mask, hold) if int(mask.sum()) >= 200 else None)
+                cache[sig] = (mask, st)
             if st is None or st["cagr"] is None or st["sharpe"] is None:
                 continue
+
             label = []
             a, bb = p.get("px_ma60_min"), p.get("px_ma60_max")
             if a or bb:
@@ -547,7 +730,15 @@ class Handler(BaseHTTPRequestHandler):
             cf = p.get("confirm") or []
             if cf:
                 label.append("+" + "+".join(cf))
-            rows.append(dict(
+            # 选股规则：只在**非默认**时才写进标签。
+            # 默认值（deep）出现在每一行里纯属噪音，反而看不清是哪一维在变。
+            pk = p.get("pick")
+            if pk and pk != DEFAULT_PARAMS.get("pick"):
+                label.append(PICK_RULES.get(str(pk), {}).get("name", str(pk)))
+            if rname:
+                label.append(rname)
+
+            row = dict(
                 label=" ｜ ".join(label) if label else "全市场",
                 params={k: (list(v) if isinstance(v, (list, tuple)) else v)
                         for k, v in p.items()},
@@ -559,10 +750,74 @@ class Handler(BaseHTTPRequestHandler):
                 is_=st["segs"].get("IS(2015-2020)"),
                 n_neg=sum(1 for y in st["yearly"] if y["ret"] < 0),
                 n_year=len(st["yearly"]),
-            ))
-        rows.sort(key=lambda r: (-(r["sharpe"] or -9)))
+            )
+
+            # ---- 容量口径（节奏模式）：账户资金口径才是「账户里真实看到的收益率」
+            mp_c = int(p.get("max_pos") or 0)
+            lad_c = parse_ladder(p.get("cap_ladder"))
+            if cap_mode and (mp_c > 0 or lad_c):
+                try:
+                    cap = ENGINE.capacity(
+                        mask, hold=hold, max_pos=mp_c,
+                        max_new=int(p.get("max_new") or 3),
+                        pick=str(p.get("pick") or "deep"),
+                        n_sim=0,                 # ⚠️ 必须关掉：200 次随机要 25s
+                        ladder=lad_c)
+                except Exception:
+                    import traceback
+                    traceback.print_exc()
+                    cap = None
+                if cap:
+                    n_cap += 1
+                    row.update(
+                        cap_cagr=cap["cap_cagr"], cap_mdd=cap["cap_mdd"],
+                        cap_sharpe=cap["cap_sharpe"],
+                        inv_cagr=cap["cagr"], inv_sharpe=cap["sharpe"],
+                        fill_pct=cap["fill_pct"], drop_pct=cap["drop_pct"],
+                        avg_pos=cap["avg_pos"],
+                        # `avg_invested` / `full_pct` **两个口径都有值**：
+                        #   等权 = avg_pos / max_pos（每笔仓位恒为 1/max_pos）
+                        #   阶梯 = 每日权重和（来自 engine._daily_invested）
+                        # ⚠️ 别用 `full_pct` 代替 `active_pct`：前者是「满仓日占比」，
+                        #    后者是「有持仓日占比」，只在 avg_pos == max_pos 时才相等。
+                        avg_invested=cap.get("avg_invested"),
+                        max_pos=cap["max_pos"], max_new=cap["max_new"],
+                        ladder=cap.get("ladder"),
+                        # 分段/逐年改用**账户口径净值**（否则「账户 CAGR」配
+                        # 「不限仓位 OOS」又是一处口径打架）
+                        n_neg=sum(1 for y in cap["yearly"] if y["ret"] < 0),
+                        n_year=len(cap["yearly"]),
+                        is_=cap["segs"].get("IS(2015-2020)"),
+                        oos=cap["segs"].get("OOS(2021-2026)"),
+                    )
+            rows.append(row)
+
+        # 排序依据：容量模式默认按**账户资金口径 Sharpe**，否则按不限仓位 Sharpe
+        sort_by = str(b.get("sort_by") or "").strip()
+        allowed = (("cap_sharpe", "cap_cagr", "inv_cagr", "sharpe", "cagr")
+                   if cap_mode else ("sharpe", "cagr"))
+        if sort_by not in allowed:
+            sort_by = allowed[0]
+        rows.sort(key=lambda r: -(r.get(sort_by) if r.get(sort_by) is not None else -9))
+        n_distinct_cap = max_same_cap = None
+        if cap_mode:
+            # 容量口径下**有多少行其实给出了同一个结果** —— 用于前端解释
+            # 「为什么好几行数字一模一样」。成因：仓位上限只有 N 个，而选股规则
+            # （如「最超跌优先」）总是先从最窄的那一档里挑满，放宽嵌套区间多买不到。
+            seen = {}
+            for r in rows:
+                if r.get("cap_cagr") is None:
+                    continue
+                k = (round(r["cap_cagr"], 6), round(r["cap_sharpe"], 6))
+                seen[k] = seen.get(k, 0) + 1
+            n_distinct_cap = len(seen)
+            max_same_cap = max(seen.values()) if seen else 0
         return self._json(dict(ms=int((time.time() - t0) * 1000),
-                               n_combo=len(rows), rows=rows[:120]))
+                               n_combo=len(rows), n_grid=n_grid, n_used=len(combos),
+                               n_cap=n_cap, n_distinct_cap=n_distinct_cap,
+                               max_same_cap=max_same_cap,
+                               cap_mode=cap_mode, auto_cap=auto_cap, sort_by=sort_by,
+                               rows=rows[:120]))
 
     # ------------------------------------------------------------ 我的方案
     def _preset_save(self, b):

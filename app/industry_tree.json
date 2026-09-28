@@ -15,7 +15,8 @@
     "  3. 该归类是【当前快照口径】，不反映历史行业变更 —— 与行业数据本身的局限一致。",
     "",
     "维护方式：改了同花顺行业清单（scripts/20_fetch_industry.py 重跑）后，",
-    "  scripts/check_industry_tree.py 会校验本文件是否覆盖全部细分行业。"
+    "  需校验本文件是否覆盖全部细分行业（原 scripts/check_industry_tree.py 已于",
+    "  2026-09-28 清理，可从 git 恢复）。"
   ],
 
   "groups": [

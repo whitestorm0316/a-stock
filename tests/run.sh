@@ -7,6 +7,8 @@
 #   bash tests/run.sh ind          # 只跑行业两级树
 #   bash tests/run.sh icon         # 只跑图标体系
 #   bash tests/run.sh ladder       # 只跑建仓节奏（阶梯建仓）
+#   bash tests/run.sh tune         # 只跑参数寻优（含建仓节奏轴 / 两套口径）
+#   bash tests/run.sh market       # 只跑市场环境（牛熊判定依据 / 真实指数对照）
 #   bash tests/run.sh delist       # 只跑退市风险过滤
 #   bash tests/run.sh presets      # 只跑市值区间 + 我的方案
 #   bash tests/run.sh cdp          # 跑真实 Chrome 端到端（需先启动 app/server.py）
@@ -35,11 +37,13 @@ case "${1:-all}" in
   fin)    SETS="test_fin" ;;
   delist) SETS="test_delist" ;;
   ladder) SETS="test_ladder" ;;
+  tune)   SETS="test_tune" ;;
+  market) SETS="test_market" ;;
   trades) SETS="test_trades" ;;
   presets) SETS="test_presets" ;;
   cdp)    SETS="__CDP__" ;;
-  all)    SETS="test_cap test_board test_indtree test_icon test_ladder test_fin test_delist test_trades test_presets" ;;
-  *) echo "未知参数：$1（可选 cap|board|ind|icon|ladder|fin|delist|trades|presets|cdp|all）"; exit 2 ;;
+  all)    SETS="test_cap test_board test_indtree test_icon test_ladder test_fin test_delist test_trades test_presets test_tune test_market" ;;
+  *) echo "未知参数：$1（可选 cap|board|ind|icon|ladder|tune|market|fin|delist|trades|presets|cdp|all）"; exit 2 ;;
 esac
 
 if [ "$SETS" = "__CDP__" ]; then
@@ -78,6 +82,10 @@ if [ -z "$failed" ]; then
   echo "✅ 全部通过：$total_pass 项"
   exit 0
 else
-  echo "❌ 失败套件：$failed（通过 $total_pass / 共 $((total_pass + total_fail))）"
+  # ⚠️ 变量后面紧跟**全角括号**时必须写成 ${failed} —— 直接写 $failed（
+  #    bash 会把多字节字符的第一个字节也吞进变量名，在 `set -u` 下报
+  #    「failed: unbound variable」并**直接终止脚本**，把真正的失败清单盖掉。
+  #    实测：只有真的有套件失败时才会踩到，所以一直没被发现。
+  echo "❌ 失败套件：${failed}（通过 $total_pass / 共 $((total_pass + total_fail))）"
   exit 1
 fi

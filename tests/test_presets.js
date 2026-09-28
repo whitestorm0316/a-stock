@@ -177,26 +177,35 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); 
   ok(fxUsers.length > 0, 'fixture 里有 user_presets（否则本套测试没意义）', String(fxUsers.length));
   ok(groups.some(x => /我的方案/.test(x)), '下拉含「我的方案」分组', groups.join(' | '));
   const u0 = fxUsers[0];
-  ok($$('#preset option').some(o => o.value === u0.id && o.textContent === u0.name),
-    '我的方案已渲染进下拉', `${u0.id} ${u0.name}`);
+  // ⚠️ fixture 里没有 user_presets 时**不能直接往下走**：u0 是 undefined，
+  //    后面每一次 u0.xxx 都会抛 TypeError，整套测试会以「未能解析结果」收场，
+  //    看不到真正的原因（上面的 ❌ 断言）。实测栽过一次：
+  //    本地 data/user_presets.json 丢了 → fixture 抓成空数组 → 这里直接崩。
+  if (!u0) {
+    ok('fixture 有 user_presets 才能继续「我的方案」用例', false,
+       'fxUsers 为空 —— 检查 data/user_presets.json 是否存在后重跑 make_fixtures.py');
+  } else {
+    ok($$('#preset option').some(o => o.value === u0.id && o.textContent === u0.name),
+      '我的方案已渲染进下拉', `${u0.id} ${u0.name}`);
 
-  // 选中「我的方案」
-  $('#preset').value = u0.id;
-  ev($('#preset'), 'change');
-  await sleep(60);
-  ok(!$('#preset_del').disabled, '选中我的方案 → 删除按钮可用');
-  ok($('#preset_name').value === u0.name, '名称回填 = 原方案名', $('#preset_name').value);
-  const fromUser = w.eval('collect()');
-  for (const k of ['px_ma60_min', 'px_ma60_max', 'mkt_state', 'hold']) {
-    if (u0.params[k] !== undefined) {
-      ok(JSON.stringify(fromUser[k]) === JSON.stringify(u0.params[k]),
-        `我的方案的 ${k} 已写回控件`, `${JSON.stringify(fromUser[k])}`);
+    // 选中「我的方案」
+    $('#preset').value = u0.id;
+    ev($('#preset'), 'change');
+    await sleep(60);
+    ok(!$('#preset_del').disabled, '选中我的方案 → 删除按钮可用');
+    ok($('#preset_name').value === u0.name, '名称回填 = 原方案名', $('#preset_name').value);
+    const fromUser = w.eval('collect()');
+    for (const k of ['px_ma60_min', 'px_ma60_max', 'mkt_state', 'hold']) {
+      if (u0.params[k] !== undefined) {
+        ok(JSON.stringify(fromUser[k]) === JSON.stringify(u0.params[k]),
+          `我的方案的 ${k} 已写回控件`, `${JSON.stringify(fromUser[k])}`);
+      }
     }
+    ok(/我的方案/.test($('#presetdesc').textContent), '描述区标明是「我的方案」',
+      $('#presetdesc').textContent);
+    ok(/个条件/.test($('#presetdesc').textContent), '描述区带参数摘要（条件数）',
+      $('#presetdesc').textContent);
   }
-  ok(/我的方案/.test($('#presetdesc').textContent), '描述区标明是「我的方案」',
-    $('#presetdesc').textContent);
-  ok(/个条件/.test($('#presetdesc').textContent), '描述区带参数摘要（条件数）',
-    $('#presetdesc').textContent);
 
   // 9. 空名称 → 不发请求
   const before = reqs.length;

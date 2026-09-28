@@ -521,6 +521,15 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
             <button data-v="low" data-page-node-id="7CM0Q5fbMD9x78ENuLAGKy">低</button>
           </div>
         </div>
+        <div class="row">
+          <label style="flex:0 0 46px">指数口径</label>
+          <select id="mkt_index" class="grow" title="牛熊判定用哪批股票构筑自建等权净值"></select>
+        </div>
+        <div class="row">
+          <label style="flex:0 0 46px">均线窗口</label>
+          <select id="mkt_ma" class="grow" title="净值与多少日简单均线比较"></select>
+        </div>
+        <div class="cap" id="mkt_cfg_note"></div>
         <div class="cap" data-page-node-id="xVZLkYxuaNZXRppmllZ0Pr">报告第6节：市场 &lt;MA60 时 +1.29%，&gt;MA60 时 −0.60%。<br data-page-node-id="vOcwqZCRxrdM7BPUu4Kw8V">
           机制：牛市里的「超跌」多是基本面恶化，熊市才更多是流动性错杀。</div>
       </div>
@@ -852,15 +861,22 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
       <div class="pane" id="p-tune" data-page-node-id="bGEcucXICspQSmxKGrig0I">
         <div class="card" data-page-node-id="9m63nWXOyuKDgh1BfyfKKv">
           <h3 data-page-node-id="3l0ffLZCbRtvQVaw2Af7wp">参数寻优 <span class="tag" data-page-node-id="cqLQHeUeooFqGBCFo0fcbu">简单网格搜索</span></h3>
-          <div class="desc" data-page-node-id="eN2GiKflS2ASozVIKumH4y">勾选要一起寻优的维度，系统做笛卡尔积后按 Sharpe 排序。组合数上限 240。
+          <div class="desc" data-page-node-id="eN2GiKflS2ASozVIKumH4y">勾选要一起寻优的维度，系统做笛卡尔积后逐一回测。组合数上限 240（超出按<b>等步长抽样</b>，保证每个维度的每个取值都能被搜到）。
             报告的核心发现是「越简单越好」，所以先只勾 2~3 个维度。</div>
+          <div class="desc" id="tune_cap_hint" style="display:none;margin-top:-4px">
+            ⚠️ 勾了<b>建仓节奏</b>或<b>超额选股规则</b>（或左侧 ⑧ 已开仓位约束）→ 本页改用<b>容量口径</b>：
+            每个组合额外模拟「同时持仓上限 + 每日买入上限 + 阶梯建仓」，
+            按 <b>账户资金口径</b> 排序。因为节奏与选股规则在「信号全买」下毫无作用 ——
+            不限仓位时压根没有仓位上限，先买哪只、分几批买都不影响结果。</div>
           <div class="chks" id="axes" style="max-height:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:2px" data-page-node-id="yBbUkoRCJlnKyCjiVFmMf8">
             <label class="chk" data-page-node-id="RuYRi5SWBNERWHlaYQx0hO"><input type="checkbox" value="px_ma60" checked data-page-node-id="xyoOremWAEERGjqwS27OGo"><span data-page-node-id="0sYD7ZrEF7mUxFV8jCVaKN"><span class="t" data-page-node-id="3oeX9Bf3WkCndeel48iatK">距MA60 分位区间</span><span class="d" data-page-node-id="dktWS6DKihPdaqERZGfCBE">D1 / D1~2 / D1~3 / D2~3 / D1~5 / D1~10</span></span></label>
-            <label class="chk" data-page-node-id="PUb8A41UcJzPTF2CMuOCNP"><input type="checkbox" value="size_band" checked data-page-node-id="LGiqoyk7czr6JHiukGto6G"><span data-page-node-id="ZogWmHgj3PMCBfgBqTOGbI"><span class="t" data-page-node-id="UbCcFYwHBKU7fAX54Ol4A8">市值区间</span><span class="d" data-page-node-id="PFCkRUKzHmjarYyr7IWXD4">最小10% / 10~20% / 最小30% / 10~30% / 20~50% / 全部（6 档）</span></span></label>
+            <label class="chk" data-page-node-id="PUb8A41UcJzPTF2CMuOCNP"><input type="checkbox" value="size_band" checked data-page-node-id="LGiqoyk7czr6JHiukGto6G"><span data-page-node-id="ZogWmHgj3PMCBfgBqTOGbI"><span class="t" data-page-node-id="UbCcFYwHBKU7fAX54Ol4A8">市值区间</span><span class="d" data-page-node-id="PFCkRUKzHmjarYyr7IWXD4">最小10% / 最小20% / 最小30% / 10~30% / 20~50% / 全部（6 档）</span></span></label>
             <label class="chk" data-page-node-id="ADE6kHSSKtIechCXTwViEX"><input type="checkbox" value="mkt_state" checked data-page-node-id="myGA5YBK3ZpSbL8F5DCOEB"><span data-page-node-id="rG7aT3bckReK2KQzbwO6Uc"><span class="t" data-page-node-id="QxxgaChishZy43BmUtABS8">市场环境</span><span class="d" data-page-node-id="5g6PAcNYdMHmlI1XSKUDMB">熊市 / 不限 / 牛市</span></span></label>
             <label class="chk" data-page-node-id="qpQUThDb7Rw2CbmlYf91Ci"><input type="checkbox" value="mkt_hv" data-page-node-id="vpSMXnhR2QSkAE19HdoyHK"><span data-page-node-id="d3ZN2JhAHa0m8ZuLScidQq"><span class="t" data-page-node-id="IDr467vo4JwanvlKtNaezX">市场波动</span><span class="d" data-page-node-id="d46MsposF7ZYljbpnWpTJJ">不限 / 高 / 低</span></span></label>
             <label class="chk" data-page-node-id="HKcGmQjsFNEfQOUtTFbH1c"><input type="checkbox" value="ret20" data-page-node-id="3UbTzUIJ3Qu2170EerfwTv"><span data-page-node-id="3HR2axIAmKPhTRFSMFWCp6"><span class="t" data-page-node-id="bm9tC3wm7jrcCtd5htQbvy">ret20 分位区间</span><span class="d" data-page-node-id="1YvAvQBJU2BnvfNIwQ7hwH">不限 / D1~3 / D2~6 / D1 / D1~5</span></span></label>
             <label class="chk" data-page-node-id="fQfhBsXytcdxDEVUfeBOxG"><input type="checkbox" value="confirm" data-page-node-id="wkwltnnElzfLMNkTtwzFt6"><span data-page-node-id="VNjbrCmQZDCHuYz916qBJJ"><span class="t" data-page-node-id="4h1XZeAWy8nhcXxI5UeoKe">反转确认信号</span><span class="d" data-page-node-id="xQxJukpFwU8D6y0JSbX5O5">无 / MACD改善 / MA5 / 放量 / 组合</span></span></label>
+            <label class="chk"><input type="checkbox" value="rhythm"><span><span class="t">建仓节奏 <span class="tag">容量口径</span></span><span class="d" id="ax_rhythm_d">等权 5 档 + 阶梯 5 档（共 10 档）</span></span></label>
+            <label class="chk"><input type="checkbox" value="pick"><span><span class="t">超额选股规则 <span class="tag">容量口径</span></span><span class="d">最超跌 / 60日跌幅 / 小市值 / 大市值 / 成交额 / 随机 / 原始顺序（7 档）</span></span></label>
           </div>
           <div class="btnrow" style="margin-top:13px;max-width:330px" data-page-node-id="aaEdCy5uE94UTOaN4y1Ibb">
             <button class="btn" id="tune_run" data-page-node-id="7tEUvmrJ6qSIztq9F7Cz7I">开始寻优</button>
@@ -905,6 +921,10 @@ const BD = v => BD_MAP[v] || (v || '—');
 const cls = v => (v > 0 ? 'pos' : v < 0 ? 'neg' : 'neu');
 const NF = new Intl.NumberFormat('zh-CN');
 const NUM = v => (v === null || v === undefined) ? '—' : NF.format(Math.round(v));
+/* 判空（含 NaN）—— 给「有值才渲染 / 否则换一种说法」的场景用。
+   ⚠️ 不要写 `isFinite(v)`：`isFinite(null) === true`（null 会被转成 0），
+      会把「后端没给这个字段」误判成「值等于 0」。必须显式排掉 null/undefined。 */
+const hasNum = v => v !== null && v !== undefined && isFinite(v);
 /* 金额（元）→ 亿/万 可读文本 */
 const MONEY = v => {
   if (v === null || v === undefined || !isFinite(v)) return '—';
@@ -1030,6 +1050,9 @@ function collect() {
     size_max: sizeBand()[1],
     mkt_state: segv('#seg-mkt') || 'any',
     mkt_hv: segv('#seg-hv') || 'any',
+    // 市场指数口径 + 均线窗口（牛熊判定用哪批股票、比多少日均线）
+    mkt_index: $('#mkt_index').value || 'all',
+    mkt_ma: parseInt($('#mkt_ma').value, 10) || 60,
     rs_sz_min: nz(rs && rs.lo), rs_sz_max: nz(rs && rs.hi),
     hv_min: nz(ihv && ihv.lo), hv_max: nz(ihv && ihv.hi),
     rvol_min: nz(rv && rv.lo), rvol_max: nz(rv && rv.hi),
@@ -1146,6 +1169,16 @@ function applyParams(p) {
     b.classList.toggle('on', (b.dataset.v || '') === String(v ?? 'any')));
   setV('#seg-mkt', p.mkt_state ?? 'any');
   setV('#seg-hv', p.mkt_hv ?? 'any');
+  // 市场指数口径 / 均线窗口：预设里没有这两项 → 回落到默认（全A等权 / MA60）
+  const setSel = (id, v) => {
+    const el = $(id);
+    if (el && v != null && [...el.options].some(o => o.value === String(v))) {
+      el.value = String(v);
+    }
+  };
+  setSel('#mkt_index', p.mkt_index ?? DEFAULT_PARAMS.mkt_index);
+  setSel('#mkt_ma', p.mkt_ma ?? DEFAULT_PARAMS.mkt_ma);
+  syncMktCfgNote();
   const cf = new Set(p.confirm || []);
   $$('#confirms input').forEach(i => i.checked = cf.has(i.value));
   // ---- 财务字段：元 → 亿元，小数 → %
@@ -1238,7 +1271,15 @@ function paramSummary(p) {
   if (nn(p.ret20_min) !== null || nn(p.ret20_max) !== null) { n++; rg(p.ret20_min, p.ret20_max, 'ret20'); }
   if (p.deep_any) { n++; L.push('深度超跌'); }
   if (sz[0] > 0 || sz[1] < SIZE_N - 1) { n++; L.push('市值' + sizeBandText(sz[0], sz[1])); }
-  if (p.mkt_state && p.mkt_state !== 'any') { n++; L.push(p.mkt_state === 'bear' ? '市场<MA60' : '市场>MA60'); }
+  // ⚠️ 标签必须跟随所选口径/窗口 —— 写死「市场<MA60」在用户切到 MA120 或小市值口径
+  //    之后就会说谎。格式与后端 engine.mkt_label() 保持一致（`MA60·小50% 等权`）。
+  if (p.mkt_state && p.mkt_state !== 'any') {
+    n++;
+    const mw = p.mkt_ma || 60;
+    const mi = p.mkt_index || 'all';
+    L.push(`${p.mkt_state === 'bear' ? '市场<' : '市场>'}MA${mw}`
+      + (mi === 'all' ? '' : '·' + (MKT_NAME[mi] || mi)));
+  }
   if (p.mkt_hv && p.mkt_hv !== 'any') { n++; L.push(p.mkt_hv === 'high' ? '市场高波动' : '市场低波动'); }
   if ((p.confirm || []).length) { n += p.confirm.length; L.push('确认×' + p.confirm.length); }
   // 财务（动态）
@@ -1400,6 +1441,9 @@ async function init() {
     // ⚠️ 必须在 applyParams 之前填充，否则 cap_pick 还没有 option，选不中
     fillPickRules(d.pick_rules);
     fillLadderPresets(d.ladder_presets);
+    fillRhythmAxis(d.rhythm_cands);
+    // 同上：市场口径 / 均线窗口的 option 必须先有，applyParams 才选得中
+    fillMktOptions(m);
     applyParams(PRESETS[0].params);
     CFG = { ...DEFAULT_PARAMS, ...PRESETS[0].params };
     // 行业（两级：门类 → 细分行业）
@@ -1594,13 +1638,100 @@ async function runScan(quiet) {
   const btn = $('#run');
   if (!quiet) btn.innerHTML = '<span class="spin"></span> 计算中';
   try {
-    const r = await api('/api/scan', { params: collect(), pool: currentPool(), limit: 120 });
+    const [r, mk] = await Promise.all([
+      api('/api/scan', { params: collect(), pool: currentPool(), limit: 120 }),
+      loadMarket(),
+    ]);
     SCAN = r;
-    renderScan(r);
+    renderScan(r, mk);
     $('#c-scan').textContent = r.n ? `(${NUM(r.n)})` : '';
   } catch (e) {
     $('#p-scan').innerHTML = `<div class="errbox"><b>选股失败：</b>${e.message}</div>`;
   } finally { if (!quiet) btn.textContent = '运行回测'; }
+}
+
+/* 市场环境序列（自建净值 vs 均线）+ 真实指数对照。
+   ⚠️ 现在**跟随「指数口径 / 均线窗口」两个参数** —— 换口径会换出另一条线，
+      不能再像以前那样「整个会话缓存一次」。
+      缓存按 `index|ma` 分键：同一会话里来回切换不会重复请求，换参数则必然重取。
+      取不到就返回 null（可选数据，不该拖垮选股页）。 */
+let MKT = null, MKT_KEY = '';
+async function loadMarket(force) {
+  const ix = ($('#mkt_index') && $('#mkt_index').value) || 'all';
+  const ma = ($('#mkt_ma') && $('#mkt_ma').value) || '60';
+  const key = `${ix}|${ma}`;
+  if (MKT && MKT_KEY === key && !force) return MKT;
+  try {
+    MKT = await api(`/api/market?days=180&index=${encodeURIComponent(ix)}&ma=${encodeURIComponent(ma)}`,
+                    null, true);
+    MKT_KEY = key;
+  } catch (e) { MKT = null; MKT_KEY = ''; }
+  return MKT;
+}
+
+/* 牛熊徽标 —— ⚠️ `bull === null` 表示「均线未成形」，必须与 false（跌破）区分开。
+   写成 `x.bull ? '牛' : '熊'` 会把 null 误显示成熊市。 */
+const bullBadge = b => (b === null || b === undefined)
+  ? '<span class="neu">—</span>'
+  : (b ? '<span class="pos">牛市</span>' : '<span class="neg">熊市</span>');
+
+function mktBlock(mk) {
+  if (!mk || !mk.series || !mk.series.length) return '';
+  const idx = mk.indices || [];
+  const last = mk.series[mk.series.length - 1];
+  const mw = mk.ma_win || 60;
+  const ixName = mk.index_name || '全A等权';
+  const rows = idx.map(x => `<tr>
+      <td class="l">${esc(x.name)}</td>
+      <td>${F(x.close, 2)}</td><td>${F(x.ma60, 2)}</td>
+      <td class="${cls(x.dist)}">${F(x.dist, 2, '%')}</td>
+      <td>${bullBadge(x.bull)}</td>
+      <td class="l">${esc(x.last_date)}</td></tr>`).join('');
+  const bears = idx.filter(x => x.bull === false).length;
+  // 只在「引擎说牛市、但真实指数里有熊市」时才告警 —— 这才是会让人误判的那种分歧
+  const split = (mk.bull_now === true && bears > 0);
+  const warn = split ? `<div class="warnbox">⚠️ <b>口径分歧</b>：本策略的牛熊判定用的是
+    <b>自建${esc(ixName)}净值</b>（日度再平衡、开盘→开盘），它与市值加权指数
+    （上证/沪深300）<b>不是同一条线</b>，所以会出现
+    「自建净值在 MA${mw} 上方」而<b>真实指数全在 MA60 下方</b>的情况。<br>
+    <b>策略实际用的是自建净值</b>（上表第一行）；想按真实指数判断市场，请看下面几张指数。</div>` : '';
+  // 同一口径下三个窗口的当前状态 —— 这是「换窗口会怎样」的**可验证依据**，
+  // 不能只在左侧用一句文案警告（用户无从核对）。
+  const wins = (mk.windows || []).map(w => `<tr>
+      <td class="l">MA${w.ma}${String(w.ma) === String(mw) ? ' <span class="tag">当前</span>' : ''}</td>
+      <td class="${cls(w.dist)}">${F(w.dist, 2, '%')}</td>
+      <td>${bullBadge(w.bull)}</td></tr>`).join('');
+  const winTbl = wins ? `<div class="tw" style="margin-top:10px"><table><thead><tr>
+      <th style="text-align:left">同一口径 · 换均线窗口</th><th>距均线</th><th>状态</th>
+    </tr></thead><tbody>${wins}</tbody></table></div>
+    <div class="cap">⚠️ <b>换均线窗口与换指数口径效果几乎等价</b>（都等于把过滤变严）。
+      实测 CAGR：全A 在 MA20/60/120 下为 25.93% / 29.81% / 34.86%；
+      小50% 为 <b>16.81%</b> / 35.19% / <b>43.64%</b> —— 跨度 26.8pp，
+      而全A 只有 8.9pp。只看单一窗口的数字会高估小市值口径的稳健性。</div>` : '';
+  return `<div class="card" style="background:#fafbfc">
+    <h3 style="font-size:13px">市场环境 <span class="tag">牛熊判定依据</span></h3>
+    <div class="desc">策略的「熊市（市场净值 &lt; MA${mw}）」过滤用的是
+      <b>自建${esc(ixName)}净值</b>，不是交易所指数（指数数据本地只覆盖 2023 起，
+      做不了 11 年回测）。口径与均线窗口可在左侧「③ 市场环境」里切换。
+      两者在个别时段会明显分歧，故并列展示。</div>
+    <div class="tw"><table><thead><tr>
+      <th style="text-align:left">口径</th><th>最新值</th><th>MA${mw}</th>
+      <th>距MA${mw}</th><th>状态</th><th style="text-align:left">数据日</th>
+    </tr></thead><tbody>
+      <tr><td class="l"><b>自建${esc(ixName)}净值</b> <span class="tag">策略用</span></td>
+        <td>${F(last.nav, 4)}</td>
+        <td>${F(last.ma, 4)}</td>
+        <td class="${cls(mk.dist_now)}">${F(mk.dist_now, 2, '%')}</td>
+        <td>${bullBadge(mk.bull_now)}</td>
+        <td class="l">${esc(mk.last_date)}</td></tr>
+      ${rows}
+    </tbody></table></div>
+    ${warn}
+    ${winTbl}
+    <div class="cap">自建净值的口径：当日该口径成分股「可交易开盘→开盘」收益的<b>等权平均</b>逐日复利，
+      因此 <b>T 日的值反映的是 T 日开盘</b>（最后一天没有 T+1，当日收益恒为 0）。
+      真实指数为<b>收盘价 vs 自身 60 日简单均线</b>。指数数据来自
+      <code>data/raw/index_*.json</code>，缺失时本表只显示自建净值一行。</div></div>`;
 }
 
 async function runBacktest() {
@@ -1622,18 +1753,23 @@ async function runBacktest() {
 }
 
 /* ---------------- 渲染：今日选股 ---------------- */
-function renderScan(r) {
+function renderScan(r, mk) {
+  // ⚠️ 文案必须跟随所选口径/窗口 —— 写死「MA60」会在用户切到 MA120 或小市值口径后说谎。
+  const lb = r.mkt_label || 'MA60';
   const mkt = r.mkt_bull === null ? '' : (r.mkt_bull
-    ? '<span style="color:#a8622c">牛市（净值 &gt; MA60）</span>'
-    : '<span style="color:#17764f">熊市（净值 &lt; MA60）</span>');
+    ? `<span style="color:#a8622c">牛市（净值 &gt; ${esc(lb)}）</span>`
+    : `<span style="color:#17764f">熊市（净值 &lt; ${esc(lb)}）</span>`);
   let fb = '';
   if (r.fallback_days > 0) {
     fb = `<div class="warnbox"><b>已回溯到最近一个有信号的交易日：${r.asof}</b>
       （距最新交易日 ${r.latest_date} 回退 ${r.fallback_days} 个交易日）。<br>
-      原因是默认条件含「熊市（市场净值 &lt; MA60）」，而最新交易日
-      <b>${r.latest_date}</b> 市场处于 ${r.mkt_bull_now ? 'MA60 上方（不满足）' : 'MA60 下方'}，
+      原因是当前条件含「熊市（市场净值 &lt; ${esc(lb)}）」，而最新交易日
+      <b>${r.latest_date}</b> 市场处于
+      ${r.mkt_bull_now ? `${esc(lb)} 上方（不满足）` : `${esc(lb)} 下方`}，
       当日符合全部条件的股票为 <b>${r.latest_n}</b> 只。
-      这是策略的正常行为——熊市过滤生效时本来就不该有信号。</div>`;
+      这是策略的正常行为——熊市过滤生效时本来就不该有信号。<br>
+      <span style="color:#8d94a3">⚠️ 这里的「市场」是<b>自建${esc(r.mkt_index_name || '全A等权')}净值</b>，
+      与上证/沪深300 等交易所指数不是同一条线 —— 分歧时请看下方「市场环境」表。</span></div>`;
   }
   let h = fb + `<div class="kv">
     <span>候选日 <b>${r.asof || r.date}</b></span>
@@ -1642,7 +1778,8 @@ function renderScan(r) {
     <span>市场距MA60 <b>${F(r.mkt_dist,2,'%')}</b></span>
     <span>Breadth <b>${F(r.breadth,1,'%')}</b></span>
     <span>市场HV20 <b>${F(r.hv20,1,'%')}</b></span>
-    <span style="color:#8d94a3">耗时 ${r.ms} ms</span></div>`;
+    <span style="color:#8d94a3">耗时 ${r.ms} ms</span></div>`
+    + mktBlock(mk);
 
   if (!r.items || !r.items.length) {
     h += `<div class="empty">当前参数下，最近 ${r.latest_date} 及回溯范围内均无符合条件的股票。<br>
@@ -1818,9 +1955,9 @@ function capHTML(r) {
         <div class="n">上限 ${c.max_pos} 只 · 实达 ${c.max_pos_seen} 只</div></div>
       <div class="mc"><div class="l">${lad ? '平均仓位' : '资金利用率'}</div>
         <div class="v sm">${lad ? PCT(c.avg_invested, 1) : PCT(util, 1)}</div>
-        <div class="n">${lad
-          ? `真·满仓日占比 ${PCT(c.full_pct, 1)}`
-          : `满仓日占比 ${PCT(c.active_pct, 1)}`}</div></div>
+        <div class="n">${hasNum(c.full_pct)
+          ? `满仓日占比 ${PCT(c.full_pct, 1)}`
+          : `有持仓日占比 ${PCT(c.active_pct, 1)}`}</div></div>
       <div class="mc"><div class="l">空仓日占比</div>
         <div class="v sm">${PCT(c.empty_pct, 1)}</div>
         <div class="n">无信号可买的天数</div></div>
@@ -2495,6 +2632,9 @@ function bindTradeControls(r) {
 }
 
 /* ---------------- 参数寻优 ---------------- */
+let TUNE = null;                                  // 最近一次寻优响应
+let TUNE_SORT = { k: null, asc: false };          // 当前表格排序（表头点击可换）
+
 $('#tune_run').addEventListener('click', async () => {
   const axes = {}; $$('#axes input').forEach(i => { if (i.checked) axes[i.value] = true; });
   if (!Object.keys(axes).length) { alert('请至少勾选一个待寻优维度'); return; }
@@ -2508,56 +2648,172 @@ $('#tune_run').addEventListener('click', async () => {
     $('#tune-out').innerHTML = `<div class="errbox"><b>寻优失败：</b>${e.message}</div>`;
   } finally { b.textContent = '开始寻优'; b.disabled = false; }
 });
-function renderTune(r) {
-  if (!r.rows.length) { $('#tune-out').innerHTML = `<div class="empty">无有效组合</div>`; return; }
-  const rows = r.rows;
-  let h = `<div class="kv"><span>有效组合 <b>${r.n_combo}</b></span>
-    <span>耗时 <b>${r.ms} ms</b></span>
-    <span>排序依据 <b style="font-family:inherit">Sharpe 降序</b></span></div>`;
-  h += `<div class="card"><h3>寻优结果 <span class="tag">Top ${Math.min(40, rows.length)}</span></h3>
-    <div class="desc">按 Sharpe 排序。但报告的核心结论是<b>越简单越好</b> ——
-      请优先看「条件数少 + 负年份少 + OOS 仍为正」的组合，而不是单纯 Sharpe 最高的。</div>
-    <div class="tw" style="max-height:520px;overflow-y:auto"><table><thead><tr>
-      <th>#</th><th style="text-align:left">组合</th><th>信号数</th><th>CAGR</th>
-      <th>MDD</th><th>Sharpe</th><th>胜率</th><th>PF</th><th>exw20</th><th>t20</th>
-      <th>负年份</th><th>IS</th><th>OOS</th></tr></thead><tbody>
-    ${rows.slice(0, 40).map((x, i) => `<tr class="${i === 0 ? 'top1' : i < 3 ? 'top2' : ''}">
+
+/* 勾了节奏轴 / 选股规则轴 → 顶部立刻提示「本页会切到容量口径」，
+   别等结果出来才发现排序依据变了（表头一换容易懵）。
+   ⚠️ 这两个轴必须一起判断：`pick` 同样是容量层参数，单独勾它也会进容量口径。 */
+const TUNE_CAP_AXES = ['rhythm', 'pick'];
+const _axesBox = $('#axes');
+if (_axesBox) _axesBox.addEventListener('change', () => {
+  const on = $$('#axes input').some(i => TUNE_CAP_AXES.includes(i.value) && i.checked);
+  const hint = $('#tune_cap_hint');
+  if (hint) hint.style.display = on ? '' : 'none';
+});
+
+/* 寻优表的列定义。
+   ⚠️ 两种口径的列**不混排** —— 把「不限仓位的胜率/PF」和「账户资金口径的 CAGR」
+      放进同一行，会让人以为它们同源。容量模式下整表换成容量列。
+   `asc0:1` = 越小越好（首次点击按升序），其余默认降序。 */
+function tuneCols(cap) {
+  const neg = () => 'neg';
+  const nneg = (v, x) => (x.n_neg === 0 ? 'pos' : x.n_neg <= 2 ? 'neu' : 'neg');
+  const nnf = (v, x) => `${x.n_neg}/${x.n_year}`;
+  return cap ? [
+    { k: 'cap_cagr',   t: '账户CAGR',   c: v => cls(v), f: v => PCT(v) },
+    { k: 'cap_sharpe', t: '账户Sharpe', b: 1,          f: v => F(v, 2) },
+    { k: 'cap_mdd',    t: '账户MDD',    c: neg, asc0: 1, f: v => PCT(v) },
+    { k: 'inv_cagr',   t: '已投CAGR',   c: v => cls(v), f: v => PCT(v) },
+    { k: 'avg_pos',    t: '平均持仓',   f: v => F(v, 1, ' 只') },
+    { k: 'fill_pct',   t: '建仓率',     f: v => PCT(v, 1) },
+    { k: 'n_signal',   t: '信号数',     f: v => NUM(v) },
+    { k: 'n_neg',      t: '负年份',     c: nneg, asc0: 1, f: nnf },
+    { k: 'is_',        t: 'IS',         c: v => cls(v), f: v => PCT(v) },
+    { k: 'oos',        t: 'OOS',        c: v => cls(v), f: v => PCT(v) },
+  ] : [
+    { k: 'cagr',       t: 'CAGR',       c: v => cls(v), f: v => PCT(v) },
+    { k: 'mdd',        t: 'MDD',        c: neg, asc0: 1, f: v => PCT(v) },
+    { k: 'sharpe',     t: 'Sharpe',     b: 1,          f: v => F(v, 2) },
+    { k: 'win',        t: '胜率',       f: v => PCT(v) },
+    { k: 'pf',         t: 'PF',         f: v => F(v, 2) },
+    { k: 'exw20',      t: 'exw20',      c: v => cls(v), f: v => F(v * 100, 3, '%') },
+    { k: 't20',        t: 't20',        f: v => F(v, 2) },
+    { k: 'n_signal',   t: '信号数',     f: v => NUM(v) },
+    { k: 'n_neg',      t: '负年份',     c: nneg, asc0: 1, f: nnf },
+    { k: 'is_',        t: 'IS',         c: v => cls(v), f: v => PCT(v) },
+    { k: 'oos',        t: 'OOS',        c: v => cls(v), f: v => PCT(v) },
+  ];
+}
+
+function tuneSorted() {
+  const { k, asc } = TUNE_SORT;
+  if (!k || !TUNE) return (TUNE || {}).rows || [];
+  const val = x => {
+    const y = x[k];
+    return (y === null || y === undefined || !isFinite(y)) ? -Infinity : y;
+  };
+  return TUNE.rows.slice().sort((a, b) => asc ? val(a) - val(b) : val(b) - val(a));
+}
+
+function tuneSortBy(k) {
+  const col = tuneCols(!!TUNE.cap_mode).find(c => c.k === k);
+  if (!col) return;
+  if (TUNE_SORT.k === k) TUNE_SORT.asc = !TUNE_SORT.asc;
+  else TUNE_SORT = { k, asc: !!col.asc0 };
+  paintTuneTable();
+}
+
+function paintTuneTable() {
+  const cols = tuneCols(!!TUNE.cap_mode);
+  const rows = tuneSorted().slice(0, 40);
+  const th = `<th>#</th><th style="text-align:left">组合</th>` + cols.map(c =>
+    `<th class="srt" data-k="${c.k}" title="点击按「${c.t}」排序">${c.t}`
+    + (TUNE_SORT.k === c.k ? (TUNE_SORT.asc ? ' ▲' : ' ▼') : '')
+    + `</th>`).join('');
+  const tb = rows.map((x, i) => `<tr class="${i === 0 ? 'top1' : i < 3 ? 'top2' : ''}">
       <td class="l"><span class="${i === 0 ? 'rk g' : i < 3 ? 'rk s' : 'rk'}">${i + 1}</span></td>
-      <td class="l" style="white-space:normal;max-width:310px;font-size:12px">${x.label}</td>
-      <td>${NUM(x.n_signal)}</td>
-      <td class="${cls(x.cagr)}">${PCT(x.cagr)}</td>
-      <td class="neg">${PCT(x.mdd)}</td>
-      <td style="font-weight:600">${F(x.sharpe, 2)}</td>
-      <td>${PCT(x.win)}</td><td>${F(x.pf, 2)}</td>
-      <td class="${cls(x.exw20)}">${F(x.exw20 * 100, 3, '%')}</td>
-      <td>${F(x.t20, 2)}</td>
-      <td class="${x.n_neg === 0 ? 'pos' : x.n_neg <= 2 ? 'neu' : 'neg'}">${x.n_neg}/${x.n_year}</td>
-      <td class="${cls(x.is_)}">${PCT(x.is_)}</td>
-      <td class="${cls(x.oos)}">${PCT(x.oos)}</td></tr>`).join('')}
-    </tbody></table></div></div>`;
-  const yc = rows.slice(0, 24);
-  h += `<div class="card"><h3>Sharpe vs 年化收益 <span class="tag">前 24 个组合</span></h3>
+      <td class="l" style="white-space:normal;max-width:310px;font-size:12px">${esc(x.label)}</td>`
+    + cols.map(c => `<td class="${c.c ? c.c(x[c.k], x) : ''}"${c.b ? ' style="font-weight:600"' : ''}>`
+        + `${c.f(x[c.k], x)}</td>`).join('')
+    + `</tr>`).join('');
+  const w = $('#tune-tblwrap');
+  if (!w) return;
+  w.innerHTML = `<div class="tw" style="max-height:520px;overflow-y:auto"><table><thead><tr>`
+    + th + `</tr></thead><tbody>` + tb + `</tbody></table></div>`;
+  $$('#tune-tblwrap th.srt').forEach(e =>
+    e.addEventListener('click', () => tuneSortBy(e.dataset.k)));
+}
+
+function renderTune(r) {
+  if (!r.rows || !r.rows.length) { $('#tune-out').innerHTML = `<div class="empty">无有效组合</div>`; return; }
+  TUNE = r;
+  const cap = !!r.cap_mode;
+  TUNE_SORT = { k: r.sort_by || (cap ? 'cap_sharpe' : 'sharpe'), asc: false };
+  const SORT_NAME = {
+    cap_sharpe: '账户资金口径 Sharpe', cap_cagr: '账户资金口径 年化',
+    inv_cagr: '已投资金口径 年化', sharpe: '不限仓位 Sharpe', cagr: '不限仓位 年化',
+  };
+  const grid = r.n_grid && r.n_grid > r.n_used
+    ? `网格 <b>${NUM(r.n_grid)}</b> → 等步长抽样 <b>${NUM(r.n_used)}</b>` : '';
+  let h = `<div class="kv"><span>有效组合 <b>${NUM(r.n_combo)}</b>${grid ? ' · ' + grid : ''}</span>
+    <span>耗时 <b>${r.ms} ms</b></span>
+    <span>评估口径 <b style="font-family:inherit">${cap ? '容量约束（实盘可执行）' : '不限仓位（研究报告）'}</b></span>
+    <span>排序依据 <b style="font-family:inherit">${SORT_NAME[r.sort_by] || r.sort_by} 降序</b></span></div>`;
+  // 「为什么好几行数字一模一样」——容量口径下极常见的现象，不解释会以为是 bug。
+  const dup = cap && r.n_distinct_cap !== undefined && r.n_distinct_cap !== null
+    && r.n_distinct_cap < r.n_combo;
+  if (dup) {
+    h += `<div class="warnbox">⚠️ <b>${r.n_combo}</b> 个组合只给出了 <b>${r.n_distinct_cap}</b> 种不同的账户净值
+      （最多 <b>${r.max_same_cap}</b> 个组合撞在一起）。这不是 bug：<br>
+      仓位上限只有 N 个，而「最超跌优先」这类规则<b>永远先从最窄的那一档挑</b> ——
+      只要最窄那档当天够 N 只，把区间放宽到 D1~D10 也<b>一只都多买不到</b>。<br>
+      想让信号维度真正起作用，请把<b>「超额选股规则」也勾上</b>，或换成<b>不嵌套</b>的区间
+      （如 D2~D3）。</div>`;
+  }
+  // 单独勾「超额选股规则」时，后端会自动补一个默认仓位 —— 必须说明，
+  // 否则用户不知道表格里为什么突然多了「10 只 / 日 3 只」的约束。
+  if (r.auto_cap) {
+    h += `<div class="warnbox">ℹ️ 只勾了<b>超额选股规则</b>：不限仓位时「先买哪只」不影响任何结果
+      （信号全买），所以本页<b>自动按「等权 10 只 / 日 3 只」评估</b>。
+      想换别的仓位，请把<b>建仓节奏</b>也勾上。</div>`;
+  }
+  h += `<div class="card"><h3>寻优结果 <span class="tag">Top ${Math.min(40, r.rows.length)}</span>
+      <span class="tag">点表头换排序</span></h3>
+    <div class="desc">${cap
+      ? `按<b>账户资金口径</b>评估 —— 即「你的账户里真实看到的收益率」，已经扣掉闲置资金。
+         <br>⚠️ 账户 CAGR 会随「同时持仓上限」<b>机械升高</b>（钱铺得越开、闲置越少），
+         所以别只挑 CAGR 最高的：要连<b>平均持仓</b>（真能盯住几只）、
+         <b>账户 Sharpe / MDD</b>、<b>负年份</b>一起看。`
+      : `按<b>不限仓位</b> Sharpe 排序（研究报告口径，信号全买 —— 实测平均同时持仓 900+ 只，实盘做不到）。
+         报告的核心结论是<b>越简单越好</b>：请优先看「条件数少 + 负年份少 + OOS 仍为正」的组合，
+         而不是单纯 Sharpe 最高的。想看实盘能执行的版本，请勾上<b>建仓节奏</b>。`}</div>
+    <div id="tune-tblwrap"></div></div>`;
+  const yc = tuneSorted().slice(0, 24);
+  h += `<div class="card"><h3>${cap ? '账户 Sharpe' : 'Sharpe'} vs ${cap ? '账户' : ''}年化收益
+      <span class="tag">前 24 个组合</span></h3>
     <div class="chart tall" id="ch-tune"></div>
     <div class="cap">气泡大小 = 信号数。右上角为更优区域。</div></div>`;
   $('#tune-out').innerHTML = h;
+  paintTuneTable();
   const c = mkChart('ch-tune');
+  const X = cap ? 'cap_cagr' : 'cagr', Y = cap ? 'cap_sharpe' : 'sharpe', D = cap ? 'cap_mdd' : 'mdd';
   c && c.setOption({
     grid: { left: 56, right: 20, top: 20, bottom: 42 },
     tooltip: { ...TIP, formatter: p => `<b>${p.data[3]}</b><br>
-      年化 ${p.data[0].toFixed(1)}% · Sharpe ${p.data[1].toFixed(2)}<br>
+      ${cap ? '账户' : ''}年化 ${p.data[0].toFixed(1)}% · Sharpe ${p.data[1].toFixed(2)}<br>
       回撤 ${p.data[4].toFixed(1)}% · 信号 ${NUM(p.data[2])}` },
-    xAxis: { type: 'value', name: '年化收益 %', nameTextStyle: { fontSize: 11, color: '#8d94a3' },
-      ...AX, nameLocation: 'middle', nameGap: 26 },
+    xAxis: { type: 'value', name: `${cap ? '账户' : ''}年化收益 %`,
+      nameTextStyle: { fontSize: 11, color: '#8d94a3' }, ...AX, nameLocation: 'middle', nameGap: 26 },
     yAxis: { type: 'value', name: 'Sharpe', nameTextStyle: { fontSize: 11, color: '#8d94a3' }, ...AX },
     series: [{
       type: 'scatter',
-      data: yc.map(x => [+((x.cagr ?? 0) * 100).toFixed(1), +((x.sharpe ?? 0)).toFixed(2),
-        x.n_signal, x.label, (x.mdd ?? 0) * 100]),
+      data: yc.map(x => [+(((x[X] ?? 0)) * 100).toFixed(1), +((x[Y] ?? 0)).toFixed(2),
+        x.n_signal, x.label, (x[D] ?? 0) * 100]),
       symbolSize: d => Math.max(7, Math.min(26, Math.sqrt(d[2]) / 26)),
       itemStyle: { color: 'rgba(50,102,173,.62)', borderColor: '#3266ad', borderWidth: 1 }
     }]
   });
 }
+
+/* 节奏轴的说明文字由后端 /api/defaults 的 rhythm_cands 生成 ——
+   前端不自己维护一份候选，否则会出现「说明写了 8 档、实际跑了 10 档」。 */
+function fillRhythmAxis(cands) {
+  const el = $('#ax_rhythm_d');
+  if (!el || !cands || !cands.length) return;
+  const eq = cands.filter(c => !c.ladder).length;
+  const lad = cands.length - eq;
+  el.textContent = `等权 ${eq} 档 + 阶梯 ${lad} 档（共 ${cands.length} 档）`;
+}
+
 
 /* ---------------- 单股透视 ---------------- */
 async function loadStock() {
@@ -2730,6 +2986,18 @@ bindSeg('#seg-ma60'); bindSeg('#seg-ma120'); bindSeg('#seg-ret20');
 bindSeg('#seg-rs'); bindSeg('#seg-ihv'); bindSeg('#seg-rv');
 bindSeg('#seg-mkt'); bindSeg('#seg-hv'); bindSeg('#seg-pool');
 bindSeg('#seg-ex', true);
+
+/* 市场指数口径 / 均线窗口 —— ⚠️ 这两个参数**会改变 mask**（与容量参数不同），
+   所以选股与回测都会失效。这里只**静默重跑选股**（顺带刷新「市场环境」表，约 1 秒）；
+   回测较贵，交给用户点「运行回测」。 */
+['#mkt_index', '#mkt_ma'].forEach(s => {
+  const el = $(s);
+  if (el) el.addEventListener('change', async () => {
+    syncMktCfgNote();
+    updateModeBadge();
+    await runScan(true);
+  });
+});
 /* ---- 市值区间双滑块 ----
  * 拖动时把**被拖的那个把手**夹住，而不是事后交换两个值：
  * 交换会让手指下的把手突然跳到对面，手感很差；夹住则允许两者重叠
@@ -2835,6 +3103,58 @@ function fillPickRules(rules) {
   sel.innerHTML = rules.map(r =>
     `<option value="${r.id}"${r.default ? ' selected' : ''}>${r.name} —— ${r.desc}</option>`
   ).join('');
+}
+
+/* ---------------- 市场指数口径 / 均线窗口 ----------------
+   牛熊判定用的那条线是**自建净值**（不是交易所指数），由「一批股票的等权
+   开盘→开盘日收益」累乘而成。这两个下拉决定「用哪批股票」和「比多少日均线」。
+
+   ⚠️ 选项清单来自 /api/meta（`mkt_indexes` / `mkt_ma_windows`），前端**不自己维护**
+      一份 —— 否则后端加了口径、前端下拉里没有，用户永远用不上。
+
+   ⚠️ 换口径 / 换窗口**会改变 mask**（与容量参数不同），所以每次变更都要重跑。
+      实测（reports/41_market_index_size.md）：小市值口径 CAGR 更高，但
+        · 改善来源是「过滤变严」而非「指数更聪明」（MA120+全A ≈ MA60+小50%）；
+        · 对窗口极度敏感 —— 小50% 在 MA20 下只有 16.81%，远差于全A 的 25.93%。
+      所以默认保持研究报告口径（全A等权 / MA60），并在下方给出警告文案。 */
+const MKT_NAME = {};    // 口径 key → 中文名（来自 /api/meta，供 paramSummary 复用）
+function fillMktOptions(m) {
+  const ix = (m && m.mkt_indexes) || [];
+  const mw = (m && m.mkt_ma_windows) || [];
+  const selI = $('#mkt_index'), selM = $('#mkt_ma');
+  ix.forEach(x => { MKT_NAME[x.key] = x.name; });
+  if (selI && ix.length) {
+    selI.innerHTML = ix.map(x =>
+      `<option value="${x.key}"${x.default ? ' selected' : ''}>${x.name} —— ${x.desc}</option>`
+    ).join('');
+  }
+  if (selM && mw.length) {
+    selM.innerHTML = mw.map(x =>
+      `<option value="${x.ma}"${x.default ? ' selected' : ''}>${x.ma} 日</option>`
+    ).join('');
+  }
+}
+
+/* 当前口径的提示文案：非默认口径时给出「结论会变」的警告。
+   ⚠️ MA 窗口的敏感性只在这里口头提示是不够的 —— 真正的数字在「市场环境」表里
+      （mktBlock 会并列同一口径下三个窗口的距均线值），那里才是可验证的依据。 */
+function syncMktCfgNote() {
+  const el = $('#mkt_cfg_note'); if (!el) return;
+  const ix = $('#mkt_index'), ma = $('#mkt_ma');
+  if (!ix || !ma) return;
+  const isDef = (ix.value === 'all' && String(ma.value) === '60');
+  const nm = (ix.selectedOptions[0] || {}).textContent || ix.value;
+  const short = nm.split(' —— ')[0];
+  if (isDef) {
+    el.style.color = '';
+    el.innerHTML = '当前：<b>全A等权 / MA60</b>（研究报告口径，与真实指数最接近）。';
+  } else {
+    el.style.color = '#a8622c';
+    el.innerHTML = `当前：<b>${esc(short)} / MA${esc(ma.value)}</b> —— `
+      + '⚠️ 非默认口径。<b>换指数与换均线窗口的效果几乎等价</b>（都等于把过滤变严），'
+      + '且小市值口径对窗口极度敏感（MA20 下反而远差于全A）。'
+      + '下方的「市场环境」表会并列三个窗口的当前状态，请对照后再用。';
+  }
 }
 
 /* ---------------- 建仓节奏（阶梯建仓） ----------------

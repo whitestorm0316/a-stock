@@ -255,7 +255,8 @@ setTimeout(() => {
   // ⚠️ 这里用**构造的 capacity**：fixture_backtest 是「不限仓位」口径刷出来的，
   //    本来就不含 capacity 块。字段名与 engine.capacity() 输出逐一对齐
   //    （max_pos = 满仓只数 = sum(ladder)）；真实数值由
-  //    scripts/verify_ladder.py / verify_ladder_http.py 跑真面板验证。
+  //    scripts/verify_ladder.py / verify_ladder_http.py 跑真面板验证
+  //    （两个脚本已于 2026-09-28 清理中删除，可从 git 恢复）。
   const mkCap = () => ({
     max_pos: 10, max_new: 3, pick: 'deep', pick_name: '最超跌优先',
     pick_desc: '距MA60 越低越优先（推荐）',
@@ -279,7 +280,11 @@ setTimeout(() => {
     ok('诊断卡显示满仓只数 10（= 序列之和）', /满仓\s*10\s*只/.test(body),
        (body.match(/满仓\s*\d+\s*只/g) || []).slice(0, 3).join(','));
     ok('诊断卡显示「平均仓位」而非「资金利用率」', /平均仓位/.test(body));
-    ok('诊断卡显示「真·满仓日占比」', /真\s*·?\s*满仓日/.test(body));
+    // ⚠️ 标签已统一为「满仓日占比」（两个口径都有真值）。
+    //    旧版等权分支写的是「有持仓日占比」却挂着「满仓日占比」的名字，已修。
+    ok('诊断卡显示「满仓日占比」', /满仓日占比/.test(body),
+       (body.match(/满仓日占比\s*[\d.]+%/g) || ['（未找到）'])[0]);
+    ok('诊断卡**不再**出现「真·满仓日占比」这种分叉文案', !/真\s*·/.test(body));
     ok('诊断卡账户口径副标题提到「每只等分资金」', /每只等分资金/.test(body),
        (body.match(/每只等分资金[^。]{0,30}/) || ['（未找到）'])[0]);
     ok('诊断卡显示平均仓位数值 91.4%', /91\.4%/.test(body),

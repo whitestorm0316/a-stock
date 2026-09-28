@@ -394,6 +394,34 @@ def main():
     tk = pd.DataFrame(tickers)[["thscode", "name", "list_date", "exchange"]]
     tk["list_date"] = pd.to_datetime(tk["list_date"], errors="coerce")
     df = df.merge(tk, on="thscode", how="left")
+
+    # ------------------------------------------------------------------
+    # ⚠️ list_date 兜底（2026-09 实测数据源整列返回 null，必须自愈）
+    #
+    # 现象：/api/meta/tickers/list 对全部 5578 只都返回 list_date=null
+    #   → days_since_list 整列 NaN
+    #   → 下游「上市满 120 日」的过滤（v3b_lib.load_clean、21 的 clean 子集）
+    #     把**整个面板清空**（clean = 0 行）
+    #   → 引擎 self.code 为空 → 启动即 IndexError；size_grp / rs_sz* 全 NaN。
+    #
+    # 兜底口径：用该股在面板里的**首次出现日**近似上市日。
+    #   · 首次出现日 == 面板起点 → 上市早于窗口起点，必属「老股」，
+    #     给哨兵值（该列只用于 >=120 日的门槛判断，见 v3b_lib.load_clean），
+    #     否则会被误杀、白白丢掉面板前 120 天。
+    #   · 其余（窗口内上市的新股）→ 首次出现日就是真实上市日附近，口径准确。
+    # ------------------------------------------------------------------
+    df["_listed_before_window"] = False
+    n_null = int(df["list_date"].isna().sum())
+    if n_null:
+        first_seen = df.groupby("thscode")["date"].transform("min")
+        panel_start = df["date"].min()
+        fill = df["list_date"].isna()
+        df.loc[fill, "list_date"] = first_seen[fill]
+        df["_listed_before_window"] = fill & (first_seen <= panel_start)
+        print(f"  !! list_date 有 {n_null:,} 行为空（数据源回归）→ 用「首次出现日」兜底")
+        print(f"     其中窗口起点前已上市的老股 {int(df['_listed_before_window'].sum()):,} 行"
+              f"（给哨兵值，避免被 120 日门槛误杀）")
+
     df["is_st_now"] = df["name"].fillna("").str.contains("ST")
     df["board"] = np.where(df["thscode"].str.endswith(".BJ"), "BJ",
                   np.where(df["thscode"].str[:3].isin(["688", "689"]), "STAR",
@@ -410,6 +438,11 @@ def main():
 
     # 上市天数
     df["days_since_list"] = (df["date"] - df["list_date"]).dt.days
+    # 窗口起点前已上市的老股：上市日不可知，但必然 >> 120 日 → 给哨兵值。
+    # 不加这一步的话，这些老股在面板最初 120 天会被当作「次新股」剔除，
+    # 无谓地砍掉 2015-01 ~ 2015-04 的回测样本。
+    if "_listed_before_window" in df.columns:
+        df.loc[df["_listed_before_window"], "days_since_list"] = 10 ** 6
 
     keep = ["thscode", "ticker",
             "date", "name", "exchange", "board", "list_date", "days_since_list",

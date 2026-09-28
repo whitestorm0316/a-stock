@@ -47,10 +47,57 @@ DELIST_REV_FLOOR = 1e8     # 默认营收阈值（元）
 DELIST_REV_FLOOR_MAIN_2024 = 3e8   # 2024 新规主板阈值（元）
 
 
+# ================================================================ 市场指数口径
+# 「牛熊判定」用的那条线是**自建净值**（不是交易所指数），由「一批股票的等权
+# 开盘→开盘日收益」累乘而成。**用哪批股票**、**用多长均线**现在都是界面可选项。
+#
+# ⚠️ 为什么值得做成选项：实测（scripts/41_market_index_size.py，数据到 2026-09-28）
+#    换成小市值口径后 K3 的 CAGR 从 29.81% 提到 35.19%、Sharpe 0.979 → 1.117。
+#    但**改善来源是「过滤变严」而不是「指数更聪明」**：
+#      · 小市值指数日波动与全A几乎相同（31.3%~32.2%），差的是**漂移**
+#        （年化 12.66% → 43.47%）→ 均线更容易落在指数下方 →「跌破 MA60」更少见更极端；
+#      · 决定性对照：`MA120+全A = 34.88%` ≈ `MA60+小50% = 35.19%`，
+#        说明「换指数」与「拉长窗口」效果几乎一样；
+#      · ⚠️ 小市值口径对窗口**极度敏感**：MA20 下只有 16.81%（远差于全A 的 25.95%），
+#        MA120 下 43.64%，跨度 26.8pp（全A 只 8.9pp）。
+#    所以默认仍是 `all` + `MA60`（研究报告口径），新口径供用户自行对照。
+#
+# ⚠️ 换小市值口径 = **离真实指数更远**：与上证的年化超额从 +12.0pp 扩大到 +37.7pp。
+MKT_INDEXES = [
+    dict(key="all",     name="全A等权",     smin=None, smax=None,
+         desc="研究报告口径（默认）。与真实指数最接近。"),
+    dict(key="small50", name="小50% 等权",  smin=0, smax=4,
+         desc="市值 < 50% 分位。CAGR +5.4pp，但离真实指数更远。"),
+    dict(key="small30", name="小30% 等权",  smin=0, smax=2,
+         desc="市值 < 30% 分位。与小50% 基本打平。"),
+    dict(key="small20", name="小20% 等权",  smin=0, smax=1,
+         desc="市值 < 20% 分位。"),
+    dict(key="small10", name="小10% 等权",  smin=0, smax=0,
+         desc="市值 < 10% 分位。CAGR 最高但 PF 反而下降（含买不到的微盘股）。"),
+    dict(key="big50",   name="大50% 等权",  smin=5, smax=9,
+         desc="市值 > 50% 分位。方向对照：CAGR 只有 25.59%。"),
+]
+MKT_INDEX_KEYS = [c["key"] for c in MKT_INDEXES]
+MKT_INDEX_NAMES = {c["key"]: c["name"] for c in MKT_INDEXES}
+# 均线窗口候选。⚠️ 换窗口的效果与换口径**几乎等价**，且没有「偏离真实指数」的副作用。
+MKT_MA_WINDOWS = [20, 60, 120]
+MKT_INDEX_DEFAULT = "all"
+MKT_MA_DEFAULT = 60
+
+
+def mkt_label(index_key, ma_win):
+    """条件标签。默认口径保持旧文案（`MA60`），其余带上口径名以便区分。"""
+    k, w = str(index_key or MKT_INDEX_DEFAULT), int(ma_win or MKT_MA_DEFAULT)
+    if k == MKT_INDEX_DEFAULT:
+        return f"MA{w}"
+    return f"MA{w}·{MKT_INDEX_NAMES.get(k, k)}"
+
+
 # ---- 行业两级归类（同花顺细分行业 → 证监会门类）
 #  数据源只有同花顺行业指数(881xxx.TI)的 88 个细分行业，没有门类字段，
 #  所以门类这一层是**人工归并**，配置在 app/industry_tree.json（该文件头部写明了局限）。
-#  用 scripts/check_industry_tree.py 校验覆盖率，避免配置漂移导致行业静默消失。
+#  该配置有覆盖率校验（原脚本 scripts/check_industry_tree.py，已于 2026-09-28 清理，
+#  可从 git 恢复），避免配置漂移导致行业静默消失。
 TREE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          "industry_tree.json")
 
@@ -220,24 +267,14 @@ class Engine:
         self.buy_open = np.where(can_buy, op, np.nan)
         self.sell_open = L.build_sell_open(op, df["can_sell_open"].values.astype(bool), C)
 
-        # ---- 市场环境（自建，指数数据仅 2023 起）
-        nav = np.cumprod(1.0 + np.nan_to_num(self.mk_d))
-        mma20 = pd.Series(nav).rolling(20, min_periods=20).mean().values
-        mma60 = pd.Series(nav).rolling(60, min_periods=60).mean().values
-        self.mkt_nav = nav
-        self.mkt_bull = nav > mma60                       # 牛市：市场净值在 MA60 上
-        self.mkt_ma20v60 = mma20 > mma60
-        self.mkt_dist60 = np.where(np.isfinite(mma60) & (mma60 > 0), nav / mma60 - 1.0, np.nan)
-        self.mhv20 = pd.Series(np.nan_to_num(self.mk_d)).rolling(
-            20, min_periods=20).std().values * np.sqrt(252)
-        self.mhv_med = float(np.nanmedian(self.mhv20))
-        # Breadth：当日上涨家数占比
-        dd = self.D
-        up = self.oret > 0
-        fin = np.isfinite(self.oret)
-        br_s = np.bincount(dd[up & fin], minlength=self.nd)
-        br_c = np.bincount(dd[fin], minlength=self.nd)
-        self.breadth = np.where(br_c > 0, br_s / np.maximum(br_c, 1), np.nan)
+        # ---- 市值分位（size_grp 已 0~9，0=最小；**分位序号**，别叫「档位」）
+        # ⚠️ 提前到市场环境之前：市场指数口径就是按它切分成分股的。
+        self.size_grp = df["size_grp"].values.astype(np.float64)
+        self.size_rank = np.where(np.isfinite(self.size_grp), self.size_grp + 1.0, np.nan)
+
+        # ---- 市场环境（自建；真实指数数据仅 2023 起，只做展示/对照）
+        # 口径（用哪批股票）与均线窗口都是前端可选项，见 MKT_INDEXES / MKT_MA_WINDOWS。
+        self._build_market(C)
 
         # ---- 分位箱号（1..10，D1=最弱）
         g = lambda c: df[c].values.astype(np.float64)
@@ -256,9 +293,6 @@ class Engine:
             "rvol20":   L.decile(g("rvol20"), C, 10),
             "turnover": L.decile(g("turnover"), C, 10),
         }
-        # 市值分位（size_grp 已 0~9，0=最小）
-        self.size_grp = df["size_grp"].values.astype(np.float64)
-        self.size_rank = np.where(np.isfinite(self.size_grp), self.size_grp + 1.0, np.nan)
 
         # ---- 静态属性（用于股票池筛选）
         self.ind_name = np.asarray(df["ind_name"].fillna("未知").values, dtype=str)
@@ -313,6 +347,91 @@ class Engine:
 
         # ---- 财务数据（as-of 动态对齐，无前视偏差）
         self._build_financials()
+
+    # ------------------------------------------------------------ 市场环境（多口径）
+    def _build_market(self, C):
+        """预计算「6 个市值口径 × 3 个均线窗口」的自建市场净值与牛熊状态。
+
+        ⚠️ 为什么全预计算：牛熊状态是 `build_mask` 的输入，必须在改参数时能 O(1) 取到。
+           现算一次要跑 10M 行的 bincount（约 0.3s），用户每点一下都要等就不可接受。
+           实测 6 口径 × 3 窗口总耗时约 2s（占启动 66s 的 3%），内存可忽略
+           （每套净值只有 n_days 个 float，18 套合计 < 1MB）。
+
+        ⚠️ `self.mk_d` / `self.CHAIN` **固定用全A等权**，不随口径变：
+           CHAIN 是 `stats()` 里「相对市场的超额」的基准，属于**研究报告口径**。
+           跟着换会让历史所有超额数字失去可比性 —— 界面会明确标注这一点。
+        """
+        sg, ok_sg = self.size_grp, np.isfinite(self.size_grp)
+        dd, nd = self.D, self.nd
+        up, fin = self.oret > 0, np.isfinite(self.oret)
+
+        self.MKT, self.MKT_BREADTH = {}, {}
+        for cfg in MKT_INDEXES:
+            key = cfg["key"]
+            # `smin is None` = 全A（不加市值过滤）。⚠️ 不能用 size_grp 0~9 代替：
+            # 那样会把 size_grp 缺失的行也排除掉，与文档里的 29.81% 基线对不上。
+            sub = (None if cfg["smin"] is None
+                   else (ok_sg & (sg >= cfg["smin"]) & (sg <= cfg["smax"])))
+            mkd = L.market_oret(self.oret, C, sub)
+            nav = np.cumprod(1.0 + np.nan_to_num(mkd))
+            hv20 = pd.Series(np.nan_to_num(mkd)).rolling(
+                20, min_periods=20).std().values * np.sqrt(252)
+            # Breadth：当日上涨家数占比（同口径成分股）
+            m = fin if sub is None else (fin & sub)
+            br_s = np.bincount(dd[up & m], minlength=nd)
+            br_c = np.bincount(dd[m], minlength=nd)
+            self.MKT_BREADTH[key] = np.where(br_c > 0,
+                                             br_s / np.maximum(br_c, 1), np.nan)
+            for w in MKT_MA_WINDOWS:
+                ma = pd.Series(nav).rolling(w, min_periods=w).mean().values
+                self.MKT[(key, int(w))] = dict(
+                    mk_d=mkd, nav=nav, ma=ma,
+                    dist=np.where(np.isfinite(ma) & (ma > 0),
+                                  nav / ma - 1.0, np.nan),
+                    # ⚠️ 沿用旧行为：均线未成形时 `nav > nan` → False → 被当成「熊市」。
+                    #    所以面板开头 MA 窗口-1 个交易日会被判为熊市（既有口径，未改）。
+                    bull=np.where(np.isfinite(ma), nav > ma, False),
+                    hv20=hv20, hv_med=float(np.nanmedian(hv20)))
+
+        # ---- 向后兼容：默认口径（全A等权 / MA60）挂到旧属性名上
+        # 这些名字被 scan / market_series / 逐日状态引用；默认口径下行为与改动前**完全一致**。
+        d0 = self.MKT[(MKT_INDEX_DEFAULT, MKT_MA_DEFAULT)]
+        self.mkt_nav = d0["nav"]
+        self.mkt_ma60 = d0["ma"]
+        self.mkt_bull = d0["bull"]          # ⚠️ 默认口径；按参数取请用 mkt_state_of()
+        self.mkt_dist60 = d0["dist"]
+        self.mhv20 = d0["hv20"]
+        self.mhv_med = d0["hv_med"]
+        self.breadth = self.MKT_BREADTH[MKT_INDEX_DEFAULT]
+
+    def mkt_cfg(self, index_key=None, ma_win=None):
+        """把前端传来的（可能缺失/非法）口径参数规范化为合法键。"""
+        k = str(index_key or MKT_INDEX_DEFAULT)
+        if k not in MKT_INDEX_NAMES:
+            k = MKT_INDEX_DEFAULT
+        try:
+            w = int(ma_win)
+        except (TypeError, ValueError):
+            w = MKT_MA_DEFAULT
+        if w not in MKT_MA_WINDOWS:
+            w = MKT_MA_DEFAULT
+        return k, w
+
+    def mkt_state_of(self, index_key=None, ma_win=None):
+        """取某口径的完整市场状态。
+
+        返回 dict：`nav` / `ma` / `dist` / `bull` / `hv20` / `hv_med` / `breadth`
+        （长度都是 `n_days`，按**交易日**索引，用 `self.D` 展开到行）
+        + `index_key` / `index_name` / `ma_win` / `label`。
+        """
+        k, w = self.mkt_cfg(index_key, ma_win)
+        d = dict(self.MKT[(k, w)])
+        d["breadth"] = self.MKT_BREADTH[k]
+        d["index_key"] = k
+        d["index_name"] = MKT_INDEX_NAMES[k]
+        d["ma_win"] = w
+        d["label"] = mkt_label(k, w)
+        return d
 
     # ------------------------------------------------------------ 财务 as-of
     def _build_financials(self):
@@ -478,7 +597,11 @@ class Engine:
           size_min/size_max : 市值分位区间（序号 0~9，0 = 最小10%，9 = 最大10%）
                               如 [0,1] = 最小10%~20%、[0,2] = 最小30%、[2,9] = 剔除最小20%
                               （size_min 缺省 0；只给 size_max 等价于旧的「市值上限」口径）
-          mkt_state         : "any" | "bear" | "bull"   市场净值 vs MA60
+          mkt_state         : "any" | "bear" | "bull"   市场净值 vs 均线
+          mkt_index         : 市场指数口径（见 MKT_INDEXES，默认 "all" 全A等权）
+          mkt_ma            : 均线窗口（见 MKT_MA_WINDOWS，默认 60）
+                              ⚠️ `mkt_state` / `mkt_hv` / `breadth_*` **共用同一口径**，
+                                 不会出现「牛熊用全A、波动用小市值」这种混搭。
           mkt_hv            : "any" | "high" | "low"   市场HV20 vs 中位
           breadth_max/min   : Breadth 区间
           rs_sz_min/max     : 相对同规模强弱 分位区间
@@ -529,23 +652,28 @@ class Engine:
                 np.isfinite(self.size_grp) &
                 (self.size_grp >= smin) & (self.size_grp <= smax))
 
-        # 市场状态
+        # 市场环境（口径 + 均线窗口由前端选，见 MKT_INDEXES / MKT_MA_WINDOWS）
+        # ⚠️ 三个市场条件（净值 vs 均线 / 波动高低 / Breadth）**共用同一口径**。
+        #    否则同一块「市场环境」里会混进两套口径，用户无法解释结果从哪来。
         ms = p.get("mkt_state", "any")
-        if ms == "bear":
-            parts["市场<MA60"] = ~self.mkt_bull[D]
-        elif ms == "bull":
-            parts["市场>MA60"] = self.mkt_bull[D]
-
         mh = p.get("mkt_hv", "any")
-        if mh == "high":
-            parts["市场高波动"] = self.mhv20[D] > self.mhv_med
-        elif mh == "low":
-            parts["市场低波动"] = self.mhv20[D] <= self.mhv_med
-
-        if p.get("breadth_min") is not None:
-            parts["Breadth下限"] = self.breadth[D] >= p["breadth_min"]
-        if p.get("breadth_max") is not None:
-            parts["Breadth上限"] = self.breadth[D] <= p["breadth_max"]
+        bmin, bmax = p.get("breadth_min"), p.get("breadth_max")
+        if (ms in ("bear", "bull") or mh in ("high", "low")
+                or bmin is not None or bmax is not None):
+            mst = self.mkt_state_of(p.get("mkt_index"), p.get("mkt_ma"))
+            # 默认口径下标签仍是「市场<MA60」，与改动前逐字一致（前端与 fixtures 都依赖）
+            if ms == "bear":
+                parts[f"市场<{mst['label']}"] = ~mst["bull"][D]
+            elif ms == "bull":
+                parts[f"市场>{mst['label']}"] = mst["bull"][D]
+            if mh == "high":
+                parts["市场高波动"] = mst["hv20"][D] > mst["hv_med"]
+            elif mh == "low":
+                parts["市场低波动"] = mst["hv20"][D] <= mst["hv_med"]
+            if bmin is not None:
+                parts["Breadth下限"] = mst["breadth"][D] >= bmin
+            if bmax is not None:
+                parts["Breadth上限"] = mst["breadth"][D] <= bmax
 
         if p.get("rs_sz_min") or p.get("rs_sz_max"):
             parts["相对同规模"] = rng("rs_sz20", B["rs_sz20"],
@@ -956,7 +1084,10 @@ class Engine:
         pl, netA, netB, cnt = _run(col, rule["asc"], seed0)
         sA, sB = ann_stats(netA, self.nd), ann_stats(netB, self.nd)
         cs = capacity_stats(pl, self.nd, cnt, netA,
-                            daily_w=self._daily_invested(pl, hold))
+                            daily_w=self._daily_invested(pl, hold),
+                            # 等权时 `_daily_invested` 返回 None，靠 max_pos 把
+                            # 「持仓只数」折算成「资金比例」（每笔 = 1/max_pos）
+                            max_pos=int(mp_eff))
 
         out = dict(
             max_pos=int(mp_eff), max_new=int(mn_eff),
@@ -975,9 +1106,12 @@ class Engine:
             fill_pct=float(cs["fill_pct"]),
             avg_pos=float(cs["avg_pos"]), max_pos_seen=int(cs["max_pos_seen"]),
             empty_pct=float(cs["empty_pct"]), active_pct=float(cs["active_pct"]),
-            # ---- 阶梯建仓诊断（等权时全为 None）
+            # ---- 资金占用诊断（**两个口径都有值**）
             # avg_invested = 有持仓的日子里，平均有多少比例的资金在外面
-            # full_pct     = 满仓（投入 100%）的交易日占比
+            #                （等权 = avg_pos / max_pos；阶梯 = 权重和均值）
+            # full_pct     = **满仓**（投入 100%）的交易日占比
+            #                ⚠️ 别拿 active_pct 当它用：active_pct 是「有持仓日占比」，
+            #                两者只在 avg_pos == max_pos 时碰巧相等。
             avg_invested=cs.get("avg_invested"), full_pct=cs.get("full_pct"),
             max_invested=cs.get("max_invested"),
             # ---- 分段表现
@@ -1296,6 +1430,11 @@ class Engine:
         if cond is None:
             cond = np.ones(n, bool)
 
+        # 市场环境：按前端选的口径取（回传「该日市场」与「最新交易日市场」两套）
+        mst = self.mkt_state_of((p or {}).get("mkt_index"), (p or {}).get("mkt_ma"))
+        mkt_meta = dict(mkt_index=mst["index_key"], mkt_index_name=mst["index_name"],
+                        mkt_ma=mst["ma_win"], mkt_label=mst["label"])
+
         # 找最后一个「有行情」的交易日
         last = self.nd - 1
         while last > 0:
@@ -1318,10 +1457,10 @@ class Engine:
                         asof=str(self.day_str[last]), fallback_days=0,
                         latest_date=str(self.day_str[last]),
                         latest_n=0,
-                        mkt_bull=bool(self.mkt_bull[last]),
-                        mkt_dist=self._f(self.mkt_dist60[last] * 100, 2),
-                        breadth=self._f(self.breadth[last] * 100, 1),
-                        hv20=self._f(self.mhv20[last] * 100, 1))
+                        mkt_bull=bool(mst["bull"][last]),
+                        mkt_dist=self._f(mst["dist"][last] * 100, 2),
+                        breadth=self._f(mst["breadth"][last] * 100, 1),
+                        hv20=self._f(mst["hv20"][last] * 100, 1), **mkt_meta)
 
         # ---- 打分：距MA60 越深 + 超跌越深 + 市值越小 → 分越高
         # ⚠️ 分位是整数（1~10），单纯加权会产生大量并列（实测 D1/D1/D0 全部 130 分）。
@@ -1384,7 +1523,7 @@ class Engine:
                 fin_end=fend,
             ))
 
-        mkt_ok = bool(self.mkt_bull[last]) if last < self.nd else False
+        mkt_ok = bool(mst["bull"][last]) if last < self.nd else False
         latest_n = int((cond & (D == last)).sum())
         return dict(
             date=str(self.day_str[asof]),
@@ -1394,12 +1533,12 @@ class Engine:
             latest_n=latest_n,
             n=int(m.sum()),
             shown=len(items),
-            mkt_bull=bool(self.mkt_bull[asof]),
-            mkt_dist=self._f(self.mkt_dist60[asof] * 100, 2),
-            breadth=self._f(self.breadth[asof] * 100, 1),
-            hv20=self._f(self.mhv20[asof] * 100, 1),
+            mkt_bull=bool(mst["bull"][asof]),
+            mkt_dist=self._f(mst["dist"][asof] * 100, 2),
+            breadth=self._f(mst["breadth"][asof] * 100, 1),
+            hv20=self._f(mst["hv20"][asof] * 100, 1),
             mkt_bull_now=mkt_ok,
-            items=items,
+            items=items, **mkt_meta,
         )
 
     # ================================================================ 单股透视
@@ -1476,6 +1615,60 @@ class Engine:
         except Exception:
             return None
 
+    # ================================================================ 市场环境序列
+    def market_series(self, days=250, index_key=None, ma_win=None):
+        """自建「市场净值」及其均线 —— 牛熊判定的**依据**（口径与窗口可选）。
+
+        为什么要把这个暴露出来：界面（`/api/scan`）只给一句结论
+        「牛市（净值 > 均线）／熊市（净值 < 均线）」，用户无从验证。
+        而这条自建净值是**日度再平衡的等权**（`market_oret` = 当日该口径成分股
+        开盘→开盘收益的等权平均，无成本、无权重漂移），它与上证/沪深300 这类
+        **市值加权、价格指数**在个别时段会明显分歧 —— 分歧大时用户会直接质疑
+        「今天明明是熊市，界面为什么说不是」。给出序列就能一眼看清差在哪。
+
+        返回：
+          index_key / index_name / ma_win / label —— 本次用的口径
+          bull_now / dist_now                     —— 最新交易日的状态
+          windows : [{ma, dist, bull}] × `MKT_MA_WINDOWS`
+                    **同一口径**下三个窗口的当前状态，用来提示「换窗口会怎样」：
+                    实测小市值口径对窗口极度敏感（MA20 下 CAGR 16.81% vs MA120 下 43.64%），
+                    只给一个窗口的数字会让人误以为它很稳。
+          series  : 按日期升序，每项 date / nav / ma / dist（%）/ bull
+                    `ma` 未满窗口时为 None（对应 `bull` 也是 None，**不是** False）
+        """
+        k, w = self.mkt_cfg(index_key, ma_win)
+        st = self.mkt_state_of(k, w)
+        nav, ma, dist, bull = st["nav"], st["ma"], st["dist"], st["bull"]
+        n = int(max(30, min(int(days), self.nd)))
+        s = self.nd - n
+        out = []
+        for i in range(s, self.nd):
+            ok = bool(np.isfinite(ma[i]))
+            out.append(dict(
+                date=str(self.day_str[i]),
+                nav=round(float(nav[i]), 6),
+                ma=round(float(ma[i]), 6) if ok else None,
+                dist=self._f(dist[i] * 100, 2) if (ok and np.isfinite(dist[i])) else None,
+                bull=bool(bull[i]) if ok else None,
+            ))
+        wins = []
+        for ww in MKT_MA_WINDOWS:
+            d = self.MKT[(k, int(ww))]
+            ok = bool(np.isfinite(d["ma"][self.nd - 1]))
+            wins.append(dict(ma=int(ww),
+                             dist=self._f(d["dist"][self.nd - 1] * 100, 2) if ok else None,
+                             bull=bool(d["bull"][self.nd - 1]) if ok else None))
+        return dict(last_date=str(self.day_str[self.nd - 1]),
+                    date_start=str(self.day_str[0]),
+                    n_days=int(self.nd),
+                    index_key=k, index_name=st["index_name"],
+                    ma_win=w, label=st["label"],
+                    bull_now=(bool(bull[self.nd - 1])
+                              if np.isfinite(ma[self.nd - 1]) else None),
+                    dist_now=self._f(dist[self.nd - 1] * 100, 2),
+                    windows=wins,
+                    days=n, series=out)
+
     # ================================================================ 元信息
     def meta(self):
         # 股票清单（最新交易日）
@@ -1507,6 +1700,18 @@ class Engine:
             board_names={"MAIN": "主板", "CHINEXT": "创业板", "STAR": "科创板",
                          "BJ": "北交所"},
             board_counts=_bc,
+            # 市场指数口径 / 均线窗口（前端据此渲染两个下拉，避免两端各维护一份清单）
+            mkt_indexes=[dict(key=c["key"], name=c["name"], desc=c["desc"],
+                              default=(c["key"] == MKT_INDEX_DEFAULT))
+                         for c in MKT_INDEXES],
+            mkt_ma_windows=[dict(ma=int(w), default=(int(w) == MKT_MA_DEFAULT))
+                            for w in MKT_MA_WINDOWS],
+            mkt_index_default=MKT_INDEX_DEFAULT,
+            mkt_ma_default=int(MKT_MA_DEFAULT),
+            # ⚠️ 名字有误导性：它 = **最新交易日有行情的标的数**（= len(stocks)，
+            #    也是行业树实际覆盖的集合），**不等于** n_stocks（全历史出现过的代码数）。
+            #    实测 5301 vs 5308 —— 差的 7 只是最新交易日停牌/无行情的标的。
+            #    别拿它当「全市场标的数」用。目前无任何前端/测试消费者。
             n_industry_stocks=len(stocks),
             stocks=stocks,
             fin_avail=bool(getattr(self, "fin_avail", False)),
@@ -1544,6 +1749,44 @@ LADDER_PRESETS = [
          tag="满仓 10 只 · 对照", desc="每批固定 2 只，5 批买满 10 只 —— "
                                       "数值上等价于「等权 10 只 / 每日 2 只」，用来做对照。"),
 ]
+
+
+# ================================================================ 建仓节奏候选
+# 「建仓节奏」= 信号出现后**怎么把仓位铺出去**：同时最多持几只、每天最多买几只、
+# 要不要分批加码（阶梯）。它**不改变信号**（mask 完全一样），只改变**实际建了多少仓**。
+#
+# ⚠️ 所以节奏只能在**容量口径**下评估：不限仓位口径下「信号全买」，
+#    压根没有仓位上限，任何节奏的净值都**完全相同**（差异恒为 0）。
+#
+# 这里是「参数寻优」页节奏轴的**唯一候选来源**，也是文案的唯一来源
+# （`rhythm_label()`）—— 避免寻优表里写「10只/日3只」而左栏写「10 只 / 日 3 只」。
+RHYTHM_CANDS = [
+    dict(id="eq5x2",   name="等权 5 只 / 日 2 只",   max_pos=5,  max_new=2),
+    dict(id="eq10x1",  name="等权 10 只 / 日 1 只",  max_pos=10, max_new=1),
+    dict(id="eq10x3",  name="等权 10 只 / 日 3 只",  max_pos=10, max_new=3),
+    dict(id="eq20x3",  name="等权 20 只 / 日 3 只",  max_pos=20, max_new=3),
+    dict(id="eq20x5",  name="等权 20 只 / 日 5 只",  max_pos=20, max_new=5),
+] + [dict(id="lad_" + x["id"], name="阶梯 " + x["name"], ladder=list(x["ladder"]))
+     for x in LADDER_PRESETS]
+
+
+def rhythm_label(c):
+    """建仓节奏的中文标签（寻优结果行用）。`c` 取自 RHYTHM_CANDS。
+
+    阶梯模式下 `max_pos` / `max_new` 由序列推出（满仓只数 = 序列之和），
+    所以标签里不重复写它们，只给满仓只数。
+    """
+    lad = c.get("ladder")
+    if lad:
+        return (f"阶梯 {'/'.join(str(int(x)) for x in lad)}"
+                f"（满仓 {int(sum(lad))} 只）")
+    return f"等权 {int(c.get('max_pos') or 0)} 只 / 日 {int(c.get('max_new') or 0)} 只"
+
+
+# 只影响「怎么建仓」、**不影响信号掩码**的参数键。
+# 用途一：给信号参数做指纹缓存（同一批信号只算一次 stats，见 server._tune）。
+# 用途二：区分「信号轴」与「节奏轴」，让寻优页知道该用哪个口径评估。
+CAP_KEYS = ("max_pos", "max_new", "pick", "cap_ladder")
 
 
 def parse_ladder(x):
@@ -1635,8 +1878,14 @@ DEFAULT_PARAMS = {
     "px_ma60_min": 1, "px_ma60_max": 1,   # 距MA60 D1
     "size_min": 0,                        # 市值区间下限（0 = 最小10%）
     "size_max": 2,                        # 市值区间上限（2 = 最小30%）
-    "mkt_state": "bear",                  # 市场净值 < MA60
+    "mkt_state": "bear",                  # 市场净值 vs 均线
     "mkt_hv": "any",
+    # 市场指数口径（见 MKT_INDEXES）+ 均线窗口（见 MKT_MA_WINDOWS）。
+    # ⚠️ 默认保持**研究报告口径**（全A等权 / MA60）。换成小市值口径虽然 CAGR 更高，
+    #    但改善来自「过滤变严」而非「指数更聪明」，且对窗口极度敏感
+    #    （MA20 下反而远差于全A）—— 不该作为默认固化。详见 MKT_INDEXES 的注释。
+    "mkt_index": MKT_INDEX_DEFAULT,
+    "mkt_ma": MKT_MA_DEFAULT,
     "deep_any": False,
     "confirm": [],
     "hold": 20,

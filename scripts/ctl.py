@@ -273,6 +273,10 @@ def cmd_stop(args: argparse.Namespace) -> int:
 
 def cmd_start(args: argparse.Namespace) -> int:
     port = args.port
+    # ⚠️ 用 getattr 兜底：任何新增的、会转发到本函数的子命令都不该因为少注册一个
+    #    可选开关就崩在收尾处（`update` 就这么崩过一次，见 build_parser 的注释）。
+    no_browser = bool(getattr(args, "no_browser", False))
+    wait_s = int(getattr(args, "wait", 600))
 
     missing = check_data()
     if missing:
@@ -331,7 +335,7 @@ def cmd_start(args: argparse.Namespace) -> int:
     print(f"  进程 PID {proc.pid}，正在加载面板（通常 80~100 秒，期间访问会 502）...")
 
     t0 = time.time()
-    deadline = t0 + args.wait
+    deadline = t0 + wait_s
     last_msg = t0
     meta: Optional[dict] = None
     while time.time() < deadline:
@@ -354,7 +358,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         time.sleep(2)
 
     if not meta:
-        print(f"\n!! 等待 {args.wait}s 仍未就绪，请查看日志 {log_path}")
+        print(f"\n!! 等待 {wait_s}s 仍未就绪，请查看日志 {log_path}")
         return 1
 
     print(f"\n  就绪（{time.time() - t0:.0f}s）")
@@ -362,7 +366,7 @@ def cmd_start(args: argparse.Namespace) -> int:
     print(f"    标的 {meta.get('n_stocks')} 只 / {meta.get('n_days')} 个交易日")
     print(f"    财务面板    {'可用' if meta.get('fin_avail') else '不可用'}")
 
-    if not args.no_browser:
+    if not no_browser:
         try:
             import webbrowser
             webbrowser.open(f"http://127.0.0.1:{port}/")
@@ -459,8 +463,13 @@ def build_parser() -> argparse.ArgumentParser:
     ]:
         sp = sub.add_parser(name, help=help_txt)
         sp.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"端口（默认 {DEFAULT_PORT}）")
-        # start 与 restart 最终都走 cmd_start，会读这两个属性，必须一起提供
-        if name in ("start", "restart"):
+        # ⚠️ start / restart / update 三个子命令最终都会走 cmd_start，而它会读
+        #    `no_browser` 与 `wait` 两个属性 —— **必须在每个会走到的子命令上都注册**。
+        #    实测漏注册 `update` 的 `--no-browser`：`ctl.py update` 在**服务已经成功
+        #    启动之后**抛 `AttributeError: 'Namespace' object has no attribute
+        #    'no_browser'`（cmd_start 第 365 行），命令以 traceback + 非 0 退出码收场，
+        #    看起来像「更新失败了」，其实数据和服务都好好的。
+        if name in ("start", "restart", "update"):
             sp.add_argument("--no-browser", action="store_true", help="不要自动打开浏览器")
             sp.add_argument("--wait", type=int, default=600, help="就绪等待上限秒数（默认 600）")
         if name == "update":
@@ -471,7 +480,6 @@ def build_parser() -> argparse.ArgumentParser:
             sp.add_argument("--since", help="手动指定起始日期 YYYY-MM-DD，回补某段区间")
             sp.add_argument("--no-start", dest="start", action="store_false",
                             help="更新完不自动启动服务")
-            sp.add_argument("--wait", type=int, default=600, help="就绪等待上限秒数")
 
     return p
 

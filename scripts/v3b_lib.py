@@ -101,7 +101,7 @@ def _rank_within_np(v, d, nd):
 
     ⚠️⚠️ 必须双键排序（主键 d，次键 v）。单键 argsort 会使同块元素分散，
         `arange(n) − 块起点` 得到负数，秩完全错误（实测 n=6000 时 maxdiff 5803）。
-        详见 35_factor_ic.py 同名函数的说明。
+        详细推导见 git 历史里的 scripts/35_factor_ic.py（已于 2026-09-28 清理）。
     ⚠️ 性能：np.lexsort 在 1e7 行上单次约 10s；两次 stable argsort 约 3.6s。
     """
     n = len(v)
@@ -157,10 +157,19 @@ def cs_rank(vals, C):
 
 
 # ================================================================ 市场基准
-def market_oret(oret, C):
-    """全A等权日度收益（含 NaN→0）"""
+def market_oret(oret, C, sub=None):
+    """等权日度收益（含 NaN→0）
+
+    `sub`：可选的**行级布尔掩码**，用来只取某批成分股（如「市值 < 50% 分位」）。
+           `None` = 全A等权（研究报告口径，也是引擎默认）。
+
+    ⚠️ 引擎与研究脚本（`scripts/41_market_index_size.py`）都走这一个实现，
+       避免「两边各写一份 bincount」导致口径悄悄漂移。
+    """
     d = C["day_idx"]
     ok = np.isfinite(oret)
+    if sub is not None:
+        ok = ok & np.asarray(sub, bool)
     rsum = np.bincount(d[ok], weights=oret[ok], minlength=C["n_days"])
     cnt = np.bincount(d[ok], minlength=C["n_days"])
     return np.where(cnt > 0, rsum / np.maximum(cnt, 1), np.nan)
@@ -716,12 +725,24 @@ def nav_from_holds(holds, day_idx, n_days, oret_sig, C,
     return net, cnt
 
 
-def capacity_stats(plan, n_days, cnt, net, nd_active=None, daily_w=None):
+def capacity_stats(plan, n_days, cnt, net, nd_active=None, daily_w=None,
+                   max_pos=None):
     """容量相关指标：信号丢弃率、满仓天数、平均持仓、资金利用率
 
     `daily_w`：可选的**每日投入权重之和**（阶梯建仓用，占账户总资金比例）。
-    给出时额外产出平均仓位 / 满仓天数占比 —— 等权口径下每笔都是
-    1/max_pos，平均仓位远低于 100%，用户看不到「钱有多少在外面空转」。
+    `max_pos`：同时持仓上限，**等权口径下用来把「持仓只数」折算成「资金比例」**。
+
+    资金利用率 / 满仓日占比的两种来源
+    ----------------------------------
+    · 阶梯：调用方传 `daily_w`（`engine._daily_invested()` 铺的权重和），
+      每笔权重是 1/满仓只数，直接就是资金比例。
+    · 等权：`daily_w=None`，此时用 `cnt / max_pos` 折算 —— 等权下每笔仓位
+      **恒为 1/max_pos**，所以「今日投入的资金比例」就等于「今日持仓只数 / 上限」。
+
+    ⚠️ 早先的版本只处理阶梯，等权一律回 `None`，导致前端在等权分支下只能
+       退而显示 `active_pct`（= **有持仓日占比**）却挂着「满仓日占比」的标签 ——
+       两者只在 `avg_pos == max_pos`（每日买入上限足够大）时**碰巧相等**。
+       现在两个口径都能给出真正的满仓日占比。
     """
     holds = plan["holds"]
     n_sig = max(plan["n_signal"], 1)
@@ -738,10 +759,13 @@ def capacity_stats(plan, n_days, cnt, net, nd_active=None, daily_w=None):
         active_pct=float((cnt > 0).mean()),
         # 「已持有未平仓」而被跳过的信号数（同一只票不得重复持仓）
         n_drop_dup=int(plan.get("n_drop_dup", 0)),
-        # 阶梯建仓（等权时全为 None / 0）
+        # 阶梯建仓（等权时为 None）
         ladder=plan.get("ladder"),
         ladder_total=plan.get("ladder_total"),
     )
+    if daily_w is None and max_pos:
+        # 等权：每笔仓位恒为 1/max_pos → 日度资金比例 = 持仓只数 / 上限
+        daily_w = np.asarray(cnt, np.float64) / float(max_pos)
     if daily_w is not None:
         dw = np.asarray(daily_w, np.float64)
         act = dw > 1e-9
