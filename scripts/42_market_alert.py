@@ -83,17 +83,29 @@ CST = timezone(timedelta(hours=8))
 
 # ---------------------------------------------------------------- 工具
 def _find_lark() -> str | None:
-    """定位 lark-cli：PATH → 托管 node bin（连接器装在全局 npm prefix 下）。"""
+    """定位 lark-cli：PATH → 托管 node bin（连接器装在全局 npm prefix 下）→ 常见安装位置。
+
+    ⚠️ Windows 上可执行文件名是 `lark-cli.cmd`（npm 全局安装），`shutil.which`
+       能识别 PATHEXT 所以第一分支通常够用；后面的候选列表覆盖
+       「装在工作流托管 node 下、但不在 PATH」的情形，Windows 分支补 `.cmd`。
+    """
     p = shutil.which("lark-cli")
     if p:
         return p
+    names = ("lark-cli.cmd", "lark-cli.exe") if os.name == "nt" else ("lark-cli",)
     base = os.path.expanduser("~/.workbuddy-ai/binaries/node/versions")
     if os.path.isdir(base):
         for ver in sorted(os.listdir(base), reverse=True):
-            cand = os.path.join(base, ver, "bin", "lark-cli")
-            if os.path.exists(cand):
-                return cand
-    for cand in ("/opt/homebrew/bin/lark-cli", "/usr/local/bin/lark-cli"):
+            for nm in names:
+                cand = os.path.join(base, ver, "bin", nm)
+                if os.path.exists(cand):
+                    return cand
+    extra = ["/opt/homebrew/bin/lark-cli", "/usr/local/bin/lark-cli"]
+    if os.name == "nt":
+        appdata = os.environ.get("APPDATA") or ""
+        if appdata:
+            extra.insert(0, os.path.join(appdata, "npm", "lark-cli.cmd"))
+    for cand in extra:
         if os.path.exists(cand):
             return cand
     return None
@@ -215,24 +227,71 @@ def build_message(scan: dict, mk: dict | None, top: list) -> str:
 
 # ---------------------------------------------------------------- 飞书
 WEBHOOK_FILE = os.path.join(ROOT, "data", "feishu_webhook.txt")
+# 用户级路径：不在仓库里，适合「只想收提醒、不想碰仓库」的人。
+# 优先级低于仓库内文件（仓库里配了就以仓库为准），但高于 lark-cli 回退。
+WEBHOOK_USER_FILE = os.path.join(os.path.expanduser("~"), ".a-stock", "feishu_webhook.txt")
 
 
-def _find_webhook() -> str | None:
-    """自定义机器人 webhook：env A_STOCK_ALERT_WEBHOOK → data/feishu_webhook.txt。
+def _clean_webhook(v: str | None) -> str | None:
+    """把一行候选文本清理成干净的 URL，清不出来就返回 None。
 
-    data/ 整个在 .gitignore 里 → 密钥不会进仓库。文件里允许有注释/空行。
+    ⚠️ 三个 Windows 上极易踩的坑，都必须容忍（否则「配了却不生效」且毫无提示）：
+      1. **记事本 UTF-8 会写 BOM**（\\ufeff）→ 按 utf-8 读会让 URL 首字符变成
+         `\\ufeffhttps://…`，正则校验**通不过**，表现为「发了但静默不生效」。
+         读取侧统一用 `utf-8-sig`，这里再兜底 strip 一次。
+      2. **用户习惯给值加引号**（`"https://…"` 或 `'https://…'`）→ 引号进 URL → 校验失败。
+      3. **复制粘贴带首尾空白 / 空格**，或把整行当成 key=value 写。
     """
-    v = (os.environ.get("A_STOCK_ALERT_WEBHOOK") or "").strip()
-    if v:
-        return v
+    if not v:
+        return None
+    v = v.strip().lstrip("\ufeff").strip()
+    # 允许写成 KEY=VALUE 形式
+    if "=" in v and not v.lower().startswith("http"):
+        v = v.split("=", 1)[1].strip()
+    # 去掉成对的包裹引号（可能套了两层）
+    for _ in range(2):
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+            v = v[1:-1].strip()
+        else:
+            break
+    # 抽第一段 http(s) 链接（容忍行内注释 / 多余文字）
+    m = re.search(r"https?://[^\s\"'<>]+", v)
+    return m.group(0) if m else None
+
+
+def _read_first_line(path: str) -> str | None:
+    """读文件里第一行非注释、非空的内容。
+
+    ⚠️ 用 `utf-8-sig`：Windows 记事本保存的 UTF-8 带 BOM，用 `utf-8` 读会在
+       首行开头留下 \\ufeff（见 _clean_webhook 的注释）。
+    """
     try:
-        with open(WEBHOOK_FILE, encoding="utf-8") as f:
+        with open(path, encoding="utf-8-sig", errors="replace") as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith("#"):
                     return line
     except OSError:
         pass
+    return None
+
+
+def _find_webhook() -> str | None:
+    """自定义机器人 webhook，按优先级：
+
+      1. 环境变量 `A_STOCK_ALERT_WEBHOOK`（最适合容器 / CI / 计划任务）
+      2. 仓库内 `data/feishu_webhook.txt`（data/ 整个在 .gitignore → 密钥不入库）
+      3. 用户级 `~/.a-stock/feishu_webhook.txt`（只想收提醒、不碰仓库的人用）
+
+    都没配 → 返回 None，发送会回退到 lark-cli bot 私信。
+    """
+    v = _clean_webhook(os.environ.get("A_STOCK_ALERT_WEBHOOK"))
+    if v:
+        return v
+    for path in (WEBHOOK_FILE, WEBHOOK_USER_FILE):
+        v = _clean_webhook(_read_first_line(path))
+        if v:
+            return v
     return None
 
 
@@ -245,7 +304,8 @@ def send_webhook(md: str, url: str, dry: bool) -> tuple[bool, str]:
     卡片的 `div`+`lark_md` 才是支持 markdown 的那条路。
     成功契约：HTTP 200 且 body `code == 0`（与 lark-cli 的 `ok == true` 不同）。
     """
-    if not re.match(r"^https://open\.feishu\.cn/open-apis/bot/v2/hook/[\w-]+$", url or ""):
+    if not re.match(r"^https://open\.(feishu\.cn|larksuite\.com)/open-apis/bot/v2/hook/[\w-]+$",
+                    url or ""):
         return False, f"webhook URL 形态不对：{url!r}"
 
     # 首行 `#### 标题` → 卡片 header，其余 → lark_md 正文
@@ -323,6 +383,81 @@ def send_feishu(md: str, to: str, idem: str, dry: bool) -> tuple[bool, str]:
     return False, (err or out).strip()[:600]
 
 
+# ---------------------------------------------------------------- 自检
+def do_check(a) -> int:
+    """配置自检：不取信号、不发送，只回答「明天 19:30 到底能不能发出提醒」。
+
+    典型的卡点都在这几步上，所以逐条打印结论而不是让人猜：
+      · 有没有配置发送通道？配的是哪个（env / 仓库文件 / 用户目录）？
+      · URL 形态对不对（BOM、引号、粘贴空格都会让它失效）？
+      · 本地服务能不能连上？
+    """
+    print("=" * 62)
+    print("  发送通道自检")
+    print("=" * 62)
+
+    src = None
+    hook = None
+    env_v = _clean_webhook(os.environ.get("A_STOCK_ALERT_WEBHOOK"))
+    if env_v:
+        hook, src = env_v, "环境变量 A_STOCK_ALERT_WEBHOOK"
+    else:
+        for path, name in ((WEBHOOK_FILE, "仓库文件 data/feishu_webhook.txt"),
+                           (WEBHOOK_USER_FILE, "用户文件 ~/.a-stock/feishu_webhook.txt")):
+            v = _clean_webhook(_read_first_line(path))
+            if v:
+                hook, src = v, name
+                break
+
+    rc = 0
+    if hook:
+        ok, why = send_webhook("#### 自检\n\n发送通道自检（--check）", hook, dry=True)
+        masked = re.sub(r"(hook/)[\w-]+", r"\1****", hook)
+        print(f"  通道       webhook（自定义机器人）")
+        print(f"  来源       {src}")
+        print(f"  地址       {masked}")
+        print(f"  URL 形态   {'通过' if ok else '不合法'}")
+        if not ok:
+            print(f"  !! {why}")
+            print("     常见原因：复制时漏了字符 / 多了引号或空格 / 用了 lark-cli 的 app 凭证")
+            rc = 1
+    else:
+        lark = _find_lark()
+        print("  通道       未配置 webhook → 回退 lark-cli bot 私信")
+        print(f"  lark-cli   {lark or '未找到'}")
+        print()
+        print("  建议：给「其他人也能收到」请改用群机器人 webhook —— 一条 URL 即可，")
+        print("        无需装 node/lark-cli、无需任何身份与权限。配置方法见 README。")
+        print("        配置位置（任选其一）：")
+        print(f"          · 环境变量 A_STOCK_ALERT_WEBHOOK")
+        print(f"          · {WEBHOOK_FILE}")
+        print(f"          · {WEBHOOK_USER_FILE}")
+        if not lark:
+            rc = 1
+
+    print()
+    print("-" * 62)
+    print("  服务连通性")
+    print("-" * 62)
+    try:
+        meta = api(a.port, "/api/meta", timeout=6)
+        print(f"  端口 {a.port}   已就绪")
+        print(f"  最近交易日     {meta.get('last_date')}")
+        print(f"  标的 / 交易日  {meta.get('n_stocks')} / {meta.get('n_days')}")
+    except Exception as e:  # noqa: BLE001
+        print(f"  端口 {a.port}   连不上（{e}）")
+        print(f"     → 先起服务：python scripts/ctl.py start")
+        print(f"       （无人值守下 daily_alert.py 会自动兜底拉起，此处只是手动自检）")
+
+    print()
+    print("=" * 62)
+    print(f"  自检结论：{'可以发送 ✅' if rc == 0 else '有问题，见上面 !! 行 ❌'}")
+    print("  想真发一条测试消息（忽略牛熊与信号条件）：")
+    print("      python scripts/42_market_alert.py --force")
+    print("=" * 62)
+    return rc
+
+
 # ---------------------------------------------------------------- 主流程
 def main() -> int:
     ap = argparse.ArgumentParser(description="熊市+有信号 的飞书提醒")
@@ -335,7 +470,12 @@ def main() -> int:
                          "超过则判定「当日数据没更新成功」并跳过")
     ap.add_argument("--params", default=None,
                     help="覆盖选股参数（JSON 字符串）。默认用引擎默认 K3")
+    ap.add_argument("--check", action="store_true",
+                    help="只自检「发送通道配置 + 服务连通性」，不取信号也不发送")
     a = ap.parse_args()
+
+    if a.check:
+        return do_check(a)
 
     params = {}
     if a.params:

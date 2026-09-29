@@ -261,6 +261,7 @@ class Handler(BaseHTTPRequestHandler):
             if p == "/api/stock":
                 q = parse_qs(u.query)
                 code = (q.get("code") or [""])[0]
+                # 仅 code → 用 DEFAULT_PARAMS 且不限池（向后兼容旧链接/书签）
                 d = ENGINE.stock_detail(code)
                 return self._json(d or {"error": "未找到该股票"}, 200 if d else 404)
             if p == "/api/defaults":
@@ -305,6 +306,8 @@ class Handler(BaseHTTPRequestHandler):
             b = self._body()
             if p == "/api/scan":
                 return self._scan(b)
+            if p == "/api/stock":
+                return self._stock(b)
             if p == "/api/backtest":
                 return self._backtest(b)
             if p == "/api/trades":
@@ -340,6 +343,40 @@ class Handler(BaseHTTPRequestHandler):
         res = ENGINE.scan(pool_mask=pool, limit=int(b.get("limit") or 200), p=p)
         res["ms"] = int((time.time() - t0) * 1000)
         return self._json(res)
+
+    def _stock(self, b):
+        """单股透视（POST 形态：可携带左侧参数与股票池）。
+
+        请求体：
+          code         : "001256.SZ" / "001256"
+          params       : 策略参数（同 /api/scan）。**省略则用 DEFAULT_PARAMS**
+          pool         : 股票池（同 /api/scan）
+          full_history : bool（默认 False）是否附带全历史日线 + 全历史信号日期，
+                         供「全部历史」图表用。省略则只返回近 WINDOW 日行情。
+
+        ⚠️ 为什么要有 POST 形态：GET 只能带 code，必然写死默认参数 ——
+           于是「左侧把市值放宽到 40%、单股透视却按 30% 算」，两页自相矛盾。
+           前端现在把 collect() + currentPool() 一并 POST 过来。
+
+        ⚠️ `signal_dates` **始终是全历史**（用户明确要求看全部历史），
+           不在图表窗口内的用 `in_window=false` 标出，前端标灰而非隐藏。
+        """
+        t0 = time.time()
+        code = str(b.get("code") or "").strip()
+        if not code:
+            return self._json({"error": "缺少 code"}, 200)
+        pool, err = self._pool(b)
+        if err:
+            return self._json({"error": err}, 200)
+        p = dict(DEFAULT_PARAMS)
+        p.update(b.get("params") or {})
+        d = ENGINE.stock_detail(code, p=p, pool_mask=pool,
+                                full_history=bool(b.get("full_history")))
+        if not d:
+            return self._json({"error": "未找到该股票"}, 200)
+        d["pool"] = b.get("pool") or {}
+        d["ms"] = int((time.time() - t0) * 1000)
+        return self._json(d)
 
     def _backtest(self, b):
         """策略回测。
@@ -433,6 +470,10 @@ class Handler(BaseHTTPRequestHandler):
                     avg_excess=s["avg_excess"], excess_win=s["excess_win"],
                     date_start=s["date_start"], date_end=s["date_end"],
                     hist=tr["hist"], plan=tr.get("plan"),
+                    # 未结束交易（不计入上面的任何统计）—— 回测页也照实说明
+                    n_open=tr.get("n_open", 0),
+                    n_open_holding=tr.get("n_open_holding", 0),
+                    n_open_nobuy=tr.get("n_open_nobuy", 0),
                 )
         except Exception:
             out["trade_brief"] = None
@@ -499,6 +540,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": msg}, 200)
 
         rows = tr["rows"]
+        # ---- 未结束交易（**独立于筛选**）
+        #   ⚠️ 刻意**不**参与下面的 win/year/code/min_ret 过滤：
+        #      它们的 net/win 全是 null，一旦跟随筛选就会凭空消失，
+        #      而「我明明看到有 57 笔没结算，怎么一筛选就没了」正是要避免的。
+        #      页面把它作为独立区块展示，并明说不计入统计。
+        open_rows = tr.get("open_rows") or []
+        open_sorted = sorted(open_rows,
+                             key=lambda r: (str(r.get("signal_date") or ""),
+                                            str(r.get("code") or "")),
+                             reverse=True)
         # ---- 过滤
         win_f = b.get("win")
         if win_f is not None:
@@ -580,6 +631,13 @@ class Handler(BaseHTTPRequestHandler):
             best=tr["best"], worst=tr["worst"],
             rows=(page_rows if b.get("with_rows", True) else []),
             plan=tr.get("plan"),          # 容量约束信息（不限仓位时为 null）
+            # ---- 未结束交易（不计入任何统计，见 engine._open_positions）
+            #   n_open = 无结局总数 = holding（真·持有中）+ nobuy（T+1 买不进）。
+            #   两者都在本区块展示，但 kind 不同、说明不同。
+            open_rows=(open_sorted if b.get("with_rows", True) else []),
+            n_open=len(open_rows),
+            n_open_holding=tr.get("n_open_holding", 0),
+            n_open_nobuy=tr.get("n_open_nobuy", 0),
         )
         return self._json(out)
 
@@ -957,6 +1015,17 @@ class Handler(BaseHTTPRequestHandler):
                         r["fin_rev"], r["fin_rev_yoy"],
                         r["fin_np"], r["fin_np_yoy"],
                         r["fin_end"], r["fin_q"]])
+        # ---- 未结束交易（⚠️ 必须与屏幕一致：屏幕有这一段，CSV 却漏掉的话，
+        #      「导出后怎么少了几笔」又是一个对不上的数字）
+        #      用「未结束」标记 + 已持有/剩余天数；收益列一律留空（没有结局）。
+        for r in (tr.get("open_rows") or []):
+            w.writerow(["未结束", r["code"], r["name"], r["ind"], r["ex"],
+                        r["signal_date"], r["entry_date"], "",
+                        f'{r["hold_days"]}/{r["hold"]}', r["buy"], "",
+                        "", "", "", "",
+                        "持有中" if r["kind"] == "holding" else "买不进",
+                        r["size_grp"], r["d_px60"], r["d_ret60"],
+                        "", "", "", "", "", ""])
         data = "\ufeff" + buf.getvalue()
         body = data.encode("utf-8")
         # RFC 5987（同 _export，避免 latin-1 编码 header 崩溃）

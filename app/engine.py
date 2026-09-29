@@ -1165,6 +1165,97 @@ class Engine:
         return segs
 
     # ================================================================ 交易明细
+    def _open_positions(self, mask, pos, hold, plan=None):
+        """找出「已建仓但持有期还没走完」的头寸（**只出行，不参与统计**）。
+
+        为什么需要单独找
+        ----------------
+        `L.simulate_hold` 的返回行是 `np.flatnonzero(sig & np.isfinite(r))` ——
+        `r = sell_open(t+1+H) / buy_open(t+1) − 1`。凡是 `r` 为 nan 的信号都
+        **根本不进 pos**，表现为「有信号、却没有对应的成交行」——从明细里
+        凭空消失，用户会觉得「我明明买了却查不到」。但实测这批里其实混着
+        **两种完全不同的东西**，必须分开：
+
+        ⚠️ 两类「无结局」，混为一谈会误导用户
+        ------------------------------------
+        · `kind="holding"` —— **真·持有中**
+              买价有效、到期日越过数据边界（`ent < nd <= ext`）。
+              实盘里就是「已经买了、还拿在手上」。**这才是用户要看的「未结束」**。
+              入场日 = T+1，`hold_days` 已持有、`left_days` 还需。
+        · `kind="nobuy"` —— **T+1 买不进**
+              `can_buy_open=False`（一字涨停封板 / 停牌），买价是 nan，
+              这笔**从未建仓**。它不是「未结束的持仓」，而是「信号作废」。
+
+        ⚠️ **两类数量相差一个量级**（实测 2026-09-29 面板）：
+        不限仓位口径 699 笔里 **只有 84 笔是 holding**，另外 **615 笔是 nobuy**；
+        容量 10/3 口径 7 笔里 **3 holding + 4 nobuy**。
+        只报一个 `n_open` 会让用户把「从未买入」读成「还拿着 N 只」。
+
+        口径纪律（这里错一步就会污染统计）
+        ---------------------------------
+        · 本方法**只读**，绝不修改 r/ed/pos；两类都不计入 n_trade / 胜率 / PF /
+          逐年 / 分布 / 最佳最差 —— 它们没有结局，纳入会让统计偏乐观。
+        · `n_open` **保持原值不变**以兼容既有基线（= 计划建仓 − 已结算），
+          细分用 `n_open_holding` / `n_open_nobuy`，页面按细分口径描述。
+          闭合自检：`plan.n_plan == n_trade + n_open` 且
+          `n_open == n_open_holding + n_open_nobuy`。
+
+        两种口径的候选集不同（与 `trades()` 的过滤规则一致）：
+          · `plan is None` → 候选 = `mask` 中所有信号行（不限仓位 = 信号全买）
+          · `plan` 非空    → 候选 = `plan["holds"]` 的实际建仓行（只列真实建仓）
+
+        返回：`list[dict]`，字段与 `trades()` 的 rows 尽量对齐，另加
+              `open=True` / `kind` / `hold_days`（已持有交易日数）/ `left_days`（还需）。
+        """
+        nd = self.nd
+        if plan is not None:
+            cand = np.asarray([h[2] for h in (plan.get("holds") or [])], np.int64)
+        else:
+            cand = np.flatnonzero(np.asarray(mask, bool) & np.isfinite(self.D))
+        if len(cand) == 0:
+            return []
+        # ⚠️ 买价必须**在循环外**算一次：shift_block 是 O(n) 全量位移，
+        #    放进循环会变成 O(n × 未平仓数)（末尾信号密集时会有上百笔）。
+        bi_all = L.shift_block(self.buy_open, self.C, 1)
+        settled = set(np.asarray(pos, np.int64).tolist())
+        sd = self.D[cand]
+        ent = sd + 1                       # T+1 开盘买入
+        ext = ent + int(hold)              # T+1+H 开盘卖出
+        buy_ok = np.isfinite(bi_all[cand])
+        # holding：买得进、到期日越过边界；nobuy：T+1 一字板/停牌，买不进
+        m_hold = buy_ok & (ent < nd) & (ext >= nd)
+        m_nobuy = (~buy_ok) & (ent < nd)
+        rows = []
+        for i in np.flatnonzero(m_hold | m_nobuy):
+            p_i = int(cand[i])
+            if p_i in settled:
+                continue
+            is_hold = bool(m_hold[i])
+            buy = float(bi_all[p_i]) if buy_ok[i] else None
+            # 已持有交易日数 = 入场日 → 最新交易日（含两端）= nd − ent（上限 hold）。
+            # ⚠️ 别写成 min(nd-1, ent) − ent + 1 —— 实测会恒等于 1。
+            held = int(min(int(hold), nd - int(ent[i]))) if is_hold else 0
+            rows.append(dict(
+                code=str(self.code[p_i]), name=str(self.stk_name[p_i]),
+                ind=str(self.ind_name[p_i]), ex=str(self.exchange[p_i]),
+                board=str(self.board[p_i]),
+                signal_date=str(self.day_str[int(sd[i])]),
+                entry_date=(str(self.day_str[int(ent[i])]) if ent[i] < nd else None),
+                exit_date=None,                       # 结局未知 —— 这正是「未结束」
+                buy=(round(buy, 3) if buy is not None else None),
+                sell=None, hold=int(hold),
+                ret=None, net=None, bench=None, excess=None, win=None,
+                open=True, kind=("holding" if is_hold else "nobuy"),
+                hold_days=held,                       # 已持有交易日数（nobuy 恒 0）
+                left_days=(max(0, int(hold) - held) if is_hold else int(hold)),
+                size_grp=self._i(self.size_grp[p_i]),
+                d_px60=self._i(self.B["px_ma60"][p_i]),
+                d_ret60=self._i(self.B["ret60"][p_i]),
+                fin_rev=None, fin_rev_yoy=None, fin_np=None, fin_np_yoy=None,
+                fin_q=0, fin_end=None,
+            ))
+        return rows
+
     def trades(self, mask, hold=20, cost=RT_COST, include_fin=True, plan=None):
         """从掩码提取**逐笔交易明细**（与 stats() 完全同源，口径一致）。
 
@@ -1174,17 +1265,17 @@ class Engine:
         两种口径（由 `plan` 决定）
         -------------------------
         · `plan=None`（默认）→ **不限仓位**：列出全部信号对应的交易
-              （默认 K3 为 93,553 笔，实盘做不完这么多）。
+              （默认 K3 约 10.5 万笔，实盘做不完这么多）。
         · `plan=dict`（来自 `capacity_plan()`）→ **容量约束**：只保留
-              真正被建仓的那些交易（默认 K3 为 787 笔建仓 / 781 笔可结算）。
+              真正被建仓的那些交易（默认 K3 为 787 笔建仓 / 780 笔可结算）。
 
-        ⚠️⚠️ 为什么「建仓数」会 >「可结算数」（787 vs 781）
+        ⚠️⚠️ 为什么「建仓数」会 >「可结算数」（787 vs 780）
         -------------------------------------------------
         容量计划在建仓日只看「信号是否存在」，不看「持有期结束时数据是否还在」。
         数据末尾最后 H 个交易日内建的仓，**到期日超出了面板范围**，因此算不出收益。
-        这批头寸是**未平仓**（实盘里就是还拿在手上），本方法用 `n_open` 单独报告，
-        **不混进交易明细**，也**不计入胜率等统计**（否则会因缺少结局而偏乐观）。
-        这一点必须显式呈现，不能悄悄丢 —— 否则「丢弃 99.2%」这类数字会对不上。
+        这批头寸**必须显式呈现**（见 `_open_positions`），但**不混进交易明细**，
+        也**不计入胜率等统计**（否则会因缺少结局而偏乐观）。
+        不能悄悄丢 —— 否则「丢弃 99.2%」这类数字会对不上，用户也查不到自己的票。
 
         实现要点
         --------
@@ -1210,7 +1301,11 @@ class Engine:
           yearly   : list[dict]  逐年交易统计
           hist     : dict        收益分布直方图（分箱）
           n_trade  : int
-          plan     : dict|None   容量约束信息（含 n_open 未平仓数）
+          plan     : dict|None   容量约束信息（含 n_open 无结局数）
+          open_rows: list[dict]  无结局头寸（holding 持有中 / nobuy 买不进），
+                                 ⚠️ **仅供展示**，字段与 rows 对齐但收益列恒为 None；
+                                 永远独立于 rows，也**不参与任何筛选/统计**
+          n_open / n_open_holding / n_open_nobuy : int
         )
 
         ⚠️⚠️ 单位约定 —— 本接口**故意混用两套**，改动前务必看清：
@@ -1228,8 +1323,16 @@ class Engine:
         if mask.sum() == 0:
             return None
         r, ed, pos = L.simulate_hold(mask, self.buy_open, self.sell_open, self.C, hold)
-        if len(r) == 0:
-            return None
+
+        # ---- 未结束头寸（⚠️ 必须在容量过滤**之前**捕获）
+        #   两种口径的取法不同，但都源自同一个事实：`simulate_hold` 用
+        #   `np.isfinite(r)` 过滤，凡是「到期日越过数据边界」的建仓都没有 r，
+        #   于是**根本不会出现在 pos 里** —— 它们就此消失，页面上无从解释。
+        #     · 不限仓位：候选 = 本次口径下全部信号行（`mask`）
+        #     · 容量约束：候选 = 计划实际建仓行（`plan["holds"]`），因为要「只列实际建仓」
+        #   注意这一块**只产出行、不参与任何统计**：r/ed/pos 与下方所有汇总一律
+        #   不含未结束头寸，故 settled 数值与改动前逐位一致。
+        open_rows = self._open_positions(mask, pos, hold, plan)
 
         # ---- 容量约束：只保留真正建仓的那批（⚠️ 必须在任何统计之前切）
         plan_info = None
@@ -1242,7 +1345,7 @@ class Engine:
                 wmap = {int(hr): float(x) * 100.0
                         for hr, x in zip(held_rows.tolist(), plan.get("weights") or [])}
             r, ed, pos = r[keep], ed[keep], pos[keep]
-            if len(r) == 0:
+            if len(r) == 0 and not open_rows:
                 return None
             plan_info = dict(
                 max_pos=int(plan.get("max_pos") or 0),
@@ -1254,7 +1357,10 @@ class Engine:
                 drop_pct=float(plan.get("drop_pct") or 0.0),
                 n_drop_dup=int(plan.get("n_drop_dup") or 0),  # 重复持仓被跳过
                 n_plan=int(len(held_rows)),      # 计划建仓数
-                n_open=n_open,                   # 期末仍未平仓（数据边界所致）
+                # ⚠️ 语义：计划建仓 − 已结算 = 无结局总数，**混合了两种**：
+                #    「真·持有中」(kind=holding) + 「T+1 买不进」(kind=nobuy)。
+                #    细分见 trades() 返回的 n_open_holding / n_open_nobuy。
+                n_open=n_open,
             )
 
         # ---- 买卖价（与 simulate_hold 内部完全同源）
@@ -1284,6 +1390,26 @@ class Engine:
         net = r - cost                            # 扣完成本的单笔收益
         pnl = net > 0
         years = self.years[np.clip(ent_d, 0, self.nd - 1)]
+
+        # ---- 全未平仓的退化情形（一条都没结算）
+        #   必须在这里提前返回：下面 net.mean()/median()/max() 对空数组会报
+        #   「zero-size array to reduction」或返回 nan。此时「完成交易 = 0 笔 + N 笔
+        #   未结束」是**正确答案**，不是错误 —— 所以返回结构化空汇总，而不是 None
+        #   （返回 None 会让上层报「没有任何交易」，把未平仓那 N 笔也一起吞掉）。
+        if len(r) == 0:
+            return dict(
+                n_trade=0, rows=[], summary=dict(
+                    n_trade=0, hold=int(hold), cost=float(cost),
+                    win=None, mean=None, median=None, std=None,
+                    best=None, worst=None, p10=None, p25=None, p75=None, p90=None,
+                    pf=None, payoff=None, avg_excess=None, excess_win=None,
+                    avg_ret=None, date_start=None, date_end=None, n_stock=0),
+                yearly=[], hist=dict(edges=[], counts=[]),
+                best=[], worst=[], hold=int(hold), plan=plan_info,
+                open_rows=open_rows, n_open=len(open_rows),
+                n_open_holding=sum(1 for x in open_rows if x["kind"] == "holding"),
+                n_open_nobuy=sum(1 for x in open_rows if x["kind"] == "nobuy"),
+            )
 
         # ---- 逐笔明细
         rows = []
@@ -1409,7 +1535,10 @@ class Engine:
 
         return dict(n_trade=int(len(net)), rows=rows_sorted, summary=summary,
                     yearly=yearly, hist=hist,
-                    best=best20, worst=worst20, hold=int(hold), plan=plan_info)
+                    best=best20, worst=worst20, hold=int(hold), plan=plan_info,
+                    open_rows=open_rows, n_open=len(open_rows),
+                    n_open_holding=sum(1 for x in open_rows if x["kind"] == "holding"),
+                    n_open_nobuy=sum(1 for x in open_rows if x["kind"] == "nobuy"))
 
     # ================================================================ 扫描
     def scan(self, pool_mask=None, limit=200, p=None, lookback=180):
@@ -1542,17 +1671,46 @@ class Engine:
         )
 
     # ================================================================ 单股透视
-    def stock_detail(self, code):
+    def stock_detail(self, code, p=None, pool_mask=None, full_history=False):
+        """单只股票：近 N 日行情 + **在指定条件下**的历史信号明细。
+
+        ⚠️ 参数口径必须由调用方传入（`p` / `pool_mask`），**不能用 DEFAULT_PARAMS 写死**。
+
+        为什么（真实用户提问触发的 bug）：
+          用户把左侧市值区间从「最小30%」放宽到「最小40%」并存成方案，
+          主面板（走 collect() + currentPool()）显示 001256.SZ 在 2026-09-15 有信号；
+          但本函数当时**写死** `build_mask(DEFAULT_PARAMS, None)`，
+          size 仍是 0~2（最小30%）且不带股票池 → 同一只票在这页显示「无信号」。
+          用户看到的是「同一个界面自相矛盾」，实际是两页用了两套参数。
+
+        另一个坑（历史）：`rows` 只取最近 `WINDOW` 个交易日，而 `signal_dates` 早先返回
+        **全历史**信号且不带任何标记 —— 用户看到表里 6 个信号、图上 0 个，无从解释。
+        ⚠️ 现在的口径是**表格给全历史、图表默认近 WINDOW 日**，靠 `in_window` 标记
+        把「不在当前图表范围内」的信号显式标出来（**不隐藏**）。用户要的就是全历史。
+
+        返回：
+          conditions : list[str]  实际生效的条件（来自 build_mask）
+          window     : int        行情窗口交易日数
+          signal_dates : 该股**全历史**信号（升序），每项含
+                         in_window(bool, 是否落在 rows 区间内) / year(int)
+          hist_rows / hist_sig_dates :
+                         全历史日线（仅 date/close/dist60）与全历史信号日期，
+                         **仅当 `full_history=True` 时返回**（前端「全部历史」图表用）。
+                         这两块是 raw 数组，直接喂 ECharts 的柱/散点，
+                         **不要**在里面塞逐行 dict（184 个信号 × 每行 7 字段不值当）。
+        """
         code = code.strip().upper()
         if code.isdigit() and len(code) == 6:
             cand = [code + ".SH", code + ".SZ"]
             hit = [c for c in cand if (self.code == c).any()]
             code = hit[0] if hit else code
-        s = np.flatnonzero(self.code == code)
-        if len(s) == 0:
+        s_all = np.flatnonzero(self.code == code)
+        if len(s_all) == 0:
             return None
-        # 取最近 250 个交易日
-        s = s[-250:]
+        # 图表只画最近 WINDOW 个交易日；`all_lo` 用于区分「哪些信号在图表窗口外」
+        WINDOW = 250
+        s = s_all[-WINDOW:]
+        win_lo, win_hi = int(s[0]), int(s[-1])
         out = dict(
             code=code, name=str(self.stk_name[s[-1]]), ind=str(self.ind_name[s[-1]]),
             board=str(self.board[s[-1]]), ex=str(self.exchange[s[-1]]),
@@ -1574,20 +1732,47 @@ class Engine:
                 size_grp=self._i(self.size_grp[i]),
             ) for i in s],
         )
-        # 该股历史上触发 K3 默认条件的次数与后续收益
+        # 该股**全历史**触发条件的次数与后续收益
+        # ⚠️ 用调用方传入的参数（默认才是 DEFAULT_PARAMS）。
+        #    信号**不裁剪窗口** —— 表格要列全历史（用户明确要求）；
+        #    是否在图表范围内由 `in_window` 标记，前端把窗外的**标灰**而不是删掉。
+        pp = dict(DEFAULT_PARAMS)
+        pp.update(p or {})
+        hit_all = np.array([], dtype=np.int64)
         try:
-            c, _ = self.build_mask(DEFAULT_PARAMS, None)
-            hit = np.flatnonzero(c & (self.code == code))
+            c, conds = self.build_mask(pp, pool_mask)
+            hit_all = np.flatnonzero(c & (self.code == code))
             fut = []
-            for i in hit:
+            for i in hit_all:
                 d = {H: (round(float(self.FWD[H][i]) * 100, 2)
                          if np.isfinite(self.FWD[H][i]) else None) for H in [5, 20, 60]}
-                fut.append(dict(date=str(self.day_str[self.D[i]]),
+                dt = str(self.day_str[self.D[i]])
+                fut.append(dict(date=dt,
+                                year=int(dt[:4]),
+                                in_window=bool(win_lo <= i <= win_hi),
                                 dist60=round(float(self.df["px_ma60_pct"].values[i]) * 100, 2),
                                 fwd5=d[5], fwd20=d[20], fwd60=d[60]))
             out["signal_dates"] = fut
+            out["conditions"] = list(conds)
         except Exception:
             out["signal_dates"] = []
+            out["conditions"] = []
+        out["window"] = WINDOW
+        # 计数（前端文案用；避免前端自己 filter 一遍导致口径不一致）
+        n_all = len(out.get("signal_dates") or [])
+        n_win = sum(1 for x in (out.get("signal_dates") or []) if x["in_window"])
+        out["n_signal_all"] = n_all
+        out["n_signal_window"] = n_win
+        out["hist_span"] = [str(self.day_str[self.D[s_all[0]]]),
+                            str(self.day_str[self.D[s_all[-1]]])]
+        # 全历史图表数据（仅按需返回；raw 数组，前端直接喂 ECharts）
+        if full_history:
+            out["hist_rows"] = [dict(date=str(self.day_str[self.D[i]]),
+                                     close=round(float(self.cl[i]), 2),
+                                     dist60=(round(float(self.df["px_ma60_pct"].values[i]) * 100, 2)
+                                             if np.isfinite(self.df["px_ma60_pct"].values[i]) else None))
+                                 for i in s_all]
+            out["hist_sig_dates"] = [str(self.day_str[self.D[i]]) for i in hit_all]
         return out
 
     @staticmethod

@@ -11,6 +11,7 @@
 #   bash tests/run.sh market       # 只跑市场环境（牛熊判定依据 / 真实指数对照）
 #   bash tests/run.sh delist       # 只跑退市风险过滤
 #   bash tests/run.sh presets      # 只跑市值区间 + 我的方案
+#   bash tests/run.sh stock        # 只跑单股透视（跟随左侧参数 / 全历史信号）
 #   bash tests/run.sh cdp          # 跑真实 Chrome 端到端（需先启动 app/server.py）
 #
 # ⚠️ 为什么逐条串行跑：多套 jsdom 同时驻留内存会触发 OOM（SIGTERM 137）。
@@ -41,9 +42,10 @@ case "${1:-all}" in
   market) SETS="test_market" ;;
   trades) SETS="test_trades" ;;
   presets) SETS="test_presets" ;;
+  stock)  SETS="test_stock" ;;
   cdp)    SETS="__CDP__" ;;
-  all)    SETS="test_cap test_board test_indtree test_icon test_ladder test_fin test_delist test_trades test_presets test_tune test_market" ;;
-  *) echo "未知参数：$1（可选 cap|board|ind|icon|ladder|tune|market|fin|delist|trades|presets|cdp|all）"; exit 2 ;;
+  all)    SETS="test_cap test_board test_indtree test_icon test_ladder test_fin test_delist test_trades test_presets test_tune test_market test_stock" ;;
+  *) echo "未知参数：$1（可选 cap|board|ind|icon|ladder|tune|market|fin|delist|trades|presets|stock|cdp|all）"; exit 2 ;;
 esac
 
 if [ "$SETS" = "__CDP__" ]; then

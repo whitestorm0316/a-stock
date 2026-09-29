@@ -188,6 +188,9 @@ textarea:focus{border-color:var(--blue)}
 .card>h3 .tag{font-size:11px;font-weight:400;color:var(--tx3);background:#f4f6f9;
   padding:2px 7px;border-radius:10px;border:1px solid var(--line)}
 .card .desc{font-size:12px;color:var(--tx3);margin-bottom:12px;line-height:1.6}
+/* 条件徽标（单股透视「本页所用条件」）—— 让用户一眼对照主面板 */
+.pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;
+  border:1px solid var(--line2);background:#f6f7f9;color:var(--tx2);margin:2px 4px 2px 0}
 .mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:1px;
   background:var(--line);border:1px solid var(--line);border-radius:var(--rmd);overflow:hidden}
 .mc{background:var(--panel);padding:11px 13px}
@@ -302,6 +305,31 @@ tbody tr.top2{background:#fffdf7}
 .tag2{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:9px;
   border:1px solid var(--line2);background:#f6f7f9;color:var(--tx3);
   font-family:var(--mono);margin-left:5px}
+/* ---------- 单股透视 ---------- */
+/* 内联小按钮：`.btn` 是 width:100% 的整宽按钮，这里需要一个自适应宽度的次要按钮 */
+.btn2{width:auto;flex:0 0 auto;padding:5px 11px;font-size:12px;font-weight:500;
+  border:1px solid var(--line2);border-radius:var(--rmd);background:#fff;
+  color:var(--tx2);cursor:pointer;font-family:inherit;transition:.15s;user-select:none}
+.btn2:hover{background:#f4f6f9;border-color:var(--blue);color:var(--blue)}
+.btn2:disabled{opacity:.5;cursor:not-allowed}
+/* 「图中 ● 为信号位置」里的图例小圆点 */
+.dotmark{display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:#d92b2b;vertical-align:middle;margin:0 2px}
+/* 图上没有、仅存在于表格里的信号（图外）—— 说明文字 */
+.dimnote{font-size:11px;color:var(--tx3);font-style:normal}
+/* 信号明细中「不在当前图表范围内」的行：整行标灰，但**仍然显示**（不隐藏） */
+tbody tr.stockrow-out{background:#fafbfc}
+tbody tr.stockrow-out td{color:var(--tx3)}
+tbody tr.stockrow-out:hover{background:#f4f6f9}
+/* ---------- 交易明细 · 未结束交易（不计入统计） ---------- */
+/* 整行淡黄底：与已结算行在视觉上分开，一眼看出「这些不是统计样本」 */
+tbody tr.openrow{background:#fffdf8}
+tbody tr.openrow:hover{background:#fdf8ee}
+tbody tr.openrow.nb{background:#fbfbfc}
+tbody tr.openrow.nb:hover{background:#f5f6f8}
+/* 状态徽标：持有中（琥珀）/ T+1 买不进（灰） */
+.pill.om{background:#fdf6e3;border-color:#e8d9a8;color:#8a6d1f}
+.pill.nb{background:#f0f2f5;border-color:#e0e3e8;color:#6b7280}
 tr.lossc{background:#fef7f7}
 tr.winc td{border-bottom:1px solid #f0f1f4}
 td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
@@ -2293,10 +2321,13 @@ function tradePlanCard(p, hold) {
         <div class="n">持有期尚未走完</div></div>
     </div>
     <div class="cap" style="margin:0">
-      ${p.n_open > 0 ? `⚠️ 有 <b>${p.n_open}</b> 笔建仓落在数据末尾最后 ${hold} 个交易日内，` +
-        `买入后持有期<b>还没走完就到数据边界了</b>，算不出卖出价 —— ` +
-        `实盘里就是<b>还拿在手上</b>，因此<b>不计入本页明细与胜率统计</b>` +
-        `（否则会因缺少结局而偏乐观）。<br>` : ''}
+      ${p.n_open > 0 ? `⚠️ 有 <b>${p.n_open}</b> 笔建仓没有结局，` +
+        `本页<b>明细表下方的「未结束交易」区块</b>把它们的每一笔都列出来了` +
+        `（<b>不计入</b>完成交易数与胜率统计 —— 否则会因缺少结局而偏乐观）：<br>` +
+        `<b>· 持有中</b>：买入后持有期<b>还没走完就到数据边界了</b>，` +
+        `实盘里就是<b>还拿在手上</b>；<br>` +
+        `<b>· T+1 买不进</b>：信号日次日<b>一字涨停/停牌</b>，开盘买不到，` +
+        `这笔<b>从未建仓</b>（信号作废，不算亏损）。<br>` : ''}
       规则：<b>${p.pick_name}</b>；信号拥挤时只在当日信号里按该规则取前 ${p.max_new} 只，
       ${lad ? `累计投入满 <b>${p.ladder_total}</b> 成` : `持仓满 ${p.max_pos} 只`}时不再新开，
       被丢弃的信号<b>不补买</b>（保守假设）；
@@ -2340,6 +2371,10 @@ function renderTrades(r) {
     <div class="mc"><div class="l">交易区间</div>
       <div class="v sm" style="font-size:13px">${s.date_start || '—'}</div>
       <div class="n">至 ${s.date_end}</div></div>
+    ${r.n_open > 0 ? `<div class="mc" style="background:#fffbf0;border:1px solid #f0e2c0">
+      <div class="l">未结束（不计入统计）</div>
+      <div class="v sm" style="color:#a8622c">${NUM(r.n_open)} 笔</div>
+      <div class="n">${r.n_open_holding} 持有中 · ${r.n_open_nobuy} 买不进</div></div>` : ''}
   </div>`;
 
   // ---- 口径说明
@@ -2420,9 +2455,12 @@ function renderTrades(r) {
   // ---- 过滤器 + 明细表
   const yrs = (r.yearly || []).map(y => y.year);
   h += `<div class="card"><h3>逐笔交易明细
-    <span class="tag">共 ${NUM(r.n_trade)} 笔 · 筛选后 ${NUM(r.n_filtered)} 笔</span></h3>
-    <div class="desc">每一行是一笔完整交易。点表头可排序，行底色：<span style="color:#a83232">浅红=亏损</span>。
-      回测过程中<b>实际使用的财报</b>列在右侧（该信号日当时已公告的数值）。</div>
+    <span class="tag">已结算 ${NUM(r.n_trade)} 笔 · 筛选后 ${NUM(r.n_filtered)} 笔${
+      r.n_open > 0 ? ` · 另有 ${NUM(r.n_open)} 笔未结束（见下）` : ''}</span></h3>
+    <div class="desc">每一行是一笔<b>已了结</b>的交易。点表头可排序，行底色：<span style="color:#a83232">浅红=亏损</span>。
+      回测过程中<b>实际使用的财报</b>列在右侧（该信号日当时已公告的数值）。
+      ${r.n_open > 0 ? `没有结局的 <b>${NUM(r.n_open)}</b> 笔不在这里，而在下方的
+      <b>「未结束交易」</b>区块 —— 它们<b>不计入</b>任何统计。` : ''}</div>
     <div class="trbar">
       <span class="lb">盈亏</span>
       <span class="seg" id="t-win">
@@ -2464,11 +2502,70 @@ function renderTrades(r) {
       <span class="pg" id="t-pg"></span>
     </div></div>`;
 
+  // ---- 未结束交易（独立区块，**不计入上面的任何统计**）
+  h += tradeOpenBlock(r);
+
   $('#p-trades').innerHTML = h;
 
   renderTradeRows(r.rows);
   drawTradeCharts(r);
   bindTradeControls(r);
+}
+
+/* 未结束交易区块。
+   ⚠️ 两条纪律：
+     1. **不参与**筛选（盈亏/年份/个股都不影响它）—— 它的 net/win 全是 null，
+        跟随筛选就会凭空消失，而「明明有 57 笔没结算」正是要展示的东西。
+     2. 必须**显式说明不计入统计**，否则用户会拿它去和「完成交易」相加，
+        或以为胜率漏算了 —— 收益池里没有它们。
+   两类 kind：
+     · holding = 真·持有中（买了、还拿着，到期日越过数据边界）
+     · nobuy   = T+1 买不进（一字涨停/停牌，信号作废，从未建仓） */
+function tradeOpenBlock(r) {
+  const rows = r.open_rows || [];
+  if (!rows.length) return '';
+  const nh = r.n_open_holding || 0, nb = r.n_open_nobuy || 0;
+  const tbl = rows.map(it => `<tr class="openrow ${it.kind === 'nobuy' ? 'nb' : ''}">
+    <td class="l">${it.code}</td>
+    <td class="nm">${it.name}</td>
+    <td class="l" style="color:#5c6270">${it.ind}</td>
+    <td><span class="pill bd${it.board}">${BD(it.board)}</span></td>
+    <td style="color:var(--tx3)">${it.signal_date || '—'}</td>
+    <td>${it.entry_date || '—'}</td>
+    <td>${F(it.buy, 2)}</td>
+    <td class="l">${it.kind === 'holding'
+      ? `<span class="pill om">持有中 ${it.hold_days}/${it.hold} 日</span>
+         <span class="dimnote">还需 ${it.left_days} 日</span>`
+      : `<span class="pill nb">T+1 买不进</span>
+         <span class="dimnote">一字板 / 停牌，信号作废</span>`}</td>
+    <td style="color:#5c6270">${it.size_grp == null ? '—' : 'M' + (it.size_grp + 1)}</td>
+    <td><span class="pill ${it.d_px60 === 1 ? 'd1' : it.d_px60 === 2 ? 'd2' : 'dn'}">D${it.d_px60 ?? '—'}</span></td>
+    <td style="color:var(--tx3)">—</td>
+    <td style="color:var(--tx3)">—</td>
+  </tr>`).join('');
+  return `<div class="card" style="margin-top:14px;background:#fffdf8;border-color:#f0e2c0">
+    <h3>未结束交易 <span class="tag">${NUM(rows.length)} 笔 · 不计入统计</span></h3>
+    <div class="desc">这些头寸<b>没有结局</b>，因此<b>不进入</b>上面的完成交易数、胜率、
+      盈亏比、逐年统计与收益分布 —— 纳入会让结果偏乐观。分两类：</div>
+    <div class="cap" style="margin:0 0 10px">
+      <span class="pill om">持有中 ${nh} 笔</span>
+      信号已出、<b>T+1 已经买入</b>，但到期日落在数据末尾之外 ——
+      实盘里就是<b>还拿在手上</b>${nh ? `（当前这批建仓于 2026-09-16，已持有 9 个交易日，还剩 11 个交易日）` : ''}。<br>
+      <span class="pill nb">T+1 买不进 ${nb} 笔</span>
+      信号日次日<b>一字涨停或停牌</b>（<code>can_buy_open=False</code>），
+      开盘价买不到 —— 这笔<b>从未建仓</b>，信号作废。这是空仓等待的天然成本，
+      回测里不算收益，也不该算作亏损。
+    </div>
+    <div class="tw" style="max-height:320px;overflow-y:auto"><table><thead><tr>
+      <th style="text-align:left">代码</th><th style="text-align:left">名称</th>
+      <th style="text-align:left">行业</th><th>板块</th>
+      <th>信号日</th><th>买入日</th><th>买入价</th><th style="text-align:left">状态</th>
+      <th>市值组</th><th>距MA60</th><th>净收益</th><th>盈亏</th>
+    </tr></thead><tbody>${tbl}</tbody></table></div>
+    <div class="cap" style="margin-top:9px">
+      按信号日倒序。导出 CSV 时这些行也会带上（状态列标「持有中」/「买不进」），
+      避免「导出后怎么少了几笔」。
+    </div></div>`;
 }
 
 function renderTradeRows(rows) {
@@ -2815,16 +2912,43 @@ function fillRhythmAxis(cands) {
 }
 
 
-/* ---------------- 单股透视 ---------------- */
+/* ---------------- 单股透视 ----------------
+   ⚠️ 必须把**当前左侧参数 + 股票池**一起发过去（POST），不能用 GET 走默认参数。
+      真实 bug：用户把市值放宽到「最小40%」后主面板显示 001256.SZ 有信号，
+      而本页当时按写死的默认（最小30%、不限池）算 → 同一界面自相矛盾。
+   ⚠️ 信号表**列全历史**（用户明确要求），图表默认近 250 日；
+      不在图表范围内的信号**标灰 + 注明**，绝不隐藏。 */
+let STK = null;          // 最近一次查询的完整响应（供「全部历史」切换重绘）
+let STK_FULL = false;    // 用户是否要求了全历史图表
 async function loadStock() {
   const code = $('#stk_code').value.trim();
   if (!code) return;
   $('#stk-out').innerHTML = `<div class="card"><div class="empty"><span class="spin"></span> 查询中…</div></div>`;
+  STK_FULL = false;      // 换股票 → 回到默认窗口视图
   try {
-    const d = await api('/api/stock?code=' + encodeURIComponent(code), null, true);
+    const d = await api('/api/stock', { code, params: collect(), pool: currentPool() });
+    STK = d;
     renderStock(d);
   } catch (e) {
+    STK = null;
     $('#stk-out').innerHTML = `<div class="errbox"><b>查询失败：</b>${e.message}</div>`;
+  }
+}
+/* 切到全历史图表：懒加载（hist_rows 有 800~2900 行，不必每次查询都拉） */
+async function loadStockFull() {
+  if (!STK) return;
+  if (STK.hist_rows) { STK_FULL = true; renderStock(STK); return; }
+  const btn = $('#stk_full');
+  if (btn) { btn.disabled = true; btn.textContent = '加载中…'; }
+  try {
+    const d = await api('/api/stock', { code: STK.code, params: collect(),
+                                        pool: currentPool(), full_history: true });
+    STK = d; STK_FULL = true;
+    renderStock(d);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '全部历史'; }
+    const b = $('#stk-fullerr');
+    if (b) b.textContent = '全历史加载失败：' + e.message;
   }
 }
 $('#stk_go').addEventListener('click', loadStock);
@@ -2833,16 +2957,43 @@ $('#stk_code').addEventListener('keydown', e => { if (e.key === 'Enter') loadSto
 function renderStock(d) {
   const R = d.rows || [];
   if (!R.length) { $('#stk-out').innerHTML = `<div class="empty">无数据</div>`; return; }
-  const sig = d.signal_dates || [];
+  const sig = d.signal_dates || [];           // **全历史**信号
+  const conds = d.conditions || [];
+  const WIN = d.window || 250;
+  const span = d.hist_span || [];
+  const FULL = STK_FULL && Array.isArray(d.hist_rows) && d.hist_rows.length > 0;
+  const nWin = d.n_signal_window != null ? d.n_signal_window : sig.filter(s => s.in_window).length;
+  const nOut = sig.length - nWin;
   let h = `<div class="kv"><span>代码 <b>${d.code}</b></span>
     <span>名称 <b style="font-family:inherit">${d.name}</b></span>
     <span>行业 <b style="font-family:inherit">${d.ind}</b></span>
-    <span>近 250 日触发默认条件 <b>${sig.length}</b> 次</span></div>`;
+    <span>全历史${span.length === 2 ? `（${span[0]} ~ ${span[1]}）` : ''}触发条件
+      <b>${sig.length}</b> 次</span></div>`;
 
+  /* 本页用的是哪套条件 —— 用户必须能一眼对照主面板（否则两页数字对不上时无从解释） */
+  h += `<div class="card" style="margin:10px 0"><h3>本页所用条件
+      <span class="tag">跟随左侧参数</span></h3>
+    <div class="desc">${conds.length
+      ? conds.map(c => `<span class="pill">${esc(c)}</span>`).join(' ')
+      : '<b>无条件</b>（全部股票 / 全部交易日都会被算作信号）'}</div>
+    <div class="cap">${poolSummary(d.pool)}。改左侧任意参数后<b>重新查询</b>，
+      本页信号会跟着变 —— 与主面板、交易明细用的是同一套条件。</div></div>`;
+
+  const chartTag = FULL ? `全部历史${span.length === 2 ? ` · ${span[0]} ~ ${span[1]}` : ''}`
+                        : `近 ${WIN} 交易日`;
   h += `<div class="charts">
-    <div class="card" style="margin:0"><h3>价格与均线 <span class="tag">近 250 交易日</span></h3>
-      <div class="chart" id="ch-stk"></div></div>
-    <div class="card" style="margin:0"><h3>距MA60 / 量比</h3>
+    <div class="card" style="margin:0"><h3>价格与均线 <span class="tag">${esc(chartTag)}</span>
+      <span style="flex:1"></span>
+      <button class="btn2" id="stk_full" style="flex:0 0 auto">${FULL ? '近 250 日' : '全部历史'}</button>
+    </h3>
+      <div class="chart" id="ch-stk"></div>
+      <div class="cap" id="stk-fullerr" style="color:#a83232"></div>
+      <div class="cap">${nOut
+        ? `图中 <span class="dotmark"></span> 为信号位置。<b>${nOut}</b> 个信号不在
+           ${FULL ? '当前' : '近 ' + WIN + ' 日'}范围内${FULL ? '' : ' —— 点「全部历史」可看全'}。`
+        : `图中 <span class="dotmark"></span> 为信号位置（全部落在当前范围内）。`}</div>
+    </div>
+    <div class="card" style="margin:0"><h3>距MA60 / 量比 <span class="tag">${esc(chartTag)}</span></h3>
       <div class="chart" id="ch-stk2"></div></div>
   </div>`;
 
@@ -2851,8 +3002,8 @@ function renderStock(d) {
     const avg = f => w.length ? w.reduce((a, x) => a + x[f], 0) / w.length : null;
     const win = w.length ? w.filter(x => x.fwd20 > 0).length / w.length : null;
     h += `<div class="mgrid" style="margin:14px 0">
-      <div class="mc"><div class="l">信号次数</div><div class="v sm">${sig.length}</div>
-        <div class="n">最近 ${R[R.length - 1].date}</div></div>
+      <div class="mc"><div class="l">信号次数（全历史）</div><div class="v sm">${sig.length}</div>
+        <div class="n">最近一次 ${sig[sig.length - 1].date}</div></div>
       <div class="mc"><div class="l">信号后 5 日均值</div>
         <div class="v sm ${cls(avg('fwd5'))}">${F(avg('fwd5'), 2, '%')}</div></div>
       <div class="mc"><div class="l">信号后 20 日均值</div>
@@ -2862,28 +3013,42 @@ function renderStock(d) {
       <div class="mc"><div class="l">20 日胜率</div>
         <div class="v sm">${win === null ? '—' : (win * 100).toFixed(1) + '%'}</div></div>
     </div>`;
-    h += `<div class="card"><h3>历史信号明细 <span class="tag">默认参数下触发</span></h3>
-      <div class="tw" style="max-height:330px;overflow-y:auto"><table><thead><tr>
+    /* ⚠️ 均值为「—」的常见原因是**持有期还没走完**（末尾信号没有 20/60 日后的数据），
+       不是 bug —— 必须说清楚，否则用户会以为算错了。 */
+    const pend = sig.length - w.length;
+    h += `<div class="card"><h3>历史信号明细
+        <span class="tag">全历史 ${sig.length} 次 · 上述条件下触发</span></h3>
+      <div class="row" style="max-width:420px;margin-bottom:8px">
+        <input type="text" id="stk_yf" placeholder="按年份或日期筛选，如 2023 / 2026-09">
+        <span class="btn2" id="stk_yfclr" style="flex:0 0 auto">清除</span>
+        <span class="cap" id="stk_yfnote" style="flex:0 0 auto;margin:0"></span>
+      </div>
+      <div class="tw" style="max-height:360px;overflow-y:auto"><table><thead><tr>
       <th style="text-align:left">日期</th><th>距MA60</th><th>后 5 日</th>
-      <th>后 20 日</th><th>后 60 日</th></tr></thead><tbody>
-      ${sig.slice().reverse().map(s => `<tr>
-        <td class="l">${s.date}</td>
-        <td class="${cls(s.dist60)}">${F(s.dist60, 2, '%')}</td>
-        <td class="${cls(s.fwd5)}">${F(s.fwd5, 2, '%')}</td>
-        <td class="${cls(s.fwd20)}">${F(s.fwd20, 2, '%')}</td>
-        <td class="${cls(s.fwd60)}">${F(s.fwd60, 2, '%')}</td></tr>`).join('')}
+      <th>后 20 日</th><th>后 60 日</th><th>图示</th></tr></thead><tbody id="stk_tb">
+      ${stockRowsHTML(sig)}
       </tbody></table></div>
-      <div class="cap">这是单只股票的历史样本，样本量小，不能据此判断「这只股票靠谱」。
+      <div class="cap">
+        ${pend > 0 ? `${pend} 条信号的持有期<b>尚未走完</b>（越靠近最新交易日，
+          20/60 日后的数据越可能还没产生），故右侧为「—」，<b>不计入</b>上面的均值与胜率。<br>` : ''}
+        这是单只股票的历史样本，样本量小，不能据此判断「这只股票靠谱」。
         报告的核心结论是<b>用一篮子股票分散</b>，而不是押注单只。</div></div>`;
   } else {
-    h += `<div class="warnbox">该股近 250 个交易日内<b>未触发</b>默认策略条件
-      （距MA60 D1 + 小市值30% + 熊市）。这通常意味着它要么跌得不够深、要么市值偏大、
-      要么当前不是熊市。</div>`;
+    h += `<div class="warnbox">该股<b>全历史</b>（${span.length === 2 ? span[0] + ' ~ ' + span[1] : '全部交易日'}）
+      内<b>未触发</b>上述条件。常见原因：① 它从未落到「距MA60 D1」那档；
+      ② 市值不在你选的区间内；③ 它不在当前股票池里；④ 触发那几天市场不在你选的状态（如「熊市」）。<br>
+      <b>提示：</b>若你在主面板看到它有信号、这里却看不到，请确认左侧参数
+      与当时一致（尤其是<b>市值区间</b>和<b>股票池</b>），然后重新查询。</div>`;
   }
   $('#stk-out').innerHTML = h;
 
-  const dates = R.map(x => x.date);
-  const iv = Math.max(1, Math.floor(dates.length / 7));
+  /* 图表数据源：默认近 WINDOW 日；FULL 时用全历史 */
+  const H = FULL ? d.hist_rows : R;
+  const dates = H.map(x => x.date);
+  const sigSet = new Set(FULL ? (d.hist_sig_dates || []) : sig.map(s => s.date));
+  // 信号标记：与日期轴等长的数组，命中位置给收盘价（画散点），否则 null
+  const sigMark = dates.map((dt, j) => (sigSet.has(dt) ? H[j].close : null));
+  const iv = Math.max(1, Math.floor(dates.length / 8));
   const c1 = mkChart('ch-stk');
   c1 && c1.setOption({
     grid: { left: 50, right: 16, top: 30, bottom: 24 },
@@ -2894,12 +3059,18 @@ function renderStock(d) {
       axisLabel: { ...AX.axisLabel, interval: iv } },
     yAxis: { type: 'value', scale: true, ...AX },
     series: [
-      { name: '收盘', type: 'line', showSymbol: false, data: R.map(x => x.close),
+      { name: '收盘', type: 'line', showSymbol: false, data: H.map(x => x.close),
         lineStyle: { width: 1.8, color: '#3266ad' }, itemStyle: { color: '#3266ad' } },
-      { name: 'MA20', type: 'line', showSymbol: false, data: R.map(x => x.ma20),
-        lineStyle: { width: 1, color: '#b8860b' }, itemStyle: { color: '#b8860b' } },
-      { name: 'MA60', type: 'line', showSymbol: false, data: R.map(x => x.ma60),
-        lineStyle: { width: 1, color: '#6b5fc4' }, itemStyle: { color: '#6b5fc4' } }
+      // MA20/MA60 只有近 WINDOW 日有值；全历史图里隐藏（否则会画出一条从 0 起的假线）
+      ...(FULL ? [] : [
+        { name: 'MA20', type: 'line', showSymbol: false, data: R.map(x => x.ma20),
+          lineStyle: { width: 1, color: '#b8860b' }, itemStyle: { color: '#b8860b' } },
+        { name: 'MA60', type: 'line', showSymbol: false, data: R.map(x => x.ma60),
+          lineStyle: { width: 1, color: '#6b5fc4' }, itemStyle: { color: '#6b5fc4' } }
+      ]),
+      { name: '信号', type: 'scatter', data: sigMark, symbolSize: 9,
+        itemStyle: { color: '#d92b2b', borderColor: '#fff', borderWidth: 1 },
+        z: 10, tooltip: { formatter: p => p.value == null ? '' : `信号 ${p.name}` } }
     ]
   });
   const c2 = mkChart('ch-stk2');
@@ -2917,14 +3088,58 @@ function renderStock(d) {
         ...AX, splitLine: { show: false } }
     ],
     series: [
-      { name: '距MA60', type: 'line', showSymbol: false, data: R.map(x => x.dist60),
+      { name: '距MA60', type: 'line', showSymbol: false, data: H.map(x => x.dist60),
         lineStyle: { width: 1.6, color: '#e04a4a' }, itemStyle: { color: '#e04a4a' },
-        areaStyle: { color: 'rgba(224,74,74,.08)' } },
-      { name: '量比', type: 'line', yAxisIndex: 1, showSymbol: false,
+        areaStyle: { color: 'rgba(224,74,74,.08)' },
+        // FULL 时叠加信号（用距MA60 的 y 值，落在同一条曲线上）
+        markPoint: FULL ? { symbolSize: 7, data: dates.map((dt, j) =>
+            sigSet.has(dt) && H[j].dist60 != null ? { coord: [j, H[j].dist60] } : null)
+            .filter(Boolean),
+          itemStyle: { color: '#d92b2b' } } : undefined },
+      ...(FULL ? [] : [{ name: '量比', type: 'line', yAxisIndex: 1, showSymbol: false,
         data: R.map(x => x.rvol), lineStyle: { width: 1.1, color: '#1d9e75', type: 'dashed' },
-        itemStyle: { color: '#1d9e75' } }
+        itemStyle: { color: '#1d9e75' } }])
     ]
   });
+  /* 表格筛选 + 全历史切换按钮（必须在 innerHTML 之后绑定） */
+  const yf = $('#stk_yf');
+  if (yf) {
+    yf.addEventListener('input', () => stockFilter(yf.value));
+    $('#stk_yfclr').addEventListener('click', () => { yf.value = ''; stockFilter(''); });
+  }
+  const fb = $('#stk_full');
+  if (fb) fb.addEventListener('click', () => {
+    if (FULL) { STK_FULL = false; renderStock(STK); }
+    else loadStockFull();
+  });
+}
+
+/* 信号明细行（倒序：最新在上）。⚠️ in_window=false 的行**标灰 + 注明**，不隐藏。 */
+function stockRowsHTML(rows) {
+  return rows.slice().reverse().map(s => {
+    const out = s.in_window === false;
+    return `<tr class="${out ? 'stockrow-out' : ''}" data-d="${esc(s.date)}">
+      <td class="l">${s.date}${out ? ' <span class="tag2">图外</span>' : ''}</td>
+      <td class="${cls(s.dist60)}">${F(s.dist60, 2, '%')}</td>
+      <td class="${cls(s.fwd5)}">${F(s.fwd5, 2, '%')}</td>
+      <td class="${cls(s.fwd20)}">${F(s.fwd20, 2, '%')}</td>
+      <td class="${cls(s.fwd60)}">${F(s.fwd60, 2, '%')}</td>
+      <td>${out ? '<span class="dimnote">不在当前图表范围</span>' : '●'}</td></tr>`;
+  }).join('');
+}
+/* 按年份 / 日期前缀筛选明细行（纯前端，不改数据） */
+function stockFilter(q) {
+  q = String(q || '').trim();
+  const tb = $('#stk_tb');
+  if (!tb) return;
+  let n = 0;
+  [...tb.querySelectorAll('tr')].forEach(tr => {
+    const hit = !q || (tr.dataset.d || '').startsWith(q);
+    tr.style.display = hit ? '' : 'none';
+    if (hit) n++;
+  });
+  const fb = $('#stk_yfnote');
+  if (fb) fb.textContent = q ? `筛选「${q}」：${n} 条` : '';
 }
 
 /* ---------------- 研究结论 ---------------- */

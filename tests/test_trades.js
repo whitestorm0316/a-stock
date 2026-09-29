@@ -4,7 +4,12 @@ const fs = require('fs');
 
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
-const html = fs.readFileSync(path.join(ROOT, 'app/index.html'), 'utf8');
+/* ⚠️ 允许 `SMOKE_HTML=<备用 index.html>` 覆盖被测文件 —— 用于**变异测试**
+   （把修复点回退，确认新断言真的会变红；见 dashboard-data-consistency 的 Rule 5）。
+   默认仍是仓库里的 app/index.html。
+   ⚠️ 早先本文件漏了这行，导致「变异测试全绿」的假象 —— 变异根本没被加载。 */
+const HTML_PATH = process.env.SMOKE_HTML || path.join(ROOT, 'app/index.html');
+const html = fs.readFileSync(HTML_PATH, 'utf8');
 const { JSDOM } = require(require('path').join(ROOT, 'node_modules/jsdom'));
 const F = n => JSON.parse(fs.readFileSync(path.join(__dirname, `fixtures/fixture_${n}.json`), 'utf8'));
 const FX = { meta: F('meta'), defaults: F('defaults'), backtest: F('backtest'),
@@ -116,6 +121,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
                 '平均超额', '持有期', '交易区间'];
   const miss = need.filter(x => !mcs.includes(x));
   ok('汇总卡片 8 张齐全', miss.length === 0, miss.length ? '缺: ' + miss : '全部存在');
+  /* 有未结束交易时**多一张**卡（这是用户明确要的「未结束也要显示」）——
+     ⚠️ 不能写成「恰好 8 张」，否则数据一变（某天恰好没有未结束）就误报。 */
+  if ((FX.trades.n_open || 0) > 0) {
+    ok('有未结束时多出「未结束（不计入统计）」卡',
+       mcs.some(x => /未结束/.test(x) && /不计入统计/.test(x)), mcs.join(' | '));
+  }
 
   // ---- 4. 汇总数值
   /* ⚠️ 这些数值必须与 fixture_trades.json 的 summary 对齐。
@@ -368,16 +379,27 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // 🔴 最关键的等式：可结算 == 明细总笔数（防止两处口径脱节）
   ok('可结算数 == n_trade', CP.n_plan - CP.n_open === FX.trades_cap.n_trade,
      `${CP.n_plan - CP.n_open} vs ${FX.trades_cap.n_trade}`);
-  ok('页面「共 N 笔」= 可结算数',
-     txt2.replace(/,/g, '').includes(`共 ${CP.n_plan - CP.n_open} 笔`),
-     `共 ${FX.trades_cap.n_trade} 笔`);
-  if (CP.n_open > 0) {
-    // ⚠️ 措辞必须说「最后 H 个交易日内」，而不是「n_open 个交易日内」——
-    //    前者是**时间窗口**（= 持有期 20 日），后者是**笔数**，两者不是一回事。
-    ok('含未平仓说明（时间窗口口径）',
-       /数据末尾最后 20 个交易日内/.test(txt2.replace(/\s+/g, ' ')),
-       (txt2.replace(/\s+/g, ' ').match(/数据末尾最后 \d+ 个交易日/) || [''])[0]);
-    ok('未平仓不计入统计', /不计入本页明细与胜率统计/.test(txt2));
+  ok('页面「已结算 N 笔」= 可结算数',
+     txt2.replace(/,/g, '').includes(`已结算 ${CP.n_plan - CP.n_open} 笔`),
+     `已结算 ${FX.trades_cap.n_trade} 笔`);
+  // 22. 未结束交易（不计入统计）—— 用户要求「未结束的也要显示」
+  const TC = FX.trades_cap;
+  ok('fixture 有 n_open / open_rows', typeof TC.n_open === 'number' && Array.isArray(TC.open_rows),
+     `n_open=${TC.n_open}, open_rows=${(TC.open_rows || []).length}`);
+  ok('n_open = holding + nobuy',
+     TC.n_open === (TC.n_open_holding || 0) + (TC.n_open_nobuy || 0),
+     `${TC.n_open} vs ${TC.n_open_holding}+${TC.n_open_nobuy}`);
+  if (TC.n_open > 0) {
+    ok('页面含「未结束交易」区块', /未结束交易/.test(txt2));
+    ok('未结束区块标明「不计入统计」', /不计入统计/.test(flat2));
+    ok(`未结束笔数 ${fmt(TC.n_open)} 上屏`, txt2.includes(fmt(TC.n_open)));
+    // 两类必须都解释到（holding = 真持有中；nobuy = T+1 买不进）
+    ok('解释了「持有中」一类', /持有中/.test(txt2));
+    ok('解释了「T+1 买不进」一类', /买不进/.test(txt2));
+    // 旧措辞（只讲「数据末尾最后 H 个交易日内」）已不再覆盖 nobuy，必须改掉
+    ok('不再只讲「数据末尾最后 H 个交易日内」',
+       !/数据末尾最后 \d+ 个交易日内/.test(flat2));
+    ok('未结束不计入统计的说明仍在', /不计入/.test(txt2));
   }
 
   // 20. 汇总卡用容量口径 summary（而非不限仓位的 93,553）
@@ -399,6 +421,106 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   click2(d2.querySelector('#t-exp'));
   await sleep(300);
   ok('导出文件名带容量标记', /持10只日3只/.test(String(dlName)), String(dlName));
+
+  /* ══════ 22. 🔴🔴 统计纯净性（本需求的核心护栏）══════
+     用户要求：「未结束的也要显示，但**不计入**统计数据」。
+     前半句靠「区块存在」断言（上面已做），后半句必须靠**数据自证** ——
+     光看页面文字说明是证明不了它真没被算进去的。四组独立证据： */
+  const rounds = [
+    { key: 'trades', F: FX.trades, label: '不限仓位' },
+    { key: 'trades_cap', F: FX.trades_cap, label: '容量 10/3' },
+  ];
+  for (const { F, label } of rounds) {
+    const op = F.open_rows || [];
+    const S2 = F.summary;
+    // (a) 明细行里**不含**未结束行（否则它们会混入筛选与统计）
+    const rowCodes = new Set((F.rows || []).map(r => r.code + '|' + r.signal_date));
+    const leaked = op.filter(x => rowCodes.has(x.code + '|' + x.signal_date));
+    ok(`[${label}] 未结束行未混进明细 rows`, leaked.length === 0,
+       leaked.length ? `泄漏 ${leaked.length} 条` : `${op.length} 条全在独立数组`);
+    // (b) 未结束行的收益字段必须是 null（不能有 net，否则会被当成盈利/亏损样本）
+    const bad = op.filter(x => x.net !== null || x.win !== null || x.ret !== null);
+    ok(`[${label}] 未结束行 net/win/ret 全为 null`, bad.length === 0,
+       bad.length ? `${bad.length} 条带收益` : 'ok');
+    // (c) summary.n_trade 必须**恰好**等于明细笔数（不含未结束）
+    ok(`[${label}] summary.n_trade == n_trade（未含未结束）`,
+       S2.n_trade === F.n_trade,
+       `summary=${S2.n_trade} / n_trade=${F.n_trade}`);
+    // (d) 若把 n_open 也当成交，n_trade 会变成 n_trade + n_open —— 断言没有
+    ok(`[${label}] n_trade ≠ n_trade + n_open（未结束没被计入）`,
+       F.n_trade !== F.n_trade + F.n_open,
+       `${F.n_trade} vs ${F.n_trade + F.n_open}`);
+    // (e) 明细分页行必须**每行都有 net**（未结束行 net=null，混进来就会露出来）
+    const nullNet = (F.rows || []).filter(r => r.net === null).length;
+    ok(`[${label}] 明细 rows 中无 net=null 的行`, nullNet === 0,
+       nullNet ? `${nullNet} 行收益为空` : `${(F.rows || []).length} 行均有净收益`);
+    // (e) 未结束行数 = n_open = holding + nobuy，且三类计数自洽
+    ok(`[${label}] open_rows 长度 == n_open`,
+       op.length === F.n_open, `${op.length} vs ${F.n_open}`);
+    const kinds = op.reduce((a, x) => (a[x.kind] = (a[x.kind] || 0) + 1, a), {});
+    ok(`[${label}] kind 只有 holding/nobuy`,
+       Object.keys(kinds).every(k => k === 'holding' || k === 'nobuy'), JSON.stringify(kinds));
+  }
+
+  // (f) 🔴 容量口径的闭环等式：计划建仓 = 已结算 + 未结束
+  //     这条一旦破了，「建仓 787 / 结算 782 / 未平仓 5」就不再自洽。
+  const CPl = FX.trades_cap.plan;
+  ok('容量口径：n_plan == n_trade + n_open（闭环）',
+     CPl.n_plan === FX.trades_cap.n_trade + FX.trades_cap.n_open,
+     `${CPl.n_plan} vs ${FX.trades_cap.n_trade} + ${FX.trades_cap.n_open}`);
+  ok('容量口径：plan.n_open == n_open == holding + nobuy',
+     CPl.n_open === FX.trades_cap.n_open
+       && FX.trades_cap.n_open === FX.trades_cap.n_open_holding + FX.trades_cap.n_open_nobuy,
+     `plan=${CPl.n_open} / n_open=${FX.trades_cap.n_open} / ${FX.trades_cap.n_open_holding}+${FX.trades_cap.n_open_nobuy}`);
+
+  // (g) 两条口径下 statistics 都与历史基线一致（防止改动悄悄动了统计）
+  ok('不限仓位胜率仍为基线 58.27%',
+     Math.abs(FX.trades.summary.win - 0.5827) < 0.0005,
+     (FX.trades.summary.win * 100).toFixed(2) + '%');
+  ok('容量口径胜率仍为基线 58.57%',
+     Math.abs(FX.trades_cap.summary.win - 0.5857) < 0.0005,
+     (FX.trades_cap.summary.win * 100).toFixed(2) + '%');
+
+  // (h) 🔴🔴 页面级铁证：容量口径下「完成交易」卡显示 n_trade，
+  //      而**未结束数必须出现在另一张卡上**。若哪天有人把未结束行并进统计，
+  //      这两张卡会显示同一个数 → 立刻变红。
+  const capGrid = d2.querySelector('#p-trades .mgrid').textContent;
+  const nCap = new Intl.NumberFormat('zh-CN').format(FX.trades_cap.n_trade);
+  const nOpen = new Intl.NumberFormat('zh-CN').format(FX.trades_cap.n_open);
+  ok('「完成交易」卡 = n_trade（不含未结束）', capGrid.includes(nCap + ' 笔'),
+     `${nCap} 笔`);
+  ok('未结束数与完成交易数是**两个不同的数**',
+     FX.trades_cap.n_open > 0 && FX.trades_cap.n_trade + FX.trades_cap.n_open
+       !== FX.trades_cap.n_trade,
+     `完成 ${FX.trades_cap.n_trade} / 未结束 ${FX.trades_cap.n_open}`);
+  ok('未结束笔数单独成卡显示', capGrid.includes(nOpen),
+     `${nOpen}`);
+
+  /* (i) 🔴🔴 **页面 DOM 级**铁证（上面 (a)~(h) 查的是 fixture，查不到前端把
+     未结束行混进明细表这种错法 —— 变异测试发现的盲区）。
+     判据：明细表 tbody 的**每一行**都必须有净收益单元格；
+     未结束行的 net 是 null，一旦混进去就会出现「—」或空格。 */
+  const tbody = d2.querySelector('#tbody-trades');
+  ok('明细表 tbody 存在', !!tbody);
+  if (tbody && tbody.children.length) {
+    const badRows = [...tbody.children].filter(tr => {
+      // 净收益列：用表头名定位（禁止用列号 —— 项目硬约定）
+      const ths = [...d2.querySelectorAll('#p-trades th')].map(t => t.textContent.replace(/[▲▼]/g, '').trim());
+      const ci = ths.indexOf('净收益');
+      const td = tr.children[ci];
+      if (!td) return true;
+      return !/%/.test(td.textContent);   // 已结算行必有「x.xx%」；未结束行是「—」
+    });
+    ok('🔴 明细表里没有无净收益的行（未结束未混入）',
+       badRows.length === 0,
+       badRows.length ? `${badRows.length} 行净收益为空，例：${badRows[0].textContent.replace(/\s+/g,' ').slice(0,70)}`
+                      : `${tbody.children.length} 行均有净收益`);
+    // 未结束行必须出现在**独立区块**里（表格行数 == 分页 rows 数，不含未结束）
+    const expRows = Math.min(d2.__lastTradesRows || FX.trades_cap.rows.length, FX.trades_cap.rows.length);
+    ok('🔴 明细表行数 == 分页 rows 数（未含未结束）',
+       tbody.children.length <= expRows + 1 && tbody.children.length >= expRows - 1,
+       `${tbody.children.length} vs 期望 ${expRows}`);
+  }
 
   console.log('\n══════ 前端「交易明细」Tab 验证 ══════\n');
   out.forEach(l => console.log(l));

@@ -271,6 +271,49 @@ def cmd_stop(args: argparse.Namespace) -> int:
     return 0 if stop_port(port) else 1
 
 
+def check_runtime() -> list[str]:
+    """确认当前解释器具备启动服务所需的第三方包（服务端 import numpy/pandas）。
+
+    ⚠️ 为什么必须显式检查
+    --------------------
+    本脚本自身**只用标准库**，所以 `status` / `stop` 在任何 python3 下都能跑通。
+    但真正的服务进程（`app/server.py` → `app/engine.py`）import numpy/pandas，
+    而**子进程用的就是本脚本的 `sys.executable`**。
+
+    于是会出现一个很别扭的失败模式：配错解释器时，`status` 显示一切正常、
+    `stop` 干净退出，只有 `start` 会失败 —— 而且报的是子进程里的一句
+    `ModuleNotFoundError: No module named 'numpy'` 加 20 行 traceback，
+    **完全指不到「你该换一个 python」这个根因**（本机实测过：
+    WorkBuddy 托管的 python3 在 PATH 上，但没装 pandas）。
+
+    所以在这里前置拦一道，直接告诉用户怎么办，而不是把 traceback 甩给他。
+    返回缺失的包名列表（空列表 = 运行时就绪）。
+    """
+    missing: list[str] = []
+    for mod in ("numpy", "pandas", "pyarrow"):
+        try:
+            __import__(mod)
+        except ImportError:
+            missing.append(mod)
+    return missing
+
+
+def _print_runtime_help(missing: list[str]) -> None:
+    print("!! 当前 Python 缺少启动服务所需的包：" + ", ".join(missing))
+    print(f"   解释器：{sys.executable}")
+    print()
+    print("   本脚本（ctl.py）只用标准库，所以 status/stop 能跑；")
+    print("   但服务进程要 import numpy/pandas —— 子进程用的就是这个解释器。")
+    print()
+    print("   三个办法（挑一个）：")
+    print("     1) 直接装上：   " + f'"{sys.executable}" -m pip install pandas numpy pyarrow')
+    print("     2) 换解释器：   PYTHON=/path/to/python3 bash app/start.sh")
+    print("     3) 显式指定：   /path/to/python3 scripts/ctl.py start")
+    print()
+    print("   （.sh / .cmd 入口都支持 PYTHON 环境变量，见 app/start.sh 头部注释）")
+    print(f'   测试：          "{sys.executable}" -c "import pandas, numpy, pyarrow"')
+
+
 def cmd_start(args: argparse.Namespace) -> int:
     port = args.port
     # ⚠️ 用 getattr 兜底：任何新增的、会转发到本函数的子命令都不该因为少注册一个
@@ -296,6 +339,13 @@ def cmd_start(args: argparse.Namespace) -> int:
     for f, desc in OPTIONAL.items():
         if not (ROOT / f).exists():
             print(f"  · 提示：{f} 不存在 → {desc}不可用")
+
+    # ⚠️ 运行时体检必须在「起服务」之前：配错解释器时子进程会瞬间退出，
+    #    只剩一句 numpy 的 ModuleNotFoundError，看不出是解释器选错了。
+    missing_mods = check_runtime()
+    if missing_mods:
+        _print_runtime_help(missing_mods)
+        return 2
 
     if port_open(port):
         print(f"端口 {port} 已被占用，先停止旧服务")
@@ -390,6 +440,19 @@ def cmd_update(args: argparse.Namespace) -> int:
     print("=" * 56)
     print("  每日更新")
     print("=" * 56)
+
+    # ⚠️ 体检必须在**停服务之前**。更新链路同样全是 `sys.executable` 起的子进程
+    #    （99_daily_update.py → 02_build_dataset.py / 21_build_v2_features.py 都要
+    #    pandas/pyarrow）。若解释器不对，会先把服务停掉、再花十几分钟取数、
+    #    最后才在「重建面板」那步炸掉 —— 比 start 的失败更贵（服务也停了）。
+    missing_mods = check_runtime()
+    if missing_mods:
+        _print_runtime_help(missing_mods)
+        print()
+        print("   注：更新链路（99_daily_update.py）也用同一个解释器起子进程，")
+        print("       所以这里必须换一个可用的 python，不能靠「先跑起来再说」。")
+        return 2
+
     if port_open(args.port):
         print("  停止选股器服务（释放内存，否则重建面板会 OOM）")
         stop_port(args.port)

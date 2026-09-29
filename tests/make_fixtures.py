@@ -130,6 +130,26 @@ def main():
     if want("tune_rhythm"):
         save("tune_rhythm", post("/api/tune", {"params": {}, "pool": POOL,
                                                "axes": {"rhythm": True, "px_ma60": True}}))
+    # 单股透视（POST 形态：携带左侧参数 + 股票池）
+    #   ⚠️ 这里刻意用**与 scan 相同的 params/pool**，让两个 fixture 可以互相对照：
+    #      「主面板说有信号、单股透视说没有」这个真实 bug 就靠这对快照锁住。
+    if want("stock"):
+        save("stock", post("/api/stock", {
+            "code": "001256.SZ",
+            "params": {"px_ma60_min": 1, "px_ma60_max": 1,
+                       "size_min": 0, "size_max": 3, "mkt_state": "bear"},
+            "pool": {"mode": "all", "boards": ["MAIN"], "exchanges": ["SH", "SZ"]}}))
+    # 单股透视 · 全部历史图表（用户点「全部历史」后的懒加载形态）
+    #   ⚠️ 必须与上面的 stock 用**同一套 params/pool**，否则前端在「窗口视图 ↔ 全历史视图」
+    #      切换时看到的两组数字对不上（那正是这个页面要防止的问题）。
+    #      hist_rows 有 800~2900 行，刻意不在 stock 里返回（省流量），只在这里给。
+    if want("stock_full"):
+        save("stock_full", post("/api/stock", {
+            "code": "001256.SZ",
+            "params": {"px_ma60_min": 1, "px_ma60_max": 1,
+                       "size_min": 0, "size_max": 3, "mkt_state": "bear"},
+            "pool": {"mode": "all", "boards": ["MAIN"], "exchanges": ["SH", "SZ"]},
+            "full_history": True}))
     print("完成。⚠️ 记得把 fixtures 一起提交，否则 CI/他人无法复现。")
 
 
