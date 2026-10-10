@@ -15,6 +15,12 @@ INDICES = {
     "hs300": "000300.SH",
     "zz500": "000905.SH",
     "zz1000": "000852.SH",
+    # 同花顺全A（市值加权口径，界面「真实指数对照」用）。
+    # ⚠️ 后缀必须是 **.TI**（同花顺指数体系）。写成 `.WI` 会返回 code=1002 无数据 ——
+    #    那是 Wind 的后缀，本数据源不提供 Wind 指数（踩过一次，误判成「数据源没有」）。
+    # ⚠️ 历史只到 **2023-12** 起（早期段落返回空），所以**不能**做回测过滤，
+    #    只做展示对照 —— 与 sh000001 等「只覆盖 2023 起」的处境相同。
+    "ths_allA": "883421.TI",
 }
 
 
@@ -48,10 +54,20 @@ def main():
             if r.get("code") == 0:
                 for it in r["data"]["item"]:
                     rows[it["date_ms"]] = it
+            # ⚠️ 某一段返回非 0 **不一定是错**：数据源对不同指数有不同的历史窗口，
+            #    比如 883421.TI 只有 2023-12 起 → 第一段（2014-2022）必然为空。
+            #    所以这里只记录、不抛错，最终以「实际拿到多少条」为准。
             time.sleep(0.3)
         items = [rows[k] for k in sorted(rows)]
         json.dump(items, open(os.path.join(RAW, f"index_{name}.json"), "w"))
-        print(f"{name} ({code}): {len(items)} bars")
+        # 打印实际覆盖范围 —— 各指数历史长度不同（2023 起 vs 2015 起），一眼可见
+        if items:
+            first, last = items[0]["date_ms"], items[-1]["date_ms"]
+            d0 = time.strftime("%Y-%m-%d", time.gmtime(first / 1000 + 8 * 3600))
+            d1 = time.strftime("%Y-%m-%d", time.gmtime(last / 1000 + 8 * 3600))
+            print(f"{name:12} ({code:12}): {len(items):>5} bars  {d0} ~ {d1}")
+        else:
+            print(f"{name:12} ({code:12}): 0 bars  ⚠️ 无数据（检查代码后缀是否正确）")
 
 
 if __name__ == "__main__":

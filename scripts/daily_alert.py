@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-daily_alert.py —— 每日数据更新 + 「熊市且有信号」飞书提醒（Windows / macOS / Linux 通用）
+daily_alert.py —— 每日数据更新 + 飞书播报（Windows / macOS / Linux 通用）
 
 一条命令走完三件事（与 daily_alert.sh 完全同构，后者已改为委托本脚本）：
   1. scripts/ctl.py update --no-browser   # 停服 → 增量取数 → 重建面板 → 起服（约 18min）
   2. 确认服务真的在跑（更新失败时 ctl.py **不会**重新起服 → 补一次 start）
-  3. scripts/42_market_alert.py           # 熊市 + 有信号 → 发飞书；否则静默
+  3. scripts/42_market_alert.py           # **每天必发**一条飞书播报
+
+播报内容（默认每天都发，不再静默）：
+  · 今日是熊市还是牛市（自建全A等权净值 vs MA60，取 mkt_bull_now）
+  · **当日大盘涨跌幅**（自建等权净值的日变化）
+  · 有无信号；有信号 → 列候选（最超跌优先前 8）
+  · 无信号 → 说明距 MA60 还差多少、为什么不建仓
+  · 同口径换窗口状态 + 真实指数对照
+
+  想恢复「只在熊市有信号时才发」的旧行为：加 `--only-signal`。
 
 为什么要有这个 .py 版本
 ----------------------
-`.sh` 在 Windows 上跑不了（没有 bash）。而「每天自动更新 + 有信号发提醒」这件事
+`.sh` 在 Windows 上跑不了（没有 bash）。而「每天自动更新 + 发播报」这件事
 显然需要能在别人的 Windows 机器上跑，所以把编排逻辑收进一个纯标准库的 Python 脚本，
 两个平台共用同一份实现，避免「同一件事两套代码各自漂移」。
 
@@ -28,15 +37,16 @@ daily_alert.py —— 每日数据更新 + 「熊市且有信号」飞书提醒�
   python scripts/daily_alert.py                 # 正常（无人值守用这个）
   python scripts/daily_alert.py --dry-run       # 不真发飞书，只打印消息
   python scripts/daily_alert.py --skip-update   # 跳过更新，只用现有面板检查（秒级）
+  python scripts/daily_alert.py --only-signal   # 只在「熊市 + 有信号」时发（旧行为）
   python scripts/daily_alert.py --skip-update --dry-run
 
   Windows 不想敲命令：双击仓库根目录的 daily_alert.cmd。
 
 可选环境变量：PORT（默认 8770）、PY / ASTOCK_PY、A_STOCK_ALERT_WEBHOOK
 
-自动化（由 WorkBuddy automation 托管，名称「A股熊市有信号提醒」，周一至周五 19:30）。
-等价 crontab：
-  30 19 * * 1-5 cd /path/to/a-stock && python scripts/daily_alert.py >> logs/daily_alert.log 2>&1
+自动化（由 WorkBuddy automation 托管，名称「A股每日飞书播报（熊市有信号/无信号都发）」，
+      周一至周五 **15:30**）。等价 crontab：
+  30 15 * * 1-5 cd /path/to/a-stock && python scripts/daily_alert.py >> logs/daily_alert.log 2>&1
 
 退出码
 ------
@@ -203,6 +213,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true", help="忽略触发条件，强制发送（自测用）")
     p.add_argument("--check", action="store_true",
                    help="只自检「发送通道配置 + 服务连通性」，不更新、不取信号、不发送")
+    p.add_argument("--only-signal", action="store_true",
+                   help="只在「熊市 + 有信号」时发送，其余静默（旧行为；默认是每天都发）")
     p.add_argument("--max-stale", type=int, default=None,
                    help="最新交易日最多可陈旧几个自然日（默认 4）")
     p.add_argument("--to", default=None, help="lark-cli 收件人 open_id（回退通道用）")
@@ -250,13 +262,15 @@ def main() -> int:
             if upd_rc == 0:
                 upd_rc = start_rc
 
-    # ---------------------------------------------------------- 3/3 检查 + 提醒
-    log("== 3/3 检查「熊市 + 有信号」==")
+    # ---------------------------------------------------------- 3/3 检查 + 播报
+    log("== 3/3 生成飞书播报（默认每天必发）==")
     cmd = [PY, "scripts/42_market_alert.py", "--port", str(port)]
     if a.dry_run:
         cmd.append("--dry-run")
     if a.force:
         cmd.append("--force")
+    if a.only_signal:
+        cmd.append("--only-signal")
     if a.max_stale is not None:
         cmd += ["--max-stale", str(a.max_stale)]
     if a.to:

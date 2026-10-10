@@ -30,6 +30,7 @@ import json
 import time
 import gzip
 import threading
+import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, quote
 
@@ -138,6 +139,11 @@ _INDEX_FILES = [
     ("沪深300", "index_hs300.json"),
     ("中证500", "index_zz500.json"),
     ("中证1000", "index_zz1000.json"),
+    # 同花顺全A：**市值加权**口径，是这张对照表里唯一的「全市场 + 加权」指数。
+    # ⚠️ 历史只到 2023-12 起（数据源窗口），因此和其他四个一样**只做展示**，
+    #    不参与任何回测计算。它的价值在于让用户看到「等权 vs 市值加权」差多少：
+    #    同期（2023-12~2026-10）市值加权 +11.7% vs 自建等权 +15.7%，差约 4pp。
+    ("同花顺全A", "index_ths_allA.json"),
 ]
 _index_cache = {}
 
@@ -264,12 +270,20 @@ class Handler(BaseHTTPRequestHandler):
                 # 仅 code → 用 DEFAULT_PARAMS 且不限池（向后兼容旧链接/书签）
                 d = ENGINE.stock_detail(code)
                 return self._json(d or {"error": "未找到该股票"}, 200 if d else 404)
+            if p == "/api/update/status":
+                st = _read_update_state() or {"state": "idle", "msg": ""}
+                st["server_last_date"] = ENGINE.meta().get("last_date")
+                return self._json(st)
             if p == "/api/defaults":
                 return self._json(dict(
                     defaults=DEFAULT_PARAMS,
                     presets=PRESETS,
                     # 「我的方案」：用户在界面上保存的自定义参数
                     user_presets=load_user_presets(),
+                    # 界面默认选中的方案 id（'' = 未设置，前端回退到内置第一套）。
+                    # ⚠️ 可能指向一个**已不存在**的 id（文件被手改 / 方案被删）——
+                    #    前端必须做存在性校验后再用，不能直接 sel.value = 它。
+                    default_preset=load_default_preset(),
                     # 市值区间的合法范围（前端双滑块用，避免两端各写一份百分比表）
                     size_bands=dict(n=SIZE_N, pct=SIZE_PCT),
                     # 容量约束：选股规则清单（供前端下拉）
@@ -320,6 +334,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._preset_save(b)
             if p == "/api/presets/delete":
                 return self._preset_delete(b)
+            if p == "/api/presets/set_default":
+                return self._preset_set_default(b)
+            if p == "/api/update/start":
+                port = int(b.get("port") or self.server.server_address[1])
+                ok, msg = start_update(port)
+                return self._json({"ok": ok, "msg": msg})
             return self._json({"error": "not found"}, 404)
         except Exception as e:
             import traceback
@@ -916,7 +936,33 @@ class Handler(BaseHTTPRequestHandler):
         if not any(x["id"] == pid for x in load_user_presets()):
             return self._json({"ok": False, "msg": "该方案不存在"}, 200)
         lst = delete_user_preset(pid)
-        return self._json({"ok": True, "msg": "已删除", "presets": lst})
+        # ⚠️ 删掉的恰好是当前默认方案 → 一并清掉默认设置，否则下次启动会
+        #    指向一个不存在的 id，前端只能静默回退（用户会以为「设置没保存住」）。
+        if load_default_preset() == pid:
+            save_default_preset(None)
+        return self._json({"ok": True, "msg": "已删除", "presets": lst,
+                           "default_preset": load_default_preset()})
+
+    def _preset_set_default(self, b):
+        """设置「界面默认预设」。
+
+        请求体： id —— 方案 id（B* 内置 / U* 我的）；**传空字符串 = 取消设置**
+                （恢复成「内置第一套」）。
+        返回：   ok / msg / default_preset（设置后的值，前端据此重绘标记）
+        """
+        pid = str(b.get("id") or "").strip()
+        if pid and not preset_exists(pid):
+            return self._json({"ok": False, "msg": "该方案不存在"}, 200)
+        save_default_preset(pid or None)
+        cur = load_default_preset()
+        name = ""
+        for x in list(PRESETS) + load_user_presets():
+            if x.get("id") == cur:
+                name = x.get("name") or ""
+                break
+        msg = (f"已设为默认：{name}" if cur
+               else "已取消默认设置（将使用内置第一套）")
+        return self._json({"ok": True, "msg": msg, "default_preset": cur})
 
     def _export(self, b):
         # 两种导出：candidates（今日候选股） / trades（回测逐笔明细）
@@ -1294,6 +1340,115 @@ def delete_user_preset(pid):
     if len(rest) != len(lst):
         save_user_presets(rest)
     return rest
+
+
+# ================================================================ 默认预设
+# 「界面打开时默认选中哪套方案」。
+#
+# ⚠️ 为什么不塞进 user_presets.json：那个文件是**方案列表**（JSON 数组），
+#    往里加元字段会破坏结构，且删除某个方案时容易把元数据一起清掉。
+#    单独一个文本文件最干净，也便于人工查看/修改。
+# ⚠️ 为什么不用 localStorage：与 user_presets 同理 —— 本地服务应该让配置
+#    跟着**数据目录**走；换浏览器 / 清缓存不该丢，脚本也要能读到。
+# ⚠️ 存的是**方案 id**（B* 内置 / U* 我的），不是名称 —— 名称可以改。
+DEFAULT_PRESET_FILE = os.path.join(ROOT, "data", "default_preset.txt")
+
+
+def load_default_preset() -> str:
+    """读默认预设 id。文件不存在/空 → 返回 ''（前端回退到内置第一套）。"""
+    try:
+        with open(DEFAULT_PRESET_FILE, encoding="utf-8-sig") as f:
+            return (f.readline() or "").strip()
+    except OSError:
+        return ""
+
+
+def save_default_preset(pid: str | None) -> None:
+    """写默认预设 id；pid 为空 → 删除文件（= 恢复「内置第一套」）。原子写。"""
+    if not pid:
+        try:
+            os.remove(DEFAULT_PRESET_FILE)
+        except OSError:
+            pass
+        return
+    os.makedirs(os.path.dirname(DEFAULT_PRESET_FILE), exist_ok=True)
+    tmp = DEFAULT_PRESET_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(str(pid).strip() + "\n")
+    os.replace(tmp, DEFAULT_PRESET_FILE)
+
+
+def preset_exists(pid: str) -> bool:
+    """该 id 是否是有效方案（内置 PRESETS 或「我的方案」之一）。"""
+    if not pid:
+        return False
+    if any(x.get("id") == pid for x in PRESETS):
+        return True
+    return any(x.get("id") == pid for x in load_user_presets())
+
+
+# ---------------------------------------------------------------- 数据更新
+# 界面上的「更新数据」按钮 → 后端拉起一次 `ctl.py update`。
+#
+# ⚠️ 这里有个**结构性矛盾**必须绕开：
+#   更新面板（02/21 号脚本）要独占约 7GB 内存，所以必须先**停服**再重建。
+#   而「停服」要停的正是**当前正在处理这个 HTTP 请求的进程**——
+#   天真做法（fork 一个线程去 `ctl.py update`）会先把自己杀掉，更新流程
+#   随进程组一起死掉，表现为「点了更新、服务停了、数据没更新、也不再起来」。
+#
+# 绕开方式：用 `start_new_session=True` 起一个**脱离当前进程组**的 detach 子进程。
+#   它不会随服务被杀；它自己会调 `ctl.py update`（内含 停服→取数→重建→起服）。
+#   子进程先把「我要开始了」写进状态文件，前端据此轮询展示进度。
+UPDATE_STATE = os.path.join(ROOT, "logs", "update_state.json")
+_update_lock = threading.Lock()
+
+
+def _read_update_state():
+    try:
+        with open(UPDATE_STATE, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _write_update_state(d):
+    os.makedirs(os.path.dirname(UPDATE_STATE), exist_ok=True)
+    tmp = UPDATE_STATE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, UPDATE_STATE)
+
+
+def start_update(port):
+    """起一个 detached 更新进程。已有更新在跑则拒绝（返回 (ok, msg)）。"""
+    with _update_lock:
+        cur = _read_update_state()
+        if cur and cur.get("state") in ("starting", "running"):
+            age = time.time() - float(cur.get("started_at") or 0)
+            if age < 40 * 60:      # 40 分钟内视为仍在跑（正常 ~18min，留余量）
+                return False, f"已有更新在进行中（已 {int(age // 60)} 分钟）"
+        d = dict(state="starting", port=int(port), started_at=time.time(),
+                 msg="正在启动更新进程…")
+        _write_update_state(d)
+        try:
+            kw = dict(cwd=ROOT, stdin=subprocess.DEVNULL,
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if os.name == "nt":
+                kw["creationflags"] = (subprocess.DETACHED_PROCESS
+                                       | subprocess.CREATE_NEW_PROCESS_GROUP)
+            else:
+                kw["start_new_session"] = True     # ★ 关键：脱离服务进程组，不被一起杀
+            # ★ 用独立脚本而不是 `-c` 内联：
+            #   1) 不依赖 inspect / 源码可读性；
+            #   2) 逻辑可单独测试（`python scripts/update_runner.py --dry`）；
+            #   3) 子进程里**不会** import server → 不会白吃 7GB 内存（见其文件头注释）。
+            runner = os.path.join(ROOT, "scripts", "update_runner.py")
+            subprocess.Popen([sys.executable, runner, "--port", str(int(port))], **kw)
+        except Exception as e:  # noqa: BLE001
+            d.update(state="failed", msg=f"无法启动更新进程：{e}")
+            _write_update_state(d)
+            return False, d["msg"]
+        return True, "更新已开始"
 
 
 def main():

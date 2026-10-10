@@ -43,10 +43,32 @@ case "${1:-all}" in
   trades) SETS="test_trades" ;;
   presets) SETS="test_presets" ;;
   stock)  SETS="test_stock" ;;
+  alert)  SETS="__PY_alert__" ;;
   cdp)    SETS="__CDP__" ;;
-  all)    SETS="test_cap test_board test_indtree test_icon test_ladder test_fin test_delist test_trades test_presets test_tune test_market test_stock" ;;
-  *) echo "未知参数：$1（可选 cap|board|ind|icon|ladder|tune|market|fin|delist|trades|presets|stock|cdp|all）"; exit 2 ;;
+  all)    SETS="test_cap test_board test_indtree test_icon test_ladder test_fin test_delist test_trades test_presets test_tune test_market test_stock __PY_alert__" ;;
+  *) echo "未知参数：$1（可选 cap|board|ind|icon|ladder|tune|market|fin|delist|trades|presets|stock|alert|cdp|all）"; exit 2 ;;
 esac
+
+# 飞书播报的单元测试是 **Python** 套件（测 42_market_alert.py 的纯函数），
+# 不能走下面的 node 分支；单独跑并复用同一套 N/M 解析。
+if [ "$SETS" = "__PY_alert__" ]; then
+  printf '%-14s ' "test_alert"
+  # 解释器：与 daily_alert.py 同源的探测（托管环境优先）
+  PY_ALERT="${PY:-${ASTOCK_PY:-}}"
+  if [ -z "$PY_ALERT" ]; then
+    for c in "$HOME/.workbuddy-ai/binaries/python/envs/default/bin/python" \
+             "$HOME/.workbuddy/binaries/python/envs/default/bin/python"; do
+      [ -x "$c" ] && { PY_ALERT="$c"; break; }
+    done
+  fi
+  [ -n "$PY_ALERT" ] || PY_ALERT=python3
+  out=$("$PY_ALERT" tests/test_alert.py 2>&1) || true
+  pair=$(echo "$out" | grep -oE '[0-9]+/[0-9]+' | tail -1)
+  if [ -z "$pair" ]; then echo "❌ 未能解析结果"; echo "$out" | tail -8; exit 1; fi
+  p=${pair%%/*}; t=${pair##*/}
+  if [ "$p" = "$t" ]; then echo "✅ 通过 $pair"; else echo "❌ 通过 $pair"; echo "$out" | grep '❌' | head -8; exit 1; fi
+  exit 0
+fi
 
 if [ "$SETS" = "__CDP__" ]; then
   echo "== 真实 Chrome 端到端（需要 app/server.py 在 8772 + CDP 在 9333）"

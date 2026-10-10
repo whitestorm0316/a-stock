@@ -110,26 +110,64 @@ $CTL scripts/ctl.py update --since 2026-09-01 # 回补某段区间
 
 > ⚠️ 更新期间服务不可用，`update.cmd` 之前务必先在界面上导出好需要的东西。
 
-### 每日飞书提醒（熊市 + 有信号）
+### 每日飞书播报（每个交易日都发）
 
-在每日更新的尾巴上挂一个飞书提醒：**「最新交易日是熊市」且「当日有信号」**
-两个条件同时满足才推送，否则静默退出（不打扰）。
+在每日更新的尾巴上挂一条飞书播报：**每个交易日都发**，不再静默。
+内容包括：
+
+- 今日是**熊市还是牛市**（自建全A等权净值 vs MA60，取 `mkt_bull_now`）
+- **当日大盘涨跌幅**（自建等权净值的日变化，不是上证指数）
+- **有无信号**：有 → 列候选（最超跌优先前 8）；无 → 说明**距 MA60 还差多少**、为何不建仓
+- 同口径换窗口状态 + 真实指数对照
 
 ```bash
-bash scripts/daily_alert.sh              # 一条命令：更新数据 → 检查 → 提醒（约 18 分钟）
+bash scripts/daily_alert.sh              # 一条命令：更新数据 → 播报（约 18 分钟）
 bash scripts/daily_alert.sh --dry-run    # 只打印消息，不真发飞书
 bash scripts/daily_alert.sh --check      # 只自检发送通道与连通性
+bash scripts/daily_alert.sh --only-signal   # 恢复旧行为：只在「熊市+有信号」时发
 python scripts/42_market_alert.py        # 只做检查（跳过更新，用现有面板）
 python scripts/42_market_alert.py --force           # 无视条件强制发一条（用于验证链路）
 python scripts/42_market_alert.py --max-stale 7     # 放宽「数据新鲜度」阈值
 ```
 
-定时由 WorkBuddy 的 **automation** 托管（不是 crontab）：名称「A股熊市有信号提醒」，
-**周一至周五 19:30**，工作目录 `a-stock`。等价 crontab 写法：
+### 定时调度：macOS 开机自启（launchd）
 
-```cron
-30 19 * * 1-5 cd /Users/chenqifeng/code/a-stock && bash scripts/daily_alert.sh >> logs/daily_alert.log 2>&1
+`daily_alert.sh` 是**自包含**的（自己探测 python、自己兜底起服），所以可以脱离 WorkBuddy
+独立跑。用 macOS 原生的 **launchd** 调度，才能扛住「关机重启 / 没开 WorkBuddy」：
+
+```bash
+bash scripts/install_launchd.sh            # 安装（幂等）
+bash scripts/install_launchd.sh --status   # 查状态 + 日志尾部
+bash scripts/install_launchd.sh --run-now  # 立刻触发一次（验证用，会真跑更新）
+bash scripts/install_launchd.sh --uninstall
 ```
+
+装上后：开机自动加载、**周一至周五 15:30** 触发、日志在
+`logs/launchd-daily-alert.log`（+ `.err.log`）。
+
+> **15:30 的考量**：A股 15:00 收盘，15:30 时当日行情已定，又能赶在盘后处理时段。
+> 更新本身约 18 分钟，所以 15:30 触发 → 约 15:48 发出播报。
+
+⚠️ **launchd 与 WorkBuddy automation 会重复触发**（两个 18 分钟更新同时跑会抢内存，
+~7GB × 2 → 必然 OOM）。**二选一**，别同时开。
+当前状态：**launchd 已就位，WorkBuddy automation 已暂停**。
+
+⚠️ 手工配 plist 时最容易犯的错：`StartCalendarInterval` 写**单个 dict** 只能表达
+**一天**（只会周一触发）。要跑周一~周五必须写**数组**，每项一个时刻。
+
+> 到点时机器在睡眠/关机 → launchd 会在机器可用后**补跑一次**（默认行为，无需额外配置）。
+> 但这是「补跑」不是「重试」：退出码非 0 时不会自动重跑。
+
+#### 界面上的「更新数据」按钮
+
+顶栏（数据截止徽章右侧）有一个**更新数据**按钮，效果等同 `ctl.py update`：
+点一下 → 后端起一个**独立的后台进程**去跑「停服 → 取数 → 重建 → 起服」，
+页面显示 `更新中 mm:ss`，完成后自动重载。
+
+> ⚠️ 为什么要有这个「独立进程」：更新会**停掉当前正在处理请求的服务进程**，
+> 如果在服务里直接跑，进程一停、更新也就跟着死了（表现为「点了按钮、服务没了、数据没更新」）。
+> 所以走 `scripts/update_runner.py`，用 `start_new_session=True` 脱离服务进程组。
+> 传输期间页面轮询会失败 —— 那是**预期行为**（服务在重启），不是错误。
 
 #### 三个必须看清的口径
 
@@ -137,12 +175,14 @@ python scripts/42_market_alert.py --max-stale 7     # 放宽「数据新鲜度�
    `/api/scan` 返回两套市场字段：`mkt_bull` 对应 **`asof`（候选日）**，
    `mkt_bull_now` 对应 **`latest_date`（最新交易日）**。熊市常让最新交易日 0 信号 →
    `scan()` 会向前回溯最多 180 个交易日找第一个有信号的日子，此时 `asof ≠ latest_date`。
-   提醒脚本判的是「**最新交易日**」，所以取 `mkt_bull_now`。
-2. **「当日有信号」= `latest_n > 0`。** 这个条件恰好保证了 `asof == latest_date` ——
-   两者是同一根意思：只有最新交易日**自身**既熊市又有票，才提醒。
+   播报判的是「**最新交易日**」，所以取 `mkt_bull_now`。
+2. **无信号时绝不能列候选。** `scan["items"]` 在最新交易日 0 信号时是**回溯日（asof）**的
+   候选，跟「今天」不是同一天 —— 列出来会让人以为「今天有这些票」。
+   代码里用 `n > 0` 把这条守住。
 3. **数据新鲜度护栏**：`stale_days(latest_date)` > `--max-stale`（默认 **4** 自然日，
-   覆盖周末 + 1 个假日）时**不发**提醒 —— 防止「当日更新失败、面板还是旧的」时
-   推一条日期很旧的提醒。日志里会写明「数据陈旧 → 不发提醒」。
+   覆盖周末 + 1 个假日）时**不发** —— 防止「当日更新失败、面板还是旧的」时
+   推一条日期很旧的「今日大盘」。日志里会写明「数据陈旧 → 不发提醒」。
+   改成每天必发后这条护栏更重要。
 
 #### 为什么用 webhook（而不是 bot 私信）
 
@@ -159,11 +199,15 @@ webhook 不需要 bot/user 身份，也不受 scope 限制 —— 最省事。
 `--to`，默认本人 `ou_041a4381ce5e42d4f502440ef39516ee`）。用它的前提是机器人已装好
 （`npm i -g @larksuite/cli`，**不在默认 PATH**，脚本内 `_find_lark()` 兜底）。
 
+> ⚠️⚠️ **托管 node 升版本会删掉旧版本目录**，把装在旧 prefix 下的 lark-cli 一起带走
+> （2026-10-08 从 22.22.2-3 → 22.22.2-6 时实测发生）。webhook 通道不受影响，
+> 只影响回退路径；要恢复就重装一次。
+
 #### 排查
 
 日志：`logs/market_alert.log`（每次运行都会写一行判定摘要：最新交易日 / 是否熊市 /
-信号数 / 口径 / asof / fallback）。消息内容包含：市场状态行、候选前 8 只、
-「同一口径换窗口」对照、以及真实指数对照 —— 与界面「市场环境」节同源。
+信号数 / 口径 / **当日大盘** / asof / fallback）。界面触发的更新另写
+`logs/update_run.log`，状态在 `logs/update_state.json`。消息内容与界面「市场环境」节同源。
 
 ## 默认参数（= 研究报告第 12 节验证的最优 3 条件策略）
 | 条件 | 取值 |
@@ -991,7 +1035,7 @@ mkt_bull[t] = nav[t] > mma[t]      牛市 / 熊市
 六个口径 × 三个窗口**全部在启动时预计算**（约 2s、<1MB），切换是 O(1) 取用。
 选中非默认口径时，组下方会出现橙色提示。
 
-「今日选股」页有一张**市场环境**表，并列给出「策略用」自建净值与 4 个真实指数的
+「今日选股」页有一张**市场环境**表，并列给出「策略用」自建净值与 5 个真实指数的
 「最新值 / 均线 / 距均线 / 状态 / 数据日」；当出现
 「自建净值在均线上方、而真实指数有熊市」时，会显式弹出**口径分歧**告警。
 表下另有一小节「同一口径 · 换均线窗口」，把 20/60/120 三个窗口的距均线+状态并排，
@@ -999,7 +1043,20 @@ mkt_bull[t] = nav[t] > mma[t]      牛市 / 熊市
 
 数据源：`GET /api/market?days=&index=&ma=`（`engine.market_series()` + `data/raw/index_*.json`）。
 
-> 真实指数**仅用于对照展示**，不参与任何回测计算。
+**五个真实指数仅用于对照展示，不参与任何回测计算。**
+
+> **同花顺全A（883421.TI）** 是这张表里**唯一「全市场 + 市值加权」**的口径。
+> 它和自建等权的差异最能说明问题：同期（2023-12-04 ~ 2026-10-09）
+> **市值加权 +11.69%** vs **自建等权 +15.74%**，差约 **4pp** —— 这就是
+> 「等权 + 日度再平衡」相对市值加权的系统性上偏。
+>
+> ⚠️ 两个坑：
+> 1. **后缀必须是 `.TI`**（同花顺指数体系）。写成 `.WI` 会返回
+>    `code=1002 无数据` —— 那是 Wind 的专有后缀，本数据源不提供 Wind 指数。
+>    搜「883421」时别被「万得全A」误导：万得全A 是 881001，且同样拿不到。
+> 2. **历史只到 2023-12 起**（数据源窗口限制），所以和另外四个一样
+>    **只做展示、不能做回测过滤**。`01c_fetch_index.py` 会打印每个指数的
+>    实际覆盖范围，一眼能看出这个差异。
 
 ### 换成小市值口径会不会更好？—— 会，但**来源是「过滤变严」**
 
@@ -1109,13 +1166,14 @@ mkt_bull[t] = nav[t] > mma[t]      牛市 / 熊市
 前端测试套件在 `tests/`，分两层：
 
 ```bash
-bash tests/run.sh          # 全部 jsdom 套件（离线，用 fixtures 快照）→ 581 项 / 12 套
+bash tests/run.sh          # 全部套件（离线，用 fixtures 快照）→ 607 项 / 13 套
 bash tests/run.sh cap      # 只跑仓位约束
-                           # （cap | board | ind | icon | ladder | tune | market | fin | delist | trades | presets | stock）
+                           # （cap | board | ind | icon | ladder | tune | market | fin | delist | trades | presets | stock | alert）
+bash tests/run.sh alert    # 飞书播报的 Python 单元测试（不依赖服务）
 bash tests/run.sh cdp      # 真实 Chrome 端到端（需先启动 app/server.py）
 ```
 
-> ⚠️ 本机空闲内存很紧（服务常驻约 7GB），一次性跑全部 12 套可能整体被 `SIGTERM`
+> ⚠️ 本机空闲内存很紧（服务常驻约 7GB），一次性跑全部套件可能整体被 `SIGTERM`
 > （exit 137、输出为空）—— 那是 OOM 不是测试挂了。**分批**直接调 node 即可，
 > 每批 2~3 套、批间换一次 shell。
 
@@ -1129,9 +1187,10 @@ bash tests/run.sh cdp      # 真实 Chrome 端到端（需先启动 app/server.p
 | `test_delist.js` | ⑨ 退市风险过滤（开关文案、参数单位换算、ST 开关已下线） | 29 |
 | `test_ladder.js` | ⑧ 建仓节奏：预设/自定义/宽容解析、**满仓只数=序列之和**、同时持仓与每日买入双接管、快捷预设自动关闭阶梯、「不限仓位」必须发 null 的契约、诊断卡阶梯口径 | 54 |
 | `test_trades.js` | 交易明细（分页/排序/筛选/导出 + **容量口径** + 仓位列 + **未结束交易的显示与统计隔离**） | 119 |
-| `test_presets.js` | ② 市值区间（双滑块夹取、重叠选单档、快捷档位、`collect()` 带 size_min/size_max、徽标文案）+ 预设方案（分组渲染、保存/覆盖/删除、空名称不发请求、内置方案不可删）+ **股票池随方案存取**（pool 一起发、无 pool 不篡改、切回完整回填） | 72 |
+| `test_presets.js` | ② 市值区间（双滑块夹取、重叠选单档、快捷档位、`collect()` 带 size_min/size_max、徽标文案）+ 预设方案（分组渲染、保存/覆盖/删除、空名称不发请求、内置方案不可删）+ **股票池随方案存取**（pool 一起发、无 pool 不篡改、切回完整回填）+ **默认预设**（设置/取消、下拉标记、同时只有一个默认、内置也能设、非法 id 本地拦下）+ **默认方案的股票池必须被应用**（回归） | 93 |
 | `test_tune.js` | 参数寻优：**建仓节奏轴 / 选股规则轴**、两套口径的列与排序依据切换、口径提示显隐、「多行同结果」解释、表头点击换排序（含「越小越好」指标首次升序） | 35 |
-| `test_market.js` | **市场环境（牛熊判定依据）**：自建净值行带「策略用」标记、4 个真实指数对照、**分歧告警只在真分歧时出现**、`bullBadge(null)` ≠ 熊市、**指数口径 / 均线窗口两个下拉**（选项数与 `/api/meta` 一致、切非默认口径必重新请求且带 `index=`/`ma=`、表格与徽标跟随、切回默认也重取）、会话内不重复请求 `/api/market` | 40 |
+| `test_market.js` | **市场环境（牛熊判定依据）**：自建净值行带「策略用」标记、5 个真实指数对照（含**同花顺全A**，唯一的市值加权全市场口径）、**分歧告警只在真分歧时出现**、`bullBadge(null)` ≠ 熊市、**指数口径 / 均线窗口两个下拉**（选项数与 `/api/meta` 一致、切非默认口径必重新请求且带 `index=`/`ma=`、表格与徽标跟随、切回默认也重取）、会话内不重复请求 `/api/market` | 40 |
+| `test_alert.py` | **飞书播报纯函数**（Python）：当日大盘涨跌幅（含序列不足/nav=0/缺失的边界）、四种文案形态（熊市有信号 / 牛市无信号 / 熊市无信号 / 均线未成形）、**无信号绝不列候选**、**口径一致性**（MA20 的数值不能是 MA60 的）、`--force` 标注、`stale_days` | 43 |
 | `cdp_cap.js` | 真实 Chrome：交互→回测→双口径渲染 + ECharts 画布 + **明细容量口径** | 34 |
 | `shot_ui.js` | 人工视觉核对：真实 Chrome 打开页面、展开指定门类、截图（**不参与 CI**） | — |
 | `shot_ladder.js` | 人工视觉核对：截⑧「容量约束」整组并切到阶梯 `1/2/2/2/3`（**不参与 CI**） | — |
@@ -1226,6 +1285,29 @@ node tests/shot_presets.js output/_shot "10%~20%"      # 换档位（单档：�
 下拉分两组：**内置方案（报告已验证）** 与 **我的方案（本地保存）**。
 调好参数后，在名称框里起个名 → 点「保存」即可；名称重复就是**覆盖**（id 不变）。
 选中「我的方案」时「删除」按钮才可用，内置方案不可删。
+
+### 设为默认 / 取消默认
+
+第二行两个按钮决定**下次打开界面默认选中哪套方案**：
+
+- **设为默认** —— 把当前选中的方案（内置或我的都行）设为默认。
+  成为默认后下拉里会显示 ` · 默认`，按钮变灰显示「已是默认方案」。
+- **取消默认** —— 清掉设置，回退成内置第一套（K3）。
+
+落盘位置：**`data/default_preset.txt`**，内容就是一个方案 id（如 `U3` / `K3`）。
+删掉该文件 = 取消默认。
+
+> 为什么不塞进 `user_presets.json`：那个文件是**方案列表**（JSON 数组），
+> 加元字段会破坏结构，删方案时还容易连元数据一起清掉。单独一个文本文件最干净，
+> 也便于手工改。同理不用 localStorage —— 配置应跟着**数据目录**走，换浏览器不丢。
+
+> ⚠️ 三个必须守住的边界（都有测试）：
+> 1. **存的 id 可能失效**（方案被删 / 文件被手改）→ 前端加载时必须
+>    `presetById()` 校验，不通过就回退内置第一套，**并静默清掉失效设置**
+>    （否则每次打开都白跑一次校验）。
+> 2. **删方案时联动清理**：删掉的恰好是当前默认 → 后端一并清空设置，
+>    避免 id 悬空。
+> 3. **同时只有一个默认**：设新的会自动摘掉旧的标记。
 
 - 落盘位置：**`data/user_presets.json`**（跟着数据目录走，不是 localStorage）
   → 换浏览器不丢，脚本（回测复现 / `make_fixtures`）也能直接读到。
@@ -1391,8 +1473,12 @@ scripts/
 ├── 41_market_index_size.py 市场指数口径研究（小市值等权 vs 全A，见 reports/41_*.md）
 ├── verify_market_index.py  6 口径 × 3 窗口逐一对回研究报告（容差 0.15pp / 0.02）
 ├── 99_daily_update.py      每日增量更新（追加式，见文件头注释）
-├── daily_alert.sh          ★ 每日更新 + 飞书提醒一条命令（automation 调这个，见「每日飞书提醒」节）
-├── 42_market_alert.py      ★ 判「最新交易日熊市 + 有信号」→ 飞书私信（含新鲜度护栏）
+├── daily_alert.sh          ★ 每日更新 + 飞书播报一条命令（automation 调这个；薄封装→daily_alert.py）
+├── daily_alert.py          ★ 同一件事的跨平台实现（Windows 无 bash，逻辑收在这里）
+├── 42_market_alert.py      ★ 生成飞书播报（每天必发：牛熊 / 当日大盘 / 信号 / 距MA60）
+├── update_runner.py        ★ 界面「更新数据」按钮的后台进程（脱离服务进程组，见 README）
+├── install_launchd.sh      ★ 装/卸 macOS 开机自启任务（launchd）
+├── com.astock.daily-alert.plist  ★ launchd 配置（工作日 15:30）
 └── fin_panel_info.py       财务面板数据字典与自检
 
 （2026-09-28 清理：一次性诊断 / 验证 / 旧编号研究脚本共 48 个已删除 ——
@@ -1408,13 +1494,14 @@ tests/
 ├── test_indtree.js         ⑥ 行业两级树（48 项）
 ├── test_icon.js            图标体系（30 项）
 ├── test_ladder.js          ⑧ 建仓节奏（阶梯建仓，54 项）
-├── test_market.js          ③ 市场环境（口径/窗口切换，40 项）
+├── test_market.js          ③ 市场环境（口径/窗口切换，41 项）
 ├── test_fin.js             财务筛选（23 项）
 ├── test_delist.js          ⑨ 退市风险过滤（29 项）
 ├── test_trades.js          交易明细（未结束交易的显示 + 统计隔离，119 项）
-├── test_presets.js         ② 市值区间 + 预设方案 + 股票池（72 项）
+├── test_presets.js         ② 市值区间 + 预设方案 + 股票池 + 默认预设（93 项）
 ├── test_tune.js            参数寻优（两套口径 + 节奏/规则轴，35 项）
 ├── test_stock.js           单股透视（全历史信号 + 图外标记 + 全部历史切换，49 项）
+├── test_alert.py           飞书播报纯函数（当日涨跌幅 / 四种文案形态 / 口径一致 / 指数排序，46 项）★Python
 ├── cdp_cap.js              真实 Chrome 端到端（34 项）
 ├── shot_ui.js              真实 Chrome 人工视觉核对（不参与 CI）
 ├── shot_ladder.js          ⑧ 容量约束整组截图核对（不参与 CI）
@@ -1434,7 +1521,10 @@ tests/
 | GET | `/api/market?days=&index=&ma=` | 市场环境序列（自建净值 vs 均线，口径/窗口可选）+ 真实指数对照 |
 | GET | `/api/stock?code=` | 单股透视（**向后兼容**：只用默认参数、不限股票池） |
 | POST | `/api/stock` | 单股透视（`code`+`params`+`pool`，**跟随左侧参数**；返回 `conditions`/`window`/`signal_dates(全历史,含 in_window)`/`n_signal_all`/`n_signal_window`/`hist_span`；加 `full_history:true` 再返回 `hist_rows`/`hist_sig_dates`） |
+| POST | `/api/presets/set_default` | 设置「界面默认预设」：`{id}`（B* 内置 / U* 我的）；**空 id = 取消设置**。落盘 `data/default_preset.txt` |
 | POST | `/api/export` | 导出 CSV：`kind:"candidates"`（默认）候选股 / `kind:"trades"` 逐笔明细 |
+| POST | `/api/update/start` | 触发一次数据更新（顶栏「更新数据」按钮）。起独立后台进程跑 `ctl.py update`，**立即返回** `{ok, msg}`；已有更新在跑时返回 `ok:false` |
+| GET | `/api/update/status` | 更新进度：`{state: idle\|starting\|running\|done\|failed, started_at, finished_at, msg, server_last_date}`。状态存 `logs/update_state.json` |
 
 ### 回测/选股参数中的财务字段
 ```

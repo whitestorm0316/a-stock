@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>距MA60 深度与反弹力度 · 实证</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f6f8;color:#1a1d21;
+ font:14px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 22px 70px}
+h1{font-size:25px;margin:0 0 6px;letter-spacing:-.4px}
+.sub{color:#6b7280;font-size:13px;margin-bottom:22px}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 22px;margin-bottom:18px;
+ box-shadow:0 1px 2px rgba(16,24,40,.04)}
+h2{font-size:17px;margin:0 0 4px}
+.cap{color:#6b7280;font-size:12.5px;margin-bottom:14px}
+.chart{width:100%;height:340px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.kpi{background:#fff;border:1px solid #e5e7eb;border-radius:11px;padding:14px 16px}
+.kpi .n{font-size:23px;font-weight:650;letter-spacing:-.5px;line-height:1.2}
+.kpi .l{color:#6b7280;font-size:12px;margin-top:3px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:8px 10px;border-bottom:1px solid #eef0f3;text-align:right}
+th{text-align:right;color:#6b7280;font-weight:600;font-size:12px;
+ background:#fafbfc;position:sticky;top:0}
+th:first-child,td:first-child{text-align:left}
+tbody tr:hover{background:#fafbfc}
+.pos{color:#d7263d;font-weight:600;font-variant-numeric:tabular-nums}
+.neg{color:#0f9d58;font-weight:600;font-variant-numeric:tabular-nums}
+.mono{font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:1.5px 7px;border-radius:5px;font-size:11.5px;font-weight:600}
+.b-red{background:#fdecef;color:#c11f37}
+.b-green{background:#e9f7ef;color:#0b7a45}
+.b-amber{background:#fff5e6;color:#a15c00}
+.b-blue{background:#eaf2fe;color:#1a56b8}
+.warn{background:#fffbf0;border:1px solid #f2d38a;border-radius:10px;padding:13px 16px;
+ font-size:13px;color:#7a5200;margin:14px 0}
+.warn b{color:#8a5a00}
+.good{background:#f2fbf5;border:1px solid #b6e3c8;border-radius:10px;padding:13px 16px;
+ font-size:13px;color:#0b6b3e;margin:14px 0}
+ul{margin:9px 0 0;padding-left:20px}li{margin:5px 0}
+.foot{color:#9aa1ab;font-size:12px;text-align:center;margin-top:26px;line-height:1.9}
+code{background:#f2f4f7;padding:1px 5px;border-radius:4px;font-size:12.5px}
+</style></head><body><div class="wrap">
+
+<h1>距MA60 越深，反弹力度越大吗？</h1>
+<div class="sub">K3 默认策略（距MA60 D1 + 小市值30% + 熊市）· 全A池 · 持有 20 日 · T+1 开盘买 / T+20 开盘卖 ·
+数据 2014-12 ~ 2026-09-30 · 可结算 <b>105,119</b> 笔</div>
+
+<div class="kpis">
+ <div class="kpi"><div class="n mono">105,119</div><div class="l">可结算交易（H=20）</div></div>
+ <div class="kpi"><div class="n mono" style="color:#d7263d">+4.82%</div><div class="l">全体平均毛收益</div></div>
+ <div class="kpi"><div class="n mono" style="color:#d7263d">+16.63%</div><div class="l">最深 10% 平均毛收益</div></div>
+ <div class="kpi"><div class="n mono" style="color:#d7263d">11 / 12</div><div class="l">深尾跑赢的年份数</div></div>
+</div>
+
+<div class="good"><b>结论：成立，但不是「线性的越深越好」——是「深到一定程度后加速」。</b>
+真正的规律是：<b>只有最深的尾部（约 10%，尤其最深 2~5%）有显著超额；中间 60% 几乎完全平坦</b>
+（D3~D10 全在 2.4%~3.6% 之间来回，没有单调性）。深尾优势 12 年中 11 年为正、剔除两次股灾底部后仍剩
++5.0~6.5pp，属于稳健规律，而非个别行情产物。</div>
+
+<div class="card">
+ <h2>① 按「距MA60」十分档看平均收益</h2>
+ <div class="cap">D1 = 跌得最深（距MA60 最负）→ D10 = 最浅。红色为全市场基准线 +4.82%。</div>
+ <div id="c1" class="chart"></div>
+ <div class="warn"><b>关键读法：</b>只有 D1（最深 10%）跳到 +16.63%，是一次<b>断层式跃升</b>；
+ D2 骤降到 +6.49%，D3~D10 全在 <b>2.4%~3.6%</b> 之间<b>无趋势地抖动</b>
+ （D6 比 D5 高、D7 比 D6 高，纯噪声）。所以「越深越好」在中间区间<b>不成立</b>，
+ 是「<b>最深的尾巴</b>明显更好」。</div>
+</div>
+
+<div class="card">
+ <h2>② 深尾阈值：越往下切，收益越陡</h2>
+ <div class="cap">取「跌得最深的前 x%」信号，看平均 / 中位收益与胜率。</div>
+ <div id="c2" class="chart"></div>
+ <table><thead><tr><th>最深前 x%</th><th>阈值(距MA60)</th><th>笔数</th>
+ <th>平均毛收益</th><th>中位</th><th>胜率</th></tr></thead><tbody id="t2"></tbody></table>
+</div>
+
+<div class="card">
+ <h2>③ 稳健性：逐年「深尾 20% − 其余」</h2>
+ <div class="cap">若规律真实，应多数年份为正、而非靠个别年份。红柱=深尾跑赢。</div>
+ <div id="c3" class="chart"></div>
+ <div id="t3w"></div>
+</div>
+
+<div class="card">
+ <h2>④ 剥离两次股灾底部后，还剩多少？</h2>
+ <div class="cap">深尾信号高度集中在 2015 年 7 月、2024 年 2 月的暴跌底（合并占深尾 4% 的 75%）。</div>
+ <div id="c4" class="chart"></div>
+ <table><thead><tr><th>样本范围</th><th>深尾20%</th><th>其余</th><th>差</th><th>深尾笔数</th></tr></thead><tbody id="t4"></tbody></table>
+ <div class="warn"><b>剔除 2015 与 2024 年后，优势从 +8.43pp 降到 +5.52pp</b>（仍显著）。
+ 只留 2016~2023（无大底）还有 <b>+6.45pp</b>。→ <b>结论不依赖股灾底部</b>，
+ 但在大底附近收益会放大 2 倍以上。</div>
+</div>
+
+<div class="card">
+ <h2>⑤ 同一个信号日内部的横截面超额</h2>
+ <div class="cap">把当日所有信号按深度分 5 档，减去当日均值 —— 排除「跌深的时候市场整体也在反弹」的干扰。</div>
+ <div id="c5" class="chart"></div>
+ <div class="warn"><b>这是最诚实的一张图：</b>Q1（最深）组内超额 <b>+1.54%</b>（t=15.4），
+ Q5 <b>−0.69%</b>，Q1−Q5 = <b>+2.22pp</b> —— 单调递减，很干净。
+ 但注意 <b>Q1 的超额中位数是 −0.96%（负的）</b>：超过一半的深尾交易跑输当日平均，
+ 优势完全靠<b>右尾少数几笔暴涨</b>拉动。这是典型的「低胜率、高赔率」结构。
+ 另外前 4 档组内中位数全为负 → 当日<b>超额收益整体集中在少数赢家</b>上。</div>
+</div>
+
+<div class="card">
+ <h2>⑥ 与持有期的关系</h2>
+ <div class="cap">深尾的优势需要时间兑现：持有 1 日几乎看不出来，20 日以上才拉开。</div>
+ <div id="c6" class="chart"></div>
+</div>
+
+<div class="card">
+ <h2>⚠️ 三个必须知道的限制</h2>
+ <ul>
+ <li><b>幸存者偏差（最重要）：</b>面板只收录 <b>当前在市</b> 的 5,565 只股票，
+ 抽查 20 只已知退市股（信威集团、康得新、华讯方舟…）<b>有 19 只完全不在数据里</b>。
+ 而「跌得最深」的票恰恰是退市风险最高的 —— 这些股票的后续表现被<b>系统性剔除</b>了，
+ 会让深尾收益<b>偏高</b>。真实优势应打个折扣。</li>
+ <li><b>统计口径是组合、不是单笔：</b>上面的交易级收益是「每笔等权、不限制仓位」。
+ 实际每天可能有几百只同时满足最深档 —— 实盘买不进这么多。容量口径下可见的
+ 深尾机会少得多（K3 容量 10 只/日 3 只全周期仅约 700 余笔建仓）。</li>
+ <li><b>集中度：</b>深尾 4% 的 4,205 笔里，2015 年占 34%、2024 年占 41%，
+ 且 75% 集中在 7 个暴跌日（如 2024-02-07 一天 298 只）。另外最深 2% 里
+ 出现最多的 10 只股票就占了 8.3% 的笔数 —— <b>这不是「随时可用」的规律，
+ 而是「熊市暴跌底才大量出现」的规律</b>。</li>
+ </ul>
+</div>
+
+<div class="foot">
+ 口径：<code>oret</code> T+1开盘→T+1+H开盘 · 成本未扣（毛收益）· 熊市判定用全A等权 MA60<br>
+ 分档为全样本等频；「深层」= 距MA60 更负 · 生成于 2026-09-30
+</div>
+</div>
+
+<script>
+const T = [{"q": "D1", "lo": -74.56339263916016, "hi": -28.1832160949707, "n": 10512, "mean": 16.625750141683934, "med": 14.91010152696215, "win": 77.91095890410958, "t": 74.70851078450943}, {"q": "D2", "lo": -28.1832160949707, "hi": -23.98232536315918, "n": 10512, "mean": 6.487708157762105, "med": 5.3277339417793, "win": 65.71537290715372, "t": 39.295628102767715}, {"q": "D3", "lo": -23.98232536315918, "hi": -21.596730804443357, "n": 10512, "mean": 3.6637982531404933, "med": 2.547964761855648, "win": 57.76255707762557, "t": 23.606041699577574}, {"q": "D4", "lo": -21.596730804443357, "hi": -19.827111053466794, "n": 10512, "mean": 2.9925938686560793, "med": 1.6666687045451267, "win": 55.26065449010654, "t": 18.972658135333894}, {"q": "D5", "lo": -19.827111053466794, "hi": -18.363914489746094, "n": 10511, "mean": 2.3895901337438152, "med": 1.1261196678678864, "win": 53.895918561506996, "t": 15.09562123797277}, {"q": "D6", "lo": -18.363914489746094, "hi": -17.033673477172847, "n": 10512, "mean": 2.952366990340209, "med": 1.2446413176094406, "win": 54.10007610350076, "t": 17.37846920480682}, {"q": "D7", "lo": -17.033673477172847, "hi": -15.679501342773436, "n": 10512, "mean": 3.540666158314803, "med": 2.0618597979873754, "win": 58.10502283105022, "t": 22.23639104526323}, {"q": "D8", "lo": -15.679501342773436, "hi": -14.194976997375488, "n": 10512, "mean": 3.613350067001038, "med": 2.2031663584989536, "win": 57.73401826484018, "t": 21.84341893725109}, {"q": "D9", "lo": -14.194976997375488, "hi": -12.523649215698244, "n": 10512, "mean": 2.8409809112521955, "med": 1.578541301524361, "win": 55.6031202435312, "t": 18.607011607632202}, {"q": "D10", "lo": -12.523649215698244, "hi": 0.8275405764579773, "n": 10512, "mean": 3.0552002855290485, "med": 1.9999950344707362, "win": 56.297564687975644, "t": 21.27710392708104}], TAIL = [{"pct": 50.0, "thr": -18.363914489746094, "n": 52560, "mean": 6.432328633940158, "med": 4.143013962227937, "win": 62.1099695585997}, {"pct": 40.0, "thr": -19.827110290527344, "n": 42048, "mean": 7.442462605310653, "med": 5.111887334986321, "win": 64.16238584474885}, {"pct": 30.0, "thr": -21.596731185913086, "n": 31536, "mean": 8.925752184195511, "med": 6.515473634718772, "win": 67.12962962962963}, {"pct": 20.0, "thr": -23.982324600219727, "n": 21024, "mean": 11.556729149723019, "med": 9.024113794780298, "win": 71.81316590563166}, {"pct": 10.0, "thr": -28.183216094970703, "n": 10512, "mean": 16.625750141683934, "med": 14.91010152696215, "win": 77.91095890410958}, {"pct": 5.0, "thr": -33.034423828125, "n": 5256, "mean": 22.990314076354785, "med": 22.773357102021897, "win": 83.25722983257229}, {"pct": 2.0, "thr": -40.647727966308594, "n": 2103, "mean": 33.515356017473536, "med": 34.179106085940326, "win": 92.15406562054208}, {"pct": 1.0, "thr": -44.83366012573242, "n": 1052, "mean": 37.35990158889078, "med": 38.4878481394927, "win": 93.44106463878326}], YR = [{"year": 2015, "deep": 12.332689159315777, "other": 14.71720972778897, "diff": -2.3845205684731945, "nd": 2541, "no": 1676}, {"year": 2016, "deep": 11.307917467678182, "other": 2.948076734077808, "diff": 8.359840733600375, "nd": 1564, "no": 2323}, {"year": 2017, "deep": 4.211205410872184, "other": -0.9100727092057148, "diff": 5.121278120077899, "nd": 1256, "no": 8651}, {"year": 2018, "deep": 10.201516367470665, "other": -2.6225513541448824, "diff": 12.824067721615547, "nd": 2378, "no": 7057}, {"year": 2019, "deep": 5.874429192010735, "other": 4.55458459446012, "diff": 1.319844597550615, "nd": 378, "no": 6749}, {"year": 2020, "deep": 2.581665903661158, "other": -0.22898548119363368, "diff": 2.810651384854792, "nd": 370, "no": 6024}, {"year": 2021, "deep": 7.5184676022005235, "other": 6.3740827547228065, "diff": 1.144384847477717, "nd": 1480, "no": 4550}, {"year": 2022, "deep": 5.988401563051384, "other": 0.3680734293437414, "diff": 5.620328133707642, "nd": 3022, "no": 10131}, {"year": 2023, "deep": 8.202052876768334, "other": 2.8935684910594768, "diff": 5.308484385708858, "nd": 332, "no": 6705}, {"year": 2024, "deep": 20.24134246507153, "other": 4.719035475006143, "diff": 15.522306990065388, "nd": 5239, "no": 15993}, {"year": 2025, "deep": 23.67724009150045, "other": 13.277628973752442, "diff": 10.399611117748009, "nd": 456, "no": 7257}, {"year": 2026, "deep": 6.1916928523666455, "other": 0.6956176038587278, "diff": 5.496075248507918, "nd": 2008, "no": 6979}], HD = [{"H": 1, "deep": 0.8824427230732358, "other": 0.06616741608243615, "diff": 0.8162753069907996}, {"H": 5, "deep": 4.347196099792853, "other": 0.726460222763072, "diff": 3.6207358770297815}, {"H": 10, "deep": 7.1759107515712355, "other": 1.3701138402322, "diff": 5.805796911339035}, {"H": 20, "deep": 11.556729149723019, "other": 3.1310771506468598, "diff": 8.425651999076159}, {"H": 40, "deep": 13.014900499585153, "other": 6.018491281385441, "diff": 6.9964092181997115}, {"H": 60, "deep": 18.127269127770326, "other": 6.819820602157876, "diff": 11.30744852561245}],
+      EX = [{"label": "全部", "deep": 11.556729149723019, "other": 3.1310771506468598, "diff": 8.425651999076159, "n": 21024}, {"label": "剔除2015&2024年", "deep": 7.972434107176506, "other": 2.4564230140020493, "diff": 5.516011093174457, "n": 13244}, {"label": "剔除股灾底部窗口", "deep": 8.29560105540557, "other": 3.27256894736547, "diff": 5.0230321080401, "n": 15067}, {"label": "仅2016~2023", "deep": 7.639812299273582, "other": 1.1871984366401336, "diff": 6.452613862633448, "n": 10780}, {"label": "仅2015+2024", "deep": 17.658323435518138, "other": 5.6674162576007445, "diff": 11.990907177917395, "n": 7780}], IN = [{"q": "Q1", "ex": 1.5357964702024491, "med": -0.9622760975528568, "n": 21275}, {"q": "Q2", "ex": 0.15331731428207693, "med": -1.7401398281436504, "n": 20779}, {"q": "Q3", "ex": -0.39483195286423606, "med": -1.9340669163313384, "n": 20770}, {"q": "Q4", "ex": -0.6189575548274926, "med": -1.9638286940989735, "n": 20779}, {"q": "Q5", "ex": -0.6877612792467809, "med": -2.1496771849122402, "n": 21516}];
+const RED='#d7263d', GREEN='#0f9d58', BLUE='#3b6fd4', GRAY='#9aa4b2';
+const AX = {axisLine:{lineStyle:{color:'#dfe3e8'}},axisLabel:{color:'#6b7280',fontSize:11},
+            splitLine:{lineStyle:{color:'#f0f2f5'}}};
+
+// ① 十分档
+echarts.init(document.getElementById('c1')).setOption({
+  grid:{left:46,right:56,top:34,bottom:44},
+  tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':v.toFixed(2)+'%'},
+  xAxis:{type:'category',data:T.map(x=>x.q),...AX},
+  yAxis:{type:'value',name:'平均毛收益(%)',nameTextStyle:{color:'#6b7280',fontSize:11},...AX},
+  series:[{type:'bar',data:T.map(x=>({value:x.mean,
+      itemStyle:{color:x.mean>=12?RED:'#e8a1ab',borderRadius:[5,5,0,0]}})),
+    label:{show:true,position:'top',formatter:p=>p.value.toFixed(1)+'%',
+      color:'#4b5563',fontSize:11,fontWeight:600},
+    markLine:{silent:true,symbol:'none',data:[{yAxis:4.816,
+      lineStyle:{color:BLUE,type:'dashed',width:1.6},
+      label:{formatter:'全市场基准 +4.82%',color:BLUE,fontSize:11,position:'insideEndTop'}}]}}]
+});
+
+// ② 深尾阈值
+const t2=TAIL;
+document.getElementById('t2').innerHTML=t2.map(x=>`<tr>
+ <td>最深 ${x.pct}%</td><td class="mono">${x.thr.toFixed(1)}%</td><td class="mono">${x.n.toLocaleString()}</td>
+ <td class="pos">+${x.mean.toFixed(2)}%</td><td class="mono">+${x.med.toFixed(2)}%</td>
+ <td class="mono">${x.win.toFixed(1)}%</td></tr>`).join('');
+echarts.init(document.getElementById('c2')).setOption({
+  grid:{left:46,right:52,top:34,bottom:44},
+  tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':v.toFixed(2)+'%'},
+  legend:{data:['平均毛收益','中位收益','胜率'],right:0,top:0,textStyle:{color:'#6b7280',fontSize:11}},
+  xAxis:{type:'category',data:t2.map(x=>'最深'+x.pct+'%'),...AX},
+  yAxis:[{type:'value',name:'收益(%)',nameTextStyle:{color:'#6b7280',fontSize:11},...AX},
+         {type:'value',name:'胜率(%)',min:50,max:100,nameTextStyle:{color:'#6b7280',fontSize:11},...AX}],
+  series:[
+   {name:'平均毛收益',type:'line',smooth:true,symbolSize:7,data:t2.map(x=>x.mean),
+    lineStyle:{width:2.6,color:RED},itemStyle:{color:RED}},
+   {name:'中位收益',type:'line',smooth:true,symbolSize:6,data:t2.map(x=>x.med),
+    lineStyle:{width:2,color:'#f0a0ac',type:'dashed'},itemStyle:{color:'#f0a0ac'}},
+   {name:'胜率',type:'bar',yAxisIndex:1,data:t2.map(x=>x.win),
+    itemStyle:{color:'rgba(59,111,212,.16)',borderRadius:[4,4,0,0]},
+    label:{show:true,position:'top',formatter:p=>p.value.toFixed(0)+'%',color:BLUE,fontSize:10.5}}]
+});
+
+// ③ 逐年
+echarts.init(document.getElementById('c3')).setOption({
+  grid:{left:50,right:30,top:34,bottom:44},
+  tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':v.toFixed(2)+'pp'},
+  xAxis:{type:'category',data:YR.map(x=>x.year),...AX},
+  yAxis:{type:'value',name:'深尾−其余 (pp)',nameTextStyle:{color:'#6b7280',fontSize:11},...AX},
+  series:[{type:'bar',data:YR.map(x=>({value:x.diff,
+      itemStyle:{color:x.diff>0?RED:GREEN,borderRadius:[5,5,0,0]}})),
+    label:{show:true,position:'top',formatter:p=>p.value.toFixed(1),
+      color:'#4b5563',fontSize:10.5,fontWeight:600},
+    markLine:{silent:true,symbol:'none',data:[{yAxis:0,lineStyle:{color:'#9aa4b2',width:1}}]}}]
+});
+document.getElementById('t3w').innerHTML = `<div class="good" style="margin-top:14px">
+ <b>12 年中 11 年为正</b>（唯一为负是 2015 年 −2.38pp——牛市顶部深尾票反弹滞后）。
+ 等权年份平均 <b>+5.96pp</b>，中位数 <b>+5.40pp</b>；按笔数加权 +8.43pp。
+ → 优势并非由 2015/2024 大样本年份主导。</div>`;
+
+// ④ 剔除股灾
+document.getElementById('t4').innerHTML=EX.map(x=>`<tr>
+ <td>${x.label}</td><td class="pos">+${x.deep.toFixed(2)}%</td>
+ <td class="mono">+${x.other.toFixed(2)}%</td>
+ <td class="${x.diff>0?'pos':'neg'}">${x.diff>0?'+':''}${x.diff.toFixed(2)}pp</td>
+ <td class="mono">${x.n.toLocaleString()}</td></tr>`).join('');
+echarts.init(document.getElementById('c4')).setOption({
+  grid:{left:46,right:30,top:34,bottom:56},
+  tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':v.toFixed(2)+'%'},
+  legend:{data:['深尾20%','其余80%'],right:0,top:0,textStyle:{color:'#6b7280',fontSize:11}},
+  xAxis:{type:'category',data:EX.map(x=>x.label),axisLabel:{color:'#6b7280',fontSize:10.5,interval:0,rotate:14},...AX},
+  yAxis:{type:'value',name:'平均毛收益(%)',nameTextStyle:{color:'#6b7280',fontSize:11},...AX},
+  series:[
+   {name:'深尾20%',type:'bar',data:EX.map(x=>x.deep),itemStyle:{color:RED,borderRadius:[5,5,0,0]},
+    label:{show:true,position:'top',formatter:p=>'+'+p.value.toFixed(1)+'%',color:'#4b5563',fontSize:10.5}},
+   {name:'其余80%',type:'bar',data:EX.map(x=>x.other),itemStyle:{color:'#c3cbd6',borderRadius:[5,5,0,0]},
+    label:{show:true,position:'top',formatter:p=>'+'+p.value.toFixed(1)+'%',color:'#4b5563',fontSize:10.5}}]
+});
+
+// ⑤ 组内超额
+echarts.init(document.getElementById('c5')).setOption({
+  grid:{left:46,right:30,top:34,bottom:44},
+  tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':v.toFixed(3)+'%'},
+  legend:{data:['组内超额(均值)','组内超额(中位)'],right:0,top:0,textStyle:{color:'#6b7280',fontSize:11}},
+  xAxis:{type:'category',data:IN.map(x=>x.q),...AX},
+  yAxis:{type:'value',name:'超额(%)',nameTextStyle:{color:'#6b7280',fontSize:11},...AX},
+  series:[
+   {name:'组内超额(均值)',type:'bar',data:IN.map(x=>({value:x.ex,
+     itemStyle:{color:x.ex>0?RED:'#8fbfa4',borderRadius:x.ex>0?[5,5,0,0]:[0,0,5,5]}})),
+    label:{show:true,position:'top',formatter:p=>(p.value>0?'+':'')+p.value.toFixed(2)+'%',
+      color:'#4b5563',fontSize:11,fontWeight:600}},
+   {name:'组内超额(中位)',type:'line',smooth:true,symbolSize:7,data:IN.map(x=>x.med),
+    lineStyle:{width:2.4,color:BLUE},itemStyle:{color:BLUE}}]
+});
+
+// ⑥ 持有期
+echarts.init(document.getElementById('c6')).setOption({
+  grid:{left:46,right:30,top:34,bottom:44},
+  tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':v.toFixed(2)+'%'},
+  legend:{data:['深尾20%','其余80%','差(pp)'],right:0,top:0,textStyle:{color:'#6b7280',fontSize:11}},
+  xAxis:{type:'category',data:HD.map(x=>'H='+x.H),...AX},
+  yAxis:[{type:'value',name:'收益(%)',nameTextStyle:{color:'#6b7280',fontSize:11},...AX},
+         {type:'value',name:'差(pp)',nameTextStyle:{color:'#6b7280',fontSize:11},...AX}],
+  series:[
+   {name:'深尾20%',type:'line',smooth:true,symbolSize:8,data:HD.map(x=>x.deep),
+    lineStyle:{width:2.8,color:RED},itemStyle:{color:RED},
+    label:{show:true,position:'top',formatter:p=>'+'+p.value.toFixed(1),color:RED,fontSize:10.5,fontWeight:600}},
+   {name:'其余80%',type:'line',smooth:true,symbolSize:7,data:HD.map(x=>x.other),
+    lineStyle:{width:2.4,color:GRAY},itemStyle:{color:GRAY}},
+   {name:'差(pp)',type:'bar',yAxisIndex:1,data:HD.map(x=>x.diff),
+    itemStyle:{color:'rgba(215,38,61,.13)',borderRadius:[4,4,0,0]}}]
+});
+window.addEventListener('resize',()=>{['c1','c2','c3','c4','c5','c6'].forEach(i=>{
+  const c=echarts.getInstanceByDom(document.getElementById(i)); if(c) c.resize();});});
+</script></body></html>

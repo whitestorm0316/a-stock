@@ -88,6 +88,13 @@ def _find_lark() -> str | None:
     ⚠️ Windows 上可执行文件名是 `lark-cli.cmd`（npm 全局安装），`shutil.which`
        能识别 PATHEXT 所以第一分支通常够用；后面的候选列表覆盖
        「装在工作流托管 node 下、但不在 PATH」的情形，Windows 分支补 `.cmd`。
+
+    ⚠️⚠️ 托管 node **升版本会删掉旧版本目录**，而 `npm i -g @larksuite/cli` 装在
+       **当时那个版本**的 prefix 下 → 升级 node 会**静默带走 lark-cli**
+       （2026-10-08 从 22.22.2-3 → 22.22.2-6 时实测发生）。
+       本函数按目录遍历，重装一次就跟得上；但救不了「根本不存在」。
+       **webhook 通道不受影响**（不依赖 node），所以只影响回退路径。
+       查：`python scripts/42_market_alert.py --check`。
     """
     p = shutil.which("lark-cli")
     if p:
@@ -155,40 +162,125 @@ def stale_days(latest_date: str | None) -> int | None:
     return (datetime.now(CST).date() - d).days
 
 
-# ---------------------------------------------------------------- 消息
-def build_message(scan: dict, mk: dict | None, top: list) -> str:
-    """拼飞书 markdown（会被转成 post，标题写成 #### 级别）。
+def day_change(mk: dict | None) -> tuple[float | None, str | None]:
+    """当日**大盘涨跌幅**（%），以及对比的是哪两天 → (pct, "MM-DD→MM-DD")。
 
-    ⚠️ 文案必须**由实际状态推导**，不要写死「低于 MA/熊市」——
-       正常路径只在「熊市 + 有信号」时发送，但 `--force` 自测会在牛市下发送，
-       写死就会出现「净值低于 MA60（+3.40%）→ 熊市」这种自相矛盾的话。
+    口径 = 自建等权净值的日变化（`series[-1].nav / series[-2].nav - 1`），
+    与界面「市场环境」图同源。**不是**上证指数 —— 自建净值日度再平衡、
+    等权，与市值加权指数会有差异（README 有说明）。
+
+    ⚠️ 用 nav 而不是 dist：dist 是「距均线」，含了均线滞后；问「今天涨跌多少」
+       要的是净值本身的日变化。两者不是一回事。
+    """
+    s = (mk or {}).get("series") or []
+    if len(s) < 2:
+        return None, None
+    a, b = s[-2], s[-1]
+    na, nb = a.get("nav"), b.get("nav")
+    if not isinstance(na, (int, float)) or not isinstance(nb, (int, float)) or not na:
+        return None, None
+    pct = (nb / na - 1.0) * 100.0
+    # 日期只留 MM-DD，消息里够用且短
+    f = lambda x: str(x or "")[5:10] or "?"
+    return pct, f"{f(a.get('date'))}→{f(b.get('date'))}"
+
+
+def _fmt_pct(v: float | None) -> str:
+    """涨跌幅：带正负号；A股习惯**红涨绿跌**（这里用文字标记，不靠颜色）。"""
+    if v is None:
+        return "—"
+    return f"{v:+.2f}%"
+
+
+# ---------------------------------------------------------------- 消息
+def build_message(scan: dict, mk: dict | None, top: list,
+                  force: bool = False) -> str:
+    """拼飞书 markdown（webhook 会转成 interactive 卡片，标题写在首行 `####`）。
+
+    三种形态，按实际状态推导（**绝不写死结论**）：
+      · 熊市 + 有信号  → 「📉 熊市有信号」，列候选
+      · 非熊市         → 「📈 无信号」（或「熊市但无信号」）
+      · 均线未成形     → 「⚠️ 无法判定」
+
+    ⚠️ 文案必须由 `mkt_bull_now` / `latest_n` 推导：
+       `--force` 自测会在不满足条件时也发送，写死就会出现
+       「净值低于 MA60（+3.40%）→ 熊市」这种自相矛盾的话。
     """
     d = scan.get("latest_date") or scan.get("asof")
     idx = scan.get("mkt_index_name") or "全A等权"
     ma = scan.get("mkt_ma") or 60
     n = int(scan.get("latest_n") or 0)
-    # scan 的 mkt_dist 对应 asof；latest_n>0 时 asof==latest_date，两者同一天
-    dist_now = (mk or {}).get("dist_now", scan.get("mkt_dist"))
     bull = scan.get("mkt_bull_now")
+    chg, chg_span = day_change(mk)
 
+    # ⚠️ `mk["dist_now"]` 恒为**MA60**口径（market_series 默认），与 `mkt_ma` 未必一致：
+    #    用户把均线窗口改成 20 时，dist_now 还是 MA60 的 —— 直接拿来用就会出现
+    #    「净值低于 MA20（+0.51%）」这种**符号自相矛盾**的话。
+    #    所以优先从 windows 里按窗口精确取；取不到才退回（单窗口的旧接口形态）。
+    #
+    # ⚠️ 只修 dist，**不动 bull**：bull 必须与主流程的判定同源（都是
+    #    `scan["mkt_bull_now"]`），否则会出现「判定按 mkt_bull_now 走、文案按 windows 走」
+    #    而两者不一致时自相矛盾（改这里踩过）。
+    dist_now = None
+    for _w in ((mk or {}).get("windows") or []):
+        if _w.get("ma") == ma:
+            dist_now = _w.get("dist")
+            break
+    if dist_now is None:
+        dist_now = (mk or {}).get("dist_now", scan.get("mkt_dist"))
+
+    # ---- 标题 + 市场状态行
     if bull is False:
-        title = f"#### 📉 熊市提醒 · 有信号 · {d}"
-        mkt_line = (f"**市场**：{idx} 净值**低于** MA{ma}"
-                    f"（{_fmt_dist(dist_now)}）→ **熊市**")
+        bear_txt, above = "熊市", "低于"
     elif bull is True:
-        title = f"#### 📈 市场提醒（强制发送 · 非熊市）· {d}"
-        mkt_line = (f"**市场**：{idx} 净值**高于** MA{ma}"
-                    f"（{_fmt_dist(dist_now)}）→ **牛市**")
+        bear_txt, above = "牛市", "高于"
     else:
-        title = f"#### ⚠️ 市场提醒（均线未成形）· {d}"
+        bear_txt, above = None, None
+
+    if bull is None:
+        title = f"#### ⚠️ 无法判定 · {d}"
         mkt_line = f"**市场**：{idx} vs MA{ma} —— 均线尚未成形，无法判定牛熊"
+    else:
+        icon = "📉" if bull is False else "📈"
+        title = f"#### {icon} {bear_txt} · {'有信号' if n > 0 else '无信号'} · {d}"
+        mkt_line = (f"**市场**：{idx} 净值**{above}** MA{ma}"
+                    f"（{_fmt_dist(dist_now)}）→ **{bear_txt}**")
 
     L = [title, "", mkt_line]
-    L.append(f"**信号**：最新交易日 **{n} 只**符合默认 K3 条件"
-             + ("" if n > 0 else "（无信号）"))
+
+    # ---- 当日大盘涨跌幅（用户明确要求）
+    if chg is not None:
+        L.append(f"**今日大盘**：{_fmt_pct(chg)}（{idx}净值，{chg_span}）")
+    else:
+        L.append("**今日大盘**：—（净值序列不足，无法计算）")
     L.append("")
 
-    if top:
+    # ---- 信号行
+    if n > 0:
+        L.append(f"**信号**：最新交易日 **{n} 只**符合默认 K3 条件")
+    else:
+        # 无信号时把「差多少」讲清楚 —— 这是用户要求的重点
+        L.append("**信号**：最新交易日 **0 只**（不满足买入条件）")
+        L.append("")
+        if bull is False:
+            L.append(f"> 已是熊市（净值低于 MA{ma} {_fmt_dist(dist_now)}），"
+                     f"但当日**没有个股**同时满足「距MA60 最弱 10% + 市值最小 30%」。")
+        elif bull is True:
+            # 「还差多少」要的是**距离**，显示绝对值；带正号读起来像收益
+            gap = abs(dist_now) if isinstance(dist_now, (int, float)) else None
+            gap_s = "—" if gap is None else f"{gap:.2f}%"
+            L.append(f"> 当前为**牛市**：净值在 MA{ma} **上方 {_fmt_dist(dist_now)}**，"
+                     f"再跌 **{gap_s}** 才跌破 MA{ma} —— 按规则不建仓，"
+                     f"等跌破 MA{ma} 且出现信号再买。")
+        else:
+            L.append(f"> 均线尚未成形（不足 {ma} 个交易日），暂不判定牛熊。")
+    L.append("")
+
+    # ---- 候选（**只在最新交易日真有信号时才列**）
+    # ⚠️ 绝不能因为 `top` 非空就列：`/api/scan` 在最新交易日 0 信号时会**向前回溯**
+    #    最多 180 个交易日**找第一个有信号的日子，此时 `items` 是 asof 那天的候选，
+    #    与「最新交易日」不是同一天。无信号还列出来 → 用户会以为「今天有这些票」。
+    if n > 0 and top:
         L.append("**候选（最超跌优先，前 8）**：")
         for it in top[:8]:
             nm = it.get("name") or ""
@@ -209,8 +301,14 @@ def build_message(scan: dict, mk: dict | None, top: list) -> str:
         L.append("**同口径换窗口**：" + " ｜ ".join(parts))
         L.append("")
 
-    # 真实指数对照：自建净值与真实指数系统性分歧，是已知的口径陷阱
-    idxs = ((mk or {}).get("indices") or [])[:4]
+    # 真实指数对照：自建净值与真实指数系统性分歧，是已知的口径陷阱。
+    # ⚠️ 消息长度有限，只取 4 条；但**必须优先带上「同花顺全A」**——
+    #    它是唯一「全市场 + 市值加权」的口径，与自建等权的差异最有说明力。
+    #    按原顺序截断会把它（排在最后）丢掉，恰好丢掉最有价值的那条。
+    all_idx = (mk or {}).get("indices") or []
+    pref = [x for x in all_idx if "全A" in str(x.get("name") or "")]
+    rest = [x for x in all_idx if "全A" not in str(x.get("name") or "")]
+    idxs = (pref + rest)[:4]
     if idxs:
         bits = []
         for it in idxs:
@@ -222,6 +320,8 @@ def build_message(scan: dict, mk: dict | None, top: list) -> str:
 
     L.append("> 自建等权净值与交易所指数**会系统性分歧**（等权 + 日度再平衡上偏），")
     L.append("> 「熊市」以自建口径为准。详见选股器「今日选股」页市场环境表。")
+    if force:
+        L.append("> ⚠️ 本条为 `--force` 强制发送（忽略触发条件），用于自测。")
     return "\n".join(L)
 
 
@@ -472,6 +572,10 @@ def main() -> int:
                     help="覆盖选股参数（JSON 字符串）。默认用引擎默认 K3")
     ap.add_argument("--check", action="store_true",
                     help="只自检「发送通道配置 + 服务连通性」，不取信号也不发送")
+    ap.add_argument("--always", dest="always", action="store_true", default=True,
+                    help="【默认】每日必发：无信号也发一条（含距均线差距 + 当日大盘涨跌幅）")
+    ap.add_argument("--only-signal", dest="always", action="store_false",
+                    help="只在「熊市 + 有信号」时发送，其余静默（旧行为）")
     a = ap.parse_args()
 
     if a.check:
@@ -508,16 +612,21 @@ def main() -> int:
     d = scan.get("latest_date")
     bear = scan.get("mkt_bull_now") is False
     n = int(scan.get("latest_n") or 0)
+    ma = scan.get("mkt_ma") or 60
+    _chg, _span = day_change(mk)
 
     log(f"最新交易日 {d}｜熊市={bear}（mkt_bull_now={scan.get('mkt_bull_now')}）"
         f"｜信号数 latest_n={n}"
         f"｜口径 {scan.get('mkt_index_name')} MA{scan.get('mkt_ma')}"
+        f"｜当日大盘 {_fmt_pct(_chg)}"
         f"｜asof={scan.get('asof')} fallback={scan.get('fallback_days')}")
 
     # ---- 数据新鲜度护栏：数据没更新就别发「今天的」提醒
     # 阈值按**自然日**算，默认 4 天：刚好覆盖「周末 + 一个法定假日」，
     # 又能在更新连续失败时拦住旧数据。（交易日历不在本地，用自然日是刻意的近似；
     #  提醒正文里始终带日期，所以即便阈值放行，旧日期也一眼可见。）
+    # ⚠️ 改为「每天必发」后，这条护栏更重要 —— 否则更新失败时会连发日期很旧的
+    #    「今日大盘」，看起来像今天的数据。
     age = stale_days(d)
     if age is not None and age > a.max_stale and not a.force:
         log(f"!! 数据陈旧：最新交易日 {d} 距今 {age} 天（阈值 {a.max_stale}）。"
@@ -525,7 +634,8 @@ def main() -> int:
             f"（先跑 python scripts/ctl.py update 再重试）")
         return 0
 
-    if not (bear and n > 0) and not a.force:
+    fire = (bear and n > 0)
+    if not fire and not a.always and not a.force:
         why = []
         if not bear:
             why.append("最新交易日不是熊市")
@@ -533,10 +643,22 @@ def main() -> int:
             why.append("最新交易日无信号")
         if age is not None and age > 0:
             why.append(f"数据距今 {age} 天")
-        log("条件不满足（" + "、".join(why) + "），不发提醒。")
+        log("条件不满足（" + "、".join(why) + "），不发提醒（--only-signal）。")
         return 0
 
-    md = build_message(scan, mk, scan.get("items") or [])
+    if fire:
+        log(f"命中：熊市 + 有信号（{n} 只）→ 发送")
+    else:
+        reasons = []
+        if not bear:
+            _dn = (mk or {}).get("dist_now", scan.get("mkt_dist"))
+            reasons.append(f"非熊市（净值距MA{ma} {_fmt_dist(_dn)}）")
+        if n <= 0:
+            reasons.append("无信号")
+        log(f"未命中（{'、'.join(reasons) or '未知'}）→ "
+            f"{'每天必发，仍发送' if a.always else '静默'}")
+
+    md = build_message(scan, mk, scan.get("items") or [], force=a.force)
     log("---- 消息预览 ----")
     for line in md.splitlines():
         print("   " + line, flush=True)

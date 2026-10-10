@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.astock.daily-alert</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/chenqifeng/code/a-stock/scripts/daily_alert.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/chenqifeng/code/a-stock</string>
+
+    <!-- ⚠️ launchd 给的环境极简（PATH 通常只有 /usr/bin:/bin:/usr/sbin:/sbin），
+         而 daily_alert.sh 内部要调 lsof、还要自己往 PATH 里塞托管 node 的 bin。
+         这里补上常见工具目录，免得脚本里的 command -v 探测失败。 -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PYTHONUTF8</key>
+        <string>1</string>
+        <key>PYTHONIOENCODING</key>
+        <string>utf-8:replace</string>
+    </dict>
+
+    <!-- 工作日 15:30 跑「更新数据 + 飞书播报」。
+         ⚠️ StartCalendarInterval 单个 dict 只能表达**一天**，要跑多天必须用**数组**
+         （每一项是一个独立的触发时刻）。写成只有 Hour=15 的单个 dict 会只在
+         第一个匹配的星期触发 —— 这是最容易犯的错。
+         Weekday: 0/7=周日, 1=周一 … 5=周五。 -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>15</integer><key>Minute</key><integer>30</integer></dict>
+    </array>
+
+    <!-- ⚠️ 刻意**不设** RunAtLoad：否则每次开机/登录都立刻跑一次 18 分钟更新，
+         而「开机自启」的本意是「让定时任务活得比 WorkBuddy 久」，不是「开机就跑」。
+         如果哪天真想要开机即更新，把下面这行的注释去掉即可。 -->
+    <!-- <key>RunAtLoad</key><true/> -->
+
+    <!-- ⚠️ 不要设 KeepAlive：这是个「跑完就退」的一次性任务，
+         设了 KeepAlive 会让 launchd 把它当成常驻服务、跑完立刻重启，无限循环。 -->
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <!-- 关于「错过怎么办」：StartCalendarInterval 的默认行为就是
+         **到点没跑成（机器睡眠 / 关机）时，等机器可用后补跑一次** —— 不需要额外键。
+         （注意是补跑，不是重试：退出码非 0 时 launchd 不会重跑。） -->
+
+    <key>StandardOutPath</key>
+    <string>/Users/chenqifeng/code/a-stock/logs/launchd-daily-alert.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/chenqifeng/code/a-stock/logs/launchd-daily-alert.err.log</string>
+</dict>
+</plist>

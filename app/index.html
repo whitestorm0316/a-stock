@@ -43,6 +43,13 @@ body{background:var(--bg);color:var(--tx);
   background:#fafbfc;color:var(--tx2);white-space:nowrap}
 .badge.warn{background:var(--amber2);border-color:#e8d9a8;color:var(--amber)}
 .badge.ok{background:#e9f7f0;border-color:#b7e4cd;color:#17764f}
+/* 顶栏「更新数据」按钮：比 .badge 略有交互感，但保持同一视觉重量级 */
+.updbtn{font-size:11.5px;padding:3px 10px;border-radius:20px;cursor:pointer;
+  border:1px solid var(--blue);background:#fff;color:var(--blue);font-family:inherit;
+  white-space:nowrap;transition:.12s}
+.updbtn:hover{background:var(--blue2)}
+.updbtn:disabled{opacity:.55;cursor:progress;border-color:var(--line2);color:var(--tx3)}
+.updbtn.busy{border-color:#e8d9a8;background:var(--amber2);color:var(--amber)}
 #main{display:flex;flex:1 1 auto;overflow:hidden}
 /* ---------- 左栏 ---------- */
 #side{width:322px;flex:0 0 322px;background:var(--panel);border-right:1px solid var(--line);
@@ -440,6 +447,7 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
   <span class="sub" id="netinfo" data-page-node-id="DW4kslyCfpUQA1JbvwZrjG">正在连接数据服务…</span>
   <span class="spacer" data-page-node-id="VcGvif6nQIZLJN3qGSpIwk"></span>
   <span class="badge" id="bdate" data-page-node-id="kJgFRm3ccWeiHX7bmBSFDH">—</span>
+  <button id="btn-upd" class="updbtn" title="增量取数 → 重建面板 → 自动重启服务（约 18 分钟，期间服务不可用）">更新数据</button>
   <span class="badge bad" id="bmode" data-page-node-id="pM4uDILCKdf4iEKPdzzPtO">默认：最优 3 条件</span>
   <span class="badge warn" id="bwarn" data-page-node-id="OGXBDHb6CeIniWKSASmzjJ">研究结论，不构成投资建议</span>
 </div>
@@ -459,6 +467,12 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
           <button class="btn" id="preset_save" data-page-node-id="SvR0w1QpXl2Tb9YcNhKmEc">保存</button>
           <button class="btn danger" id="preset_del" title="删除当前选中的「我的方案」"
                   data-page-node-id="SvR0w1QpXl2Tb9YcNhKmEd">删除</button>
+        </div>
+        <div class="saverow">
+          <button class="btn ghost" id="preset_def" style="flex:1"
+                  title="下次打开界面时默认选中这套方案（可选内置或我的方案）">设为默认</button>
+          <button class="btn ghost" id="preset_def_clear" style="flex:0 0 auto;width:auto;padding:5px 11px"
+                  title="取消默认设置，恢复成内置第一套">取消默认</button>
         </div>
         <div id="preset_stat" data-page-node-id="SvR0w1QpXl2Tb9YcNhKmEe"></div>
       </div>
@@ -963,6 +977,9 @@ const MONEY = v => {
 };
 
 let META = null, LAST = null, DEFAULT_PARAMS = {}, PRESETS = [], USER_PRESETS = [];
+// 界面默认选中的方案 id（'' = 未设置 → 回退到内置第一套）。来自 /api/defaults，
+// 由「设为默认 / 取消默认」按钮改。⚠️ 可能指向已不存在的 id，用前必须校验。
+let DEFAULT_PRESET = '';
 // 市值分位：序号 0..9（每档 10%），0 = 最小；标签与后端 SIZE_PCT 同源（init 时用
 // /api/defaults 的 size_bands 覆盖，避免两端各写一份百分比表而对不上）
 let SIZE_PCT = ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%', '100%'];
@@ -1380,12 +1397,14 @@ function curPreset() { return presetById($('#preset').value); }
 function renderPresets(want) {
   const sel = $('#preset');
   const keep = want !== undefined ? want : sel.value;
+  // 默认方案打标记：在 option 文字后加「 · 默认」，让用户一眼看到当前设置
+  const mark = id => (id === DEFAULT_PRESET ? ' · 默认' : '');
   let html = '<optgroup label="内置方案（报告已验证）">' +
-    PRESETS.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('') +
+    PRESETS.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${mark(p.id)}</option>`).join('') +
     '</optgroup>';
   if (USER_PRESETS.length) {
     html += '<optgroup label="我的方案（本地保存）">' +
-      USER_PRESETS.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('') +
+      USER_PRESETS.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${mark(p.id)}</option>`).join('') +
       '</optgroup>';
   }
   sel.innerHTML = html;
@@ -1407,6 +1426,20 @@ function syncPresetUI() {
   $('#preset_name').value = mine ? p.name : '';
   $('#preset_name').placeholder = mine ? '改个新名字 = 另存为一份' : '给当前这套参数起个名…';
   $('#preset_del').disabled = !mine;
+  // 「设为默认」按钮：当前这套已是默认 → 禁用并改文案，避免重复点
+  const isDef = !!(p && DEFAULT_PRESET === p.id);
+  const bd = $('#preset_def');
+  bd.disabled = isDef || !p;
+  bd.textContent = isDef ? '已是默认方案' : '设为默认';
+  bd.title = isDef
+    ? '当前方案已设为界面默认'
+    : '下次打开界面时默认选中这套方案（可选内置或我的方案）';
+  // 「取消默认」只在确实有默认设置时可点
+  const bc = $('#preset_def_clear');
+  bc.disabled = !DEFAULT_PRESET;
+  bc.title = DEFAULT_PRESET
+    ? '取消默认设置，恢复成内置第一套'
+    : '当前没有设置默认方案';
 }
 function setPresetStat(msg, kind) {
   const el = $('#preset_stat');
@@ -1451,6 +1484,125 @@ async function deletePreset() {
   }
 }
 
+/* 设置 / 取消「界面默认预设」。
+   选中哪套就设哪套 —— 内置方案也可以设为默认（它只是「默认选中」，
+   不代表被修改）。设置存在服务端 data/default_preset.txt，换浏览器也在。 */
+async function setDefaultPreset(pid) {
+  const p = presetById(pid);
+  if (!p) { setPresetStat('先选一套方案', 'bad'); return; }
+  const isCur = DEFAULT_PRESET === pid;
+  if (isCur) { setPresetStat(`「${p.name}」已经是默认方案`, 'bad'); return; }
+  try {
+    const r = await api('/api/presets/set_default', { id: pid });
+    if (!r || r.ok === false) { setPresetStat((r && r.msg) || '设置失败', 'bad'); return; }
+    DEFAULT_PRESET = r.default_preset || '';
+    renderPresets(pid);              // 重绘以刷新「 · 默认」标记
+    syncPresetUI();
+    setPresetStat(r.msg || `已设为默认：${p.name}`);
+  } catch (e) {
+    setPresetStat('设置失败：' + (e && e.message ? e.message : e), 'bad');
+  }
+}
+async function clearDefaultPreset() {
+  if (!DEFAULT_PRESET) { setPresetStat('当前没有设置默认方案', 'bad'); return; }
+  try {
+    const r = await api('/api/presets/set_default', { id: '' });
+    if (!r || r.ok === false) { setPresetStat((r && r.msg) || '取消失败', 'bad'); return; }
+    DEFAULT_PRESET = '';
+    renderPresets();
+    setPresetStat(r.msg || '已取消默认设置');
+  } catch (e) {
+    setPresetStat('取消失败：' + (e && e.message ? e.message : e), 'bad');
+  }
+}
+
+/* ---------------- 数据更新（顶栏按钮） ----------------
+   为什么要轮询状态而不是等这一个请求返回：
+   更新会**先停服再重建**（重建面板要独占 ~7GB），服务一停，请求就断了 ——
+   HTTP 请求根本不可能撑满 18 分钟。所以后端立刻返回「已开始」，
+   真正的进度写进 logs/update_state.json，前端另起轮询去读。
+   服务停着的那段时间轮询必然失败，那是**预期行为**，不当错误处理。 */
+let UPD_TIMER = null;
+
+function updBtn(){ return $('#btn-upd'); }
+
+function setUpdBtn(text, cls, disabled){
+  const b = updBtn(); if (!b) return;
+  b.textContent = text;
+  b.className = 'updbtn' + (cls ? ' ' + cls : '');
+  b.disabled = !!disabled;
+}
+
+function stopUpdPoll(){
+  if (UPD_TIMER){ clearInterval(UPD_TIMER); UPD_TIMER = null; }
+}
+
+function startUpdPoll(){
+  stopUpdPoll();
+  UPD_TIMER = setInterval(pollUpd, 5000);
+  pollUpd();
+}
+
+async function pollUpd(){
+  let st;
+  try {
+    st = await api('/api/update/status', null, true);
+  } catch (e) {
+    // 服务正在重启（更新中途"停服"这一步）—— 预期内，继续等
+    setUpdBtn('更新中…（服务重启中）', 'busy', true);
+    $('#netinfo').innerHTML = '<span style="color:#b8860b">● 正在更新数据</span> · 服务重启中…';
+    return;
+  }
+  const s = st && st.state;
+  if (s === 'running' || s === 'starting'){
+    const secs = st.started_at ? Math.round(Date.now()/1000 - st.started_at) : 0;
+    const mm = Math.floor(secs/60), ss = secs % 60;
+    setUpdBtn(`更新中 ${mm}:${String(ss).padStart(2,'0')}`, 'busy', true);
+    $('#netinfo').innerHTML = '<span style="color:#b8860b">● 正在更新数据</span> · ' +
+      '增量取数 → 重建面板 → 自动重启服务（约 18 分钟，期间服务不可用）';
+    return;
+  }
+  // done / failed / idle
+  stopUpdPoll();
+  // 陈旧结论（超过 30 分钟前的 done/failed）不再展示，避免每次打开页面都看到旧提示
+  const age = (st && st.finished_at) ? Date.now()/1000 - st.finished_at : 1e9;
+  if (age > 1800) { setUpdBtn('更新数据', '', false); return; }
+  if (s === 'done'){
+    setUpdBtn('更新完成，重载中…', 'busy', true);
+    $('#netinfo').innerHTML = '<span style="color:#17764f">● 数据已更新</span> · 正在重新加载…';
+    setTimeout(() => location.reload(), 2500);
+  } else if (s === 'failed'){
+    setUpdBtn('更新失败，点击重试', '', false);
+    $('#netinfo').innerHTML = '<span style="color:#a83232">● 更新失败</span> · ' +
+      ((st && st.msg) || '') + '　详见 logs/update_run.log';
+  } else {
+    setUpdBtn('更新数据', '', false);
+  }
+}
+
+async function onUpdateClick(){
+  const b = updBtn();
+  if (!b || b.disabled) return;
+  if (!confirm('将执行完整数据更新：\n\n  增量取数 → 重建面板 → 自动重启服务\n\n'
+             + '约需 18 分钟，期间本页面会不可用。确定开始吗？')) return;
+  setUpdBtn('启动中…', 'busy', true);
+  try {
+    const r = await api('/api/update/start', {});
+    if (r && r.ok === false){
+      setUpdBtn('更新数据', '', false);
+      $('#netinfo').innerHTML = '<span style="color:#b8860b">● 未开始更新</span> · ' +
+        ((r && r.msg) || '已有更新在进行中');
+      return;
+    }
+    $('#netinfo').innerHTML = '<span style="color:#b8860b">● 正在更新数据</span> · 已启动…';
+    startUpdPoll();
+  } catch (e) {
+    setUpdBtn('更新失败，点击重试', '', false);
+    $('#netinfo').innerHTML = '<span style="color:#a83232">● 启动更新失败</span> · ' +
+      (e && e.message ? e.message : e);
+  }
+}
+
 /* ---------------- 初始化 ---------------- */
 async function init() {
   try {
@@ -1465,15 +1617,32 @@ async function init() {
     if (d.size_bands && Array.isArray(d.size_bands.pct)) SIZE_PCT = d.size_bands.pct;
     // 预设：内置 + 我的方案
     USER_PRESETS = d.user_presets || [];
-    renderPresets(PRESETS[0] ? PRESETS[0].id : '');
+    // 「界面默认预设」：优先用它，但它可能指向**已不存在**的方案
+    // （方案被删 / 文件被手改）→ 必须校验存在性再回退，否则下拉会空白。
+    DEFAULT_PRESET = d.default_preset || '';
+    const startId = (DEFAULT_PRESET && presetById(DEFAULT_PRESET))
+      ? DEFAULT_PRESET : (PRESETS[0] ? PRESETS[0].id : '');
+    if (DEFAULT_PRESET && !presetById(DEFAULT_PRESET)) {
+      // 静默修正：清掉失效的设置，免得每次打开都白跑一次校验
+      DEFAULT_PRESET = '';
+      api('/api/presets/set_default', { id: '' }).catch(() => {});
+    }
+    renderPresets(startId);
     // ⚠️ 必须在 applyParams 之前填充，否则 cap_pick 还没有 option，选不中
     fillPickRules(d.pick_rules);
     fillLadderPresets(d.ladder_presets);
     fillRhythmAxis(d.rhythm_cands);
     // 同上：市场口径 / 均线窗口的 option 必须先有，applyParams 才选得中
     fillMktOptions(m);
-    applyParams(PRESETS[0].params);
-    CFG = { ...DEFAULT_PARAMS, ...PRESETS[0].params };
+    const startP = presetById(startId) || PRESETS[0];
+    applyParams(startP.params);
+    CFG = { ...DEFAULT_PARAMS, ...startP.params };
+    // 若上一次的更新还在跑（页面被刷新 / 重开），接着显示进度 —— 不要让人以为丢了
+    try {
+      const ust = await api('/api/update/status', null, true);
+      if (ust && (ust.state === 'running' || ust.state === 'starting')) startUpdPoll();
+      else if (ust && ust.state === 'done') setUpdBtn('更新数据', '', false);
+    } catch (e) { /* 状态读不到不影响主流程 */ }
     // 行业（两级：门类 → 细分行业）
     renderIndustryTree(m);
     // 板块数量徽章（来自 meta.board_counts，仅供提示；未连接时留空）
@@ -1483,6 +1652,14 @@ async function init() {
       if (el && bc[k] != null) el.textContent = NUM(bc[k]);
     });
     syncBdCnt();
+    // ⚠️ 必须**在这里**（renderIndustryTree 之后、runAll 之前）应用默认方案的股票池：
+    //    · 之前：板块会被 applyParams 之外的默认值覆盖成「主板+科创+创业板」，
+    //      表现为「刷新后自动选上了我没选的板块」；
+    //    · 不能更早：applyPool 要勾 `#inds input.ibx`，而行业树这一刻才生成，
+    //      更早调用勾选会全部丢失。
+    //    ⚠️ 没有 pool 的方案（内置 K 系列 / 早期存的方案）→ applyPool 直接 return false，
+    //       保持现有池子不动（向后兼容）。
+    applyPool(startP.pool);
     $('#p-help').innerHTML = helpHTML();
     await runAll();
   } catch (e) {
@@ -3591,6 +3768,14 @@ $('#preset').addEventListener('change', () => {
 /* ---- 我的方案：保存 / 删除 ---- */
 $('#preset_save').addEventListener('click', savePreset);
 $('#preset_del').addEventListener('click', deletePreset);
+/* ---- 设为默认 / 取消默认（当前选中的那套）---- */
+$('#preset_def').addEventListener('click', () => {
+  const p = curPreset();
+  if (p) setDefaultPreset(p.id);
+});
+$('#preset_def_clear').addEventListener('click', clearDefaultPreset);
+// 切方案时清掉提示（否则上一套的「已设为默认」会挂在新方案下面，误导）
+$('#preset').addEventListener('change', () => setPresetStat(''));
 // 回车 = 保存（输入框里按回车比移鼠标快）
 $('#preset_name').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); savePreset(); }
@@ -3608,6 +3793,7 @@ $('#reset').addEventListener('click', () => {
   updateModeBadge(); runAll();
 });
 syncLabels(); updateModeBadge(); updateFinBadge(); updateDelistBadge();
+$('#btn-upd') && $('#btn-upd').addEventListener('click', onUpdateClick);
 init();
 </script>
 </body>

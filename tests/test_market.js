@@ -115,7 +115,13 @@ setTimeout(async () => {
   const mk = FX.market;
   ok('fixture_market 有自建净值序列', Array.isArray(mk.series) && mk.series.length > 60,
      `${(mk.series || []).length} 条`);
-  ok('fixture_market 有 4 个真实指数', (mk.indices || []).length === 4,
+  // 5 个真实指数对照：上证 / 沪深300 / 中证500 / 中证1000 + **同花顺全A**。
+  // ⚠️ 同花顺全A（883421.TI）是这张表里**唯一「全市场 + 市值加权」**的口径 ——
+  //    它与自建等权的差异最有说明力，所以要断言它确实在。
+  ok('fixture_market 有 5 个真实指数', (mk.indices || []).length === 5,
+     (mk.indices || []).map(x => x.name).join(','));
+  ok('真实指数里含「同花顺全A」（唯一的市值加权全市场口径）',
+     (mk.indices || []).some(x => String(x.name || '').includes('全A')),
      (mk.indices || []).map(x => x.name).join(','));
   ok('fixture_market 的 last_date 与 /api/meta 一致',
      mk.last_date === FX.meta.last_date, `${mk.last_date} vs ${FX.meta.last_date}`);

@@ -35,12 +35,17 @@ const reqs = [];
 
 /* 起一个 jsdom；user_presets 由本测试自己造，从初始值开始，保存/删除就地更新，
  * 这样 save → 再 delete 的链路能在一次会话里闭环验证。 */
-function boot() {
+function boot(opts) {
+  const o = opts || {};
   const FX = {
     meta: F('meta'), defaults: F('defaults'),
     backtest: F('backtest'), scan: F('scan'),
   };
-  let users = (FX.defaults.user_presets || []).slice();
+  // 允许测试注入自己的「我的方案」与默认预设（默认取值来自 fixture）
+  let users = (o.users || FX.defaults.user_presets || []).slice();
+  // 「界面默认预设」的可变状态（模拟 data/default_preset.txt）
+  let def = o.defaultPreset !== undefined ? o.defaultPreset
+    : (FX.defaults.default_preset || '');
   const dom = new JSDOM(html, {
     runScripts: 'dangerously', pretendToBeVisual: true,
     url: 'http://127.0.0.1:8771/',
@@ -58,7 +63,7 @@ function boot() {
         let body = {};
         if (u.includes('/api/meta')) body = FX.meta;
         else if (u.includes('/api/defaults')) {
-          body = { ...FX.defaults, user_presets: users };
+          body = { ...FX.defaults, user_presets: users, default_preset: def };
         } else if (u.includes('/api/presets/save')) {
           const nm = String(payload.name).trim();
           const hit = users.find(x => x.name === nm);
@@ -74,6 +79,15 @@ function boot() {
         } else if (u.includes('/api/presets/delete')) {
           users = users.filter(x => x.id !== payload.id);
           body = { ok: true, msg: '已删除', presets: users };
+        } else if (u.includes('/api/presets/set_default')) {
+          // 与后端同语义：空 id = 取消；非空则校验存在性
+          const pid = String(payload.id || '').trim();
+          const known = pid === '' ||
+            (FX.defaults.presets || []).some(x => x.id === pid) ||
+            users.some(x => x.id === pid);
+          if (!known) body = { ok: false, msg: '该方案不存在' };
+          else { def = pid; body = { ok: true, default_preset: pid,
+            msg: pid ? '已设为默认' : '已取消默认设置（将使用内置第一套）' }; }
         } else if (u.includes('/api/backtest')) body = FX.backtest;
         else if (u.includes('/api/scan')) body = FX.scan;
         else if (u.includes('/api/trades')) body = { rows: [], n_trade: 0, summary: {}, yearly: {} };
@@ -351,6 +365,127 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); 
   await sleep(80);
   ok(reqs.filter(r => r.url.includes('/api/presets/delete')).length === before4,
     '内置方案时点删除不发请求');
+
+  // ---------------- D. 界面默认预设（设为默认 / 取消默认） ----------------
+  ok(!!$('#preset_def') && !!$('#preset_def_clear'), '「设为默认 / 取消默认」按钮存在');
+  // 初始未设置默认 → 取消按钮禁用
+  ok($('#preset_def_clear').disabled, '初始（无默认设置）时「取消默认」禁用');
+  ok($('#preset_def').textContent === '设为默认',
+    '初始时「设为默认」文案正确', $('#preset_def').textContent);
+
+  // 选中第一个内置方案 → 设为默认
+  $('#preset').value = F('defaults').presets[0].id;
+  $('#preset').dispatchEvent(new w.Event('change'));
+  await sleep(80);
+  const bid = $('#preset').value;
+  const b5 = reqs.length;
+  click($('#preset_def'));
+  await sleep(150);
+  const defReq = reqs.slice(b5).find(r => r.url.includes('/api/presets/set_default'));
+  ok(!!defReq && defReq.payload.id === bid,
+    '点击「设为默认」→ POST /api/presets/set_default 带当前方案 id',
+    defReq && defReq.payload.id);
+  ok(/已设为默认/.test($('#preset_stat').textContent), '给出设置成功提示',
+    $('#preset_stat').textContent);
+  const defOpt = $$('#preset option').find(o => o.value === bid);
+  ok(defOpt && /默认/.test(defOpt.textContent), '下拉里该方案带「 · 默认」标记',
+    defOpt && defOpt.textContent);
+  ok($('#preset_def').disabled && $('#preset_def').textContent === '已是默认方案',
+    '当前已是默认 → 按钮禁用并改文案',
+    $('#preset_def').textContent + '/' + $('#preset_def').disabled);
+  ok(!$('#preset_def_clear').disabled, '有默认设置时「取消默认」可用');
+
+  // 内置方案也可以设为默认（不该被拒绝）
+  const otherId = F('defaults').presets[1] ? F('defaults').presets[1].id : null;
+  if (otherId) {
+    $('#preset').value = otherId;
+    $('#preset').dispatchEvent(new w.Event('change'));
+    await sleep(80);
+    click($('#preset_def'));
+    await sleep(150);
+    const o2 = $$('#preset option').find(o => o.value === otherId);
+    ok(o2 && /默认/.test(o2.textContent), '内置方案也能设为默认', o2 && o2.textContent);
+    const o1 = $$('#preset option').find(o => o.value === bid);
+    ok(o1 && !/默认/.test(o1.textContent), '旧的默认标记被摘掉（同时只有一个默认）',
+      o1 && o1.textContent);
+  }
+
+  // 取消默认
+  const b6 = reqs.length;
+  click($('#preset_def_clear'));
+  await sleep(150);
+  const clrReq = reqs.slice(b6).find(r => r.url.includes('/api/presets/set_default'));
+  ok(!!clrReq && clrReq.payload.id === '',
+    '点击「取消默认」→ 发空 id', clrReq && JSON.stringify(clrReq.payload));
+  ok(!$$('#preset option').some(o => /默认/.test(o.textContent)),
+    '取消后下拉里没有任何「默认」标记');
+  ok($('#preset_def_clear').disabled, '取消后「取消默认」重新禁用');
+  ok(/取消默认/.test($('#preset_stat').textContent), '给出取消提示',
+    $('#preset_stat').textContent);
+
+  // 不存在的 id → 前端本地校验就拦住，不发请求、给出提示
+  // （后端也会校验，但前端更早拦掉更省一次往返）
+  const b7 = reqs.filter(r => r.url.includes('/api/presets/set_default')).length;
+  await w.setDefaultPreset('NOPE');
+  await sleep(150);
+  ok(/先选一套方案/.test($('#preset_stat').textContent),
+    '不存在的 id → 前端本地拦下并提示（不发请求）',
+    $('#preset_stat').textContent);
+  ok(reqs.filter(r => r.url.includes('/api/presets/set_default')).length === b7,
+    '不存在的 id 不发请求');
+
+  // ---------------- E. 默认方案的「股票池」必须被应用（回归） ----------------
+  /* ⚠️ 这是一个真实出现过的 bug：
+     加了「默认预设」功能后，init() 只调了 applyParams(startP.params)，
+     **漏了 applyPool(startP.pool)** —— 而切换预设的那条路径是两个都调的。
+     原代码默认用 PRESETS[0]（内置 K 系列，没有 pool），所以一直没暴露；
+     一旦把默认换成用户的方案（U3，只选主板），刷新后板块就变成
+     defaultPool() 的「主板+科创+创业板」—— 表现为「自动选上了我没选的板块」。
+
+     修法：init() 里在 renderIndustryTree 之后、runAll 之前补 applyPool。
+     为什么必须在那之后：applyPool 要勾 `#inds input.ibx`，而行业树那一刻才生成。 */
+  {
+    const uPool = {
+      mode: 'all', codes_text: '600519, 000001.SZ',
+      industries: [], boards: ['MAIN'], exchanges: ['SH'],
+    };
+    const uP = {
+      id: 'U9', name: '__pool_probe__', desc: '', saved_at: '',
+      params: { ...F('defaults').defaults, size_min: 0, size_max: 3 },
+      pool: uPool,
+    };
+    const b2 = boot({ users: [uP], defaultPreset: 'U9' });
+    await sleep(700);
+    const d2 = b2.d;
+    const $2 = s => d2.querySelector(s), $$2 = s => [...d2.querySelectorAll(s)];
+
+    ok($2('#preset').value === 'U9', '默认预设生效：下拉选中 U9', $2('#preset').value);
+
+    // ★ 核心断言：板块只勾 MAIN
+    const bdOn = $$2('#seg-board button').filter(b => b.classList.contains('on'))
+      .map(b => b.dataset.v);
+    ok(JSON.stringify(bdOn) === JSON.stringify(['MAIN']),
+      '★ 默认方案的板块被应用（只勾 MAIN，不是默认的三板块）', JSON.stringify(bdOn));
+
+    // 交易所只勾 SH
+    const exOn = $$2('#seg-ex button').filter(b => b.classList.contains('on'))
+      .map(b => b.dataset.v);
+    ok(JSON.stringify(exOn) === JSON.stringify(['SH']),
+      '默认方案的交易所被应用（只勾 SH）', JSON.stringify(exOn));
+
+    // 自定义代码回填
+    ok($2('#pool_codes').value.includes('600519'),
+      '默认方案的自定义代码被回填', $2('#pool_codes').value);
+
+    // 反向：没有 pool 的方案 → 保持默认池子不动（向后兼容）
+    const b3 = boot({ users: [{ id: 'U8', name: '__nopool__', desc: '', saved_at: '',
+      params: { ...F('defaults').defaults }, pool: null }], defaultPreset: 'U8' });
+    await sleep(700);
+    const bdOn3 = [...b3.d.querySelectorAll('#seg-board button')]
+      .filter(b => b.classList.contains('on')).map(b => b.dataset.v);
+    ok(bdOn3.includes('CHINEXT') && bdOn3.includes('STAR'),
+      '无 pool 的方案 → 板块保持默认三板块（不被清空）', JSON.stringify(bdOn3));
+  }
 
   // ---------------- C. 运行时错误 ----------------
   ok(errors.length === 0, '无运行时错误', errors.slice(0, 3).join(' | '));
