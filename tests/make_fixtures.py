@@ -85,6 +85,25 @@ def save(name, obj):
     print(f"  ✅ {name:16s} {os.path.getsize(p)/1024:8.1f} KB")
 
 
+def _NEUTRAL_USER_PRESETS(defaults):
+    """fixture 里「我的方案」的**固定中性内容**（不抓本机的真实方案）。
+
+    ⚠️ 为什么不能直接抓本机的：见调用处注释 —— 会让测试随个人数据漂移。
+    ⚠️ 但也不能给空数组：`test_presets` 有一整个板块在测「我的方案」的
+       保存 / 覆盖 / 删除 / 股池回填，没有方案就没意义（它自己也有断言守着这点）。
+    所以：内容**写死在这里**，与谁跑无关。
+    """
+    def mk(i, name, desc, **over):
+        prm = dict(defaults)
+        prm.update(over)
+        return dict(id=f"U{i}", name=name, desc=desc,
+                    saved_at="2026-01-01 00:00", params=prm, pool=None)
+    return [
+        mk(1, "测试用 · 次小分位", "演示：市值收窄到 10%~20%", size_min=1, size_max=1),
+        mk(2, "测试用 · 12只6批次", "", max_pos=12, cap_ladder="1,2,2,2,2,3"),
+    ]
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     print(f"从 {URL} 抓取 fixture → {OUT}"
@@ -94,7 +113,17 @@ def main():
     if want("meta"):
         save("meta", get("/api/meta"))
     if want("defaults"):
-        save("defaults", get("/api/defaults"))
+        # ⚠️⚠️ 必须**剥掉个人状态**后再存（user_presets / default_preset 都要）。
+        #     它们来自本机的 `data/user_presets.json` 与 `data/default_preset.txt` ——
+        #     每个人机器上都不一样。直接存进去会让测试**随个人数据漂移**，
+        #     而且症状很怪：本机存过一个「市值 0~3 + 5 批次建仓」的方案并设为默认，
+        #     就会把 `test_presets` 里「默认 = 最小30%」那批断言全带崩
+        #     （实测踩过，排查了很久才定位到是 fixture 而不是代码）。
+        #     fixtures 的意义是「离线可复现」→ 必须中性、固定。
+        dv = get("/api/defaults")
+        dv["user_presets"] = _NEUTRAL_USER_PRESETS(dv.get("defaults") or {})
+        dv["default_preset"] = ""
+        save("defaults", dv)
     # 市场环境序列（自建全A等权净值 vs MA60）+ 真实指数对照。
     #   180 天足够前端画对照表；指数侧多留 60 根才能算出窗口起点的 MA60。
     if want("market"):

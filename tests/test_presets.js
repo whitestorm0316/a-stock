@@ -477,14 +477,17 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); 
     ok($2('#pool_codes').value.includes('600519'),
       '默认方案的自定义代码被回填', $2('#pool_codes').value);
 
-    // 反向：没有 pool 的方案 → 保持默认池子不动（向后兼容）
+    // 反向：没有 pool 的方案 → 保持**默认池**（不是保留上次的勾选，也不是清空）
+    // ⚠️ 期望值跟随 defaultPool()，不写死板块清单（默认池可配置）
     const b3 = boot({ users: [{ id: 'U8', name: '__nopool__', desc: '', saved_at: '',
       params: { ...F('defaults').defaults }, pool: null }], defaultPreset: 'U8' });
     await sleep(700);
     const bdOn3 = [...b3.d.querySelectorAll('#seg-board button')]
       .filter(b => b.classList.contains('on')).map(b => b.dataset.v);
-    ok(bdOn3.includes('CHINEXT') && bdOn3.includes('STAR'),
-      '无 pool 的方案 → 板块保持默认三板块（不被清空）', JSON.stringify(bdOn3));
+    const dflt = b3.w.defaultPool().boards;
+    ok(JSON.stringify(bdOn3) === JSON.stringify(dflt),
+      '无 pool 的方案 → 板块回落到默认池（不被清空）',
+      `${JSON.stringify(bdOn3)} vs 默认 ${JSON.stringify(dflt)}`);
   }
 
   // ---------------- C. 运行时错误 ----------------

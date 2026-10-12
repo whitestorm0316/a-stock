@@ -80,8 +80,12 @@ const lastBoards = () => {
      JSON.stringify(vals) === JSON.stringify(['MAIN', 'CHINEXT', 'STAR', 'BJ']), vals.join(','));
   const labels = btns.map(b => b.textContent.replace(/[\d,]/g, '').trim());
   ok('标签为中文', labels.join(',') === '主板,创业板,科创板,北交所', labels.join(','));
-  ok('默认选中 主板/创业板/科创板',
-     btns.filter(b => b.classList.contains('on')).map(b => b.dataset.v).join(',') === 'MAIN,CHINEXT,STAR',
+  // ⚠️ 默认勾选**不能写死**：默认池是可配置的（2026-10-12 从「主板+创业板+科创板」
+  //    改成「仅主板」）。这里改为**跟随页面自己的 defaultPool()** ——
+  //    测试断言的是「初始状态 == 默认池」这条不变量，而不是某个具体清单。
+  const DFLT = w.defaultPool().boards;
+  ok(`默认选中 = defaultPool（${DFLT.join('/')}）`,
+     btns.filter(b => b.classList.contains('on')).map(b => b.dataset.v).join(',') === DFLT.join(','),
      btns.filter(b => b.classList.contains('on')).map(b => b.dataset.v).join(','));
   ok('默认不选北交所', !btns.find(b => b.dataset.v === 'BJ').classList.contains('on'));
 
@@ -94,19 +98,32 @@ const lastBoards = () => {
   const expectMain = new Intl.NumberFormat('zh-CN').format(Math.round(bc.MAIN));
   ok('主板徽章与 meta 一致', badgeTxt[0] === expectMain, `${badgeTxt[0]} vs ${expectMain}`);
 
-  // ---- 3. 计数提示
-  ok('计数提示初始为「选中 3 个」', /选中 3 个/.test($('#bdcnt').textContent),
+  // ---- 3. 计数提示（初值 = 默认池的板块个数，不写死）
+  ok(`计数提示初始为「选中 ${DFLT.length} 个」`,
+     new RegExp(`选中\\s*${DFLT.length}\\s*个`).test($('#bdcnt').textContent),
      $('#bdcnt').textContent);
 
   // ---- 4. 点击是 toggle（多选），不是单选
-  click(btns.find(b => b.dataset.v === 'STAR'));
+  // 点一个**当前未选中**的板块（默认池之外的）→ 打开
+  const offBtn = btns.find(b => !b.classList.contains('on'));
+  click(offBtn);
   await sleep(50);
-  ok('取消科创板后仍保留主板', btns.find(b => b.dataset.v === 'MAIN').classList.contains('on'));
-  ok('取消科创板后计数=2', /选中 2 个/.test($('#bdcnt').textContent), $('#bdcnt').textContent);
-  click(btns.find(b => b.dataset.v === 'BJ'));
+  ok(`点击未选中板块（${offBtn.dataset.v}）可选中（多选而非单选）`,
+     offBtn.classList.contains('on'));
+  ok(`加入后计数 = ${DFLT.length + 1}`,
+     new RegExp(`选中\\s*${DFLT.length + 1}\\s*个`).test($('#bdcnt').textContent),
+     $('#bdcnt').textContent);
+  // 再点一次 → 关掉（真正的 toggle）
+  click(offBtn);
   await sleep(50);
-  ok('点击北交所可选中（多选而非单选）', btns.find(b => b.dataset.v === 'BJ').classList.contains('on'));
-  ok('加入北交所后计数=3', /选中 3 个/.test($('#bdcnt').textContent), $('#bdcnt').textContent);
+  ok('再点一次 → 取消该板块',
+     !offBtn.classList.contains('on'));
+  ok(`取消后计数回到 ${DFLT.length}`,
+     new RegExp(`选中\\s*${DFLT.length}\\s*个`).test($('#bdcnt').textContent),
+     $('#bdcnt').textContent);
+  // 再打开，供后面的请求体断言用
+  click(offBtn);
+  await sleep(50);
 
   // ---- 5. 请求体携带 boards
   const before = reqLog.length;
@@ -115,9 +132,10 @@ const lastBoards = () => {
   ok('点运行触发请求', reqLog.length > before, '新增 ' + (reqLog.length - before) + ' 次');
   const reqBds = lastBoards();
   ok('请求体含 pool.boards', Array.isArray(reqBds), JSON.stringify(reqBds));
-  // 此时勾选状态：MAIN 保留、CHINEXT 保留、STAR 被取消、BJ 被加入
-  ok('boards 内容 = 当前勾选', JSON.stringify(reqBds) === JSON.stringify(['MAIN', 'CHINEXT', 'BJ']),
-     JSON.stringify(reqBds));
+  // 期望值 = 当前 DOM 上真正亮着的按钮（不写死清单，改默认也不会假报警）
+  const expectBds = btns.filter(b => b.classList.contains('on')).map(b => b.dataset.v);
+  ok('boards 内容 = 当前勾选', JSON.stringify(reqBds) === JSON.stringify(expectBds),
+     `${JSON.stringify(reqBds)} vs ${JSON.stringify(expectBds)}`);
 
   // ---- 6. 全选 / 清空（只作用于板块，不动行业）
   // 先勾一个行业，验证板块操作不误伤它
@@ -149,13 +167,17 @@ const lastBoards = () => {
      btns.filter(b => b.classList.contains('on')).length + '/4');
 
   // ---- 9. 重置恢复默认
+  // ⚠️ 期望值**不能写死**板块清单：默认池是可配置的（2026-10-12 从
+  //    「主板+创业板+科创板」改成「仅主板」）。写死会在下次改默认时假报警。
+  //    从页面自己的 defaultPool() 取值，让测试**跟随**配置而不是重复配置。
+  const DP = w.defaultPool().boards;
   click($('#reset'));
   await sleep(700);
-  ok('重置后恢复 主板/创业板/科创板',
-     btns.filter(b => b.classList.contains('on')).map(b => b.dataset.v).join(',') === 'MAIN,CHINEXT,STAR',
+  ok(`重置后恢复默认板块（${DP.join('/')}）`,
+     btns.filter(b => b.classList.contains('on')).map(b => b.dataset.v).join(',') === DP.join(','),
      btns.filter(b => b.classList.contains('on')).map(b => b.dataset.v).join(','));
   ok('重置后北交所仍不选', !btns.find(b => b.dataset.v === 'BJ').classList.contains('on'));
-  ok('重置后请求 boards 已恢复', JSON.stringify(lastBoards()) === JSON.stringify(['MAIN', 'CHINEXT', 'STAR']),
+  ok('重置后请求 boards 已恢复', JSON.stringify(lastBoards()) === JSON.stringify(DP),
      JSON.stringify(lastBoards()));
   ok('重置后行业恢复全不选', $$('#inds input:checked').length === 0);
 

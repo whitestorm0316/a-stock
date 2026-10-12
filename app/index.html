@@ -123,6 +123,8 @@ input[type=range]{width:100%;accent-color:var(--blue)}
 .btn:active{transform:translateY(1px)}
 .btn.ghost{background:#fff;color:var(--tx2);border:1px solid var(--line2)}
 .btn.ghost:hover{background:#f4f6f9}
+/* 表格内的行内小按钮（寻优「应用」列）—— 必须比 .btn 小，否则行高被撑得很难看 */
+.btn.tiny{padding:2px 9px;font-size:11.5px;border-radius:5px;line-height:1.7}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .btnrow{display:flex;gap:7px}
 .chk{display:flex;align-items:flex-start;gap:8px;padding:6px 7px;border-radius:6px;
@@ -681,10 +683,17 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
           <button data-act="allbd" data-page-node-id="s4SBMZo7jjSqiqdxJKArhY">全选</button>
           <button data-act="nonebd" data-page-node-id="4DWbHdPlhS8XYk6IwLNPEj">清空</button>
         </div>
+        <!-- ⚠️ 板块按钮的初始 class 必须与 defaultPool().boards 保持一致！
+             这里是**静态 HTML**，而 defaultPool() 是 JS —— 两处若不一致就会出现
+             「改了默认池但页面还是旧的勾选」（实测踩过：改了 defaultPool 为只主板，
+             页面仍勾着三个板块，因为这里的 class="on" 是写死的）。
+             所以：**改默认板块时，这里和 defaultPool() 必须一起改**。
+             （更稳的做法是启动时无条件 applyPool(defaultPool())，但那会覆盖
+               「我的方案」里的 pool —— 现在的优先级是方案 > 默认，符合预期。） -->
         <div class="seg wrap" id="seg-board" data-page-node-id="mCcEDsDZoSPGs16pI7adXw">
           <button data-v="MAIN" class="on" data-page-node-id="opLt8Kp21pWnS1tREL6y4K">主板<i class="sbc" id="sbc-MAIN" data-page-node-id="yW2OKUMCcAliVAiysdm6xl"></i></button>
-          <button data-v="CHINEXT" class="on" data-page-node-id="mUUXRCxqFkT0WWuxWXhYXz">创业板<i class="sbc" id="sbc-CHINEXT" data-page-node-id="KJEIxgl0UkBJzMLs9nb3ec"></i></button>
-          <button data-v="STAR" class="on" data-page-node-id="49etJVoEFKvvIHcLxwrVcL">科创板<i class="sbc" id="sbc-STAR" data-page-node-id="lNCqrgVA2TpHIPCOlUcakp"></i></button>
+          <button data-v="CHINEXT" data-page-node-id="mUUXRCxqFkT0WWuxWXhYXz">创业板<i class="sbc" id="sbc-CHINEXT" data-page-node-id="KJEIxgl0UkBJzMLs9nb3ec"></i></button>
+          <button data-v="STAR" data-page-node-id="49etJVoEFKvvIHcLxwrVcL">科创板<i class="sbc" id="sbc-STAR" data-page-node-id="lNCqrgVA2TpHIPCOlUcakp"></i></button>
           <button data-v="BJ" data-page-node-id="cImAFBQg7cBFM5UUdyxeOJ">北交所<i class="sbc" id="sbc-BJ" data-page-node-id="0bn0XpsQLZvUYZwZnRvh6D"></i></button>
         </div>
         <div class="cap" data-page-node-id="a9MHgbPU4lbTOU6XE8aoGS">板块由证券代码号段判定，经涨跌停幅度交叉验证（主板 10% / 创业板·科创板 20% / 北交所 30%）。
@@ -922,7 +931,11 @@ td.rk2{font-family:var(--mono);color:var(--tx3);font-size:11px;text-align:right}
           </div>
           <div class="btnrow" style="margin-top:13px;max-width:330px" data-page-node-id="aaEdCy5uE94UTOaN4y1Ibb">
             <button class="btn" id="tune_run" data-page-node-id="7tEUvmrJ6qSIztq9F7Cz7I">开始寻优</button>
+            <button class="btn ghost" id="tune_apply_top" disabled
+                    title="把当前排序下第 1 名的参数写回左侧面板">应用最优</button>
           </div>
+          <!-- 应用状态的反馈区。放在按钮正下方，比弹窗轻、也不打断连续操作 -->
+          <div id="tune_stat" style="font-size:11.5px;margin-top:8px;line-height:1.6"></div>
         </div>
         <div id="tune-out" data-page-node-id="25IDgotoUb0gI6ImAeWUQr"></div>
       </div>
@@ -1652,13 +1665,16 @@ async function init() {
       if (el && bc[k] != null) el.textContent = NUM(bc[k]);
     });
     syncBdCnt();
-    // ⚠️ 必须**在这里**（renderIndustryTree 之后、runAll 之前）应用默认方案的股票池：
-    //    · 之前：板块会被 applyParams 之外的默认值覆盖成「主板+科创+创业板」，
-    //      表现为「刷新后自动选上了我没选的板块」；
-    //    · 不能更早：applyPool 要勾 `#inds input.ibx`，而行业树这一刻才生成，
-    //      更早调用勾选会全部丢失。
-    //    ⚠️ 没有 pool 的方案（内置 K 系列 / 早期存的方案）→ applyPool 直接 return false，
-    //       保持现有池子不动（向后兼容）。
+    // ⚠️ 股票池的**两段式**应用（顺序不能反）：
+    //    ① 先无条件套用 defaultPool() —— 让「默认池」有唯一真相源（JS），
+    //       HTML 里板块按钮的静态 class 只当首屏占位，不再参与逻辑。
+    //       （踩过：把 defaultPool 改成只主板，页面仍勾着三板块 ——
+    //        因为 HTML 里那几个 class="on" 是写死的，两处漂移了。）
+    //    ② 再用方案自己的 pool 覆盖 —— 方案优先级更高（用户存的池子要保住）。
+    //       方案没有 pool（内置 K 系列 / 早期方案）→ applyPool 返回 false，保持 ① 的结果。
+    //    ⚠️ 必须在 renderIndustryTree 之后：applyPool 要勾 `#inds input.ibx`，
+    //       而行业树这一刻才生成；更早调用 → 行业勾选全部丢失。
+    applyPool(defaultPool());
     applyPool(startP.pool);
     $('#p-help').innerHTML = helpHTML();
     await runAll();
@@ -1784,10 +1800,19 @@ function currentPool() {
       保存方案时必须**两个都发**：只发 params 的话，板块/行业/自定义代码/
       交易所这一整组都会丢 —— 也就是「保存后切走再切回，板块筛选没了」。 */
 const EXN = { SH: '沪市', SZ: '深市', BJ: '北交所' };
+/* 默认股票池 —— **只主板**。
+   ⚠️ 为什么改成只主板（2026-10-12 用户要求「回测只用主板的数据」）：
+      · 主板是这套「超跌反转」最稳的战场（成交活跃、退市规则清晰、无涨跌幅 20% 的制度差异）；
+      · 创业板/科创板 20% 涨跌幅 + 上市未满期票，会让回撤显著放大；
+      · 北交所流动性与制度差异更大，本来就不选。
+   ⚠️ 这只是**默认值**：用户随时可以在 ③ 板块 里改（或存进方案随方案走）。
+      改这里会同时影响：回测 / 选股 / 寻优 / 单股透视 / 导出 ——
+      因为它们都走 `currentPool()`，也正是「一处改、处处生效」的原因。
+   ⚠️ 与「我的方案」的 pool 优先级：方案里存了 pool 就以方案为准（见 applyPool）。 */
 function defaultPool() {
   return {
     mode: 'all', codes_text: '', industries: [],
-    boards: ['MAIN', 'CHINEXT', 'STAR'],        // 北交所流动性与制度差异大，默认不选
+    boards: ['MAIN'],                           // 只主板
     exchanges: ['SH', 'SZ'],
   };
 }
@@ -2920,8 +2945,26 @@ $('#tune_run').addEventListener('click', async () => {
     renderTune(r);
   } catch (e) {
     $('#tune-out').innerHTML = `<div class="errbox"><b>寻优失败：</b>${e.message}</div>`;
+    setTuneStat('寻优失败：' + e.message, 'bad');
   } finally { b.textContent = '开始寻优'; b.disabled = false; }
 });
+
+/* 「应用最优」= 应用当前排序下的第 1 行。
+   ⚠️ 用 tuneSorted() 而不是 rows[0]：表格可能被表头点击换过排序，
+      用户看到的第 1 行才是他要的「最优」。 */
+$('#tune_apply_top').addEventListener('click', () => {
+  if (!TUNE || !(TUNE.rows || []).length) { setTuneStat('先跑一次寻优', 'bad'); return; }
+  applyTuneRow(0);
+});
+
+/* 寻优相关的状态提示（失败 / 已应用），与「预设方案」的 setPresetStat 分开，
+   避免两处互相覆盖。 */
+function setTuneStat(msg, kind) {
+  const el = $('#tune_stat');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = kind === 'bad' ? '#c0392b' : (msg ? '#0d7a3a' : '');
+}
 
 /* 勾了节奏轴 / 选股规则轴 → 顶部立刻提示「本页会切到容量口径」，
    别等结果出来才发现排序依据变了（表头一换容易懵）。
@@ -2992,12 +3035,17 @@ function paintTuneTable() {
   const th = `<th>#</th><th style="text-align:left">组合</th>` + cols.map(c =>
     `<th class="srt" data-k="${c.k}" title="点击按「${c.t}」排序">${c.t}`
     + (TUNE_SORT.k === c.k ? (TUNE_SORT.asc ? ' ▲' : ' ▼') : '')
-    + `</th>`).join('');
+    + `</th>`).join('')
+    + `<th title="把这行的参数写回左侧面板">操作</th>`;
+  /* ⚠️ 用 data-ri（行在 rows 里的下标）而不是闭包捕获 —— 表格是 innerHTML 重建的，
+     每次重排后都必须重新绑定；用下标可以让「重绘 → 重绑」这一步是幂等的。 */
   const tb = rows.map((x, i) => `<tr class="${i === 0 ? 'top1' : i < 3 ? 'top2' : ''}">
       <td class="l"><span class="${i === 0 ? 'rk g' : i < 3 ? 'rk s' : 'rk'}">${i + 1}</span></td>
       <td class="l" style="white-space:normal;max-width:310px;font-size:12px">${esc(x.label)}</td>`
     + cols.map(c => `<td class="${c.c ? c.c(x[c.k], x) : ''}"${c.b ? ' style="font-weight:600"' : ''}>`
         + `${c.f(x[c.k], x)}</td>`).join('')
+    + `<td><button class="btn ghost tiny tune-apply" data-ri="${i}"
+         title="把「${esc(x.label)}」的参数写回左侧面板（不自动运行）">应用</button></td>`
     + `</tr>`).join('');
   const w = $('#tune-tblwrap');
   if (!w) return;
@@ -3005,11 +3053,39 @@ function paintTuneTable() {
     + th + `</tr></thead><tbody>` + tb + `</tbody></table></div>`;
   $$('#tune-tblwrap th.srt').forEach(e =>
     e.addEventListener('click', () => tuneSortBy(e.dataset.k)));
+  $$('#tune-tblwrap .tune-apply').forEach(b =>
+    b.addEventListener('click', () => applyTuneRow(+b.dataset.ri)));
+}
+
+/* 把寻优某一行的参数写回左侧面板。
+   ⚠️ `/api/tune` 的每行已经带 `params`（完整参数对象），**不需要**反推或重算 ——
+      直接用即可。但要注意它只含 params，**不含 pool**：股票池是「当前页面正在用的」，
+      寻优本身就是在该池下跑的，所以不该也不能被寻优结果覆盖（否则会把用户的池改掉）。 */
+function applyTuneRow(ri) {
+  const rows = tuneSorted();
+  const x = rows[ri];
+  if (!x || !x.params) { alert('这一行没有可用的参数'); return; }
+  applyParams(x.params);
+  // CFG 必须同步（它被 updateModeBadge / 徽标文案读取），否则界面显示与参数不一致
+  CFG = { ...DEFAULT_PARAMS, ...x.params };
+  updateModeBadge(); updateFinBadge(); updateDelistBadge();
+  // 不自动跑：用户常要连点几行比较，每次重算会很卡（回测 + 选股要好几秒）
+  setTuneStat(`已应用第 ${ri + 1} 行：${x.label} —— 参数已写回左侧，`
+    + `点「运行回测」查看完整结果。`);
 }
 
 function renderTune(r) {
-  if (!r.rows || !r.rows.length) { $('#tune-out').innerHTML = `<div class="empty">无有效组合</div>`; return; }
+  if (!r.rows || !r.rows.length) {
+    $('#tune-out').innerHTML = `<div class="empty">无有效组合</div>`;
+    TUNE = null;
+    const bt0 = $('#tune_apply_top'); if (bt0) bt0.disabled = true;
+    setTuneStat('没有可用组合，无法应用', 'bad');
+    return;
+  }
   TUNE = r;
+  // 有结果了才让「应用最优」可点（否则点了也没东西可应用）
+  const bt = $('#tune_apply_top'); if (bt) bt.disabled = false;
+  setTuneStat('');
   const cap = !!r.cap_mode;
   TUNE_SORT = { k: r.sort_by || (cap ? 'cap_sharpe' : 'sharpe'), asc: false };
   const SORT_NAME = {

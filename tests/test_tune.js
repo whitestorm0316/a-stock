@@ -225,7 +225,64 @@ setTimeout(async () => {
   ok('「账户MDD」首次点击按升序（回撤最小的排第一）', nonDecreasing(mdds),
      mdds.slice(0, 5).join(' ≤ '));
 
-  // ---- 9. 无错误
+  // ---- 9. 「一键应用参数」（应用最优 / 行内应用）
+  // 需求：寻优结果里点一下就能把这套参数写回左侧面板。
+  //   · ensure: 表头有「操作」列，每行有「应用」按钮
+  //   · ensure: /api/tune 的行里带 params（不需要反推）→ 应用后左侧控件真的变了
+  const applyBtns = () => $$('#tune-tblwrap .tune-apply');
+  ok('表头出现「操作」列', !!$$('#tune-tblwrap th').find(t => /操作/.test(t.textContent)));
+  ok('每行都有「应用」按钮', applyBtns().length === bodyRows().length,
+     `${applyBtns().length} 个按钮 / ${bodyRows().length} 行`);
+  ok('存在「应用最优」按钮', !!$('#tune_apply_top'));
+  ok('寻优结果出来后「应用最优」可用', !$('#tune_apply_top').disabled);
+
+  // 先把排序切到「账户CAGR 降序」，确认应用的是**用户看到的**第 1 行
+  if (!/▼/.test(headOf('账户CAGR').textContent)) click(headOf('账户CAGR'));
+  await sleep(30);
+  const topRowLabel = bodyRows()[0].querySelectorAll('td')[1].textContent.trim();
+  const topCAGR = parseFloat(cell(bodyRows()[0], '账户CAGR'));
+
+  const sizeBefore = $('#size_min').value + '/' + $('#size_max').value;
+  const holdBefore = $('#hold').value;
+  click($('#tune_apply_top'));
+  await sleep(80);
+  ok('点「应用最优」→ 给出「已应用」提示',
+     /已应用第\s*1\s*行/.test($('#tune_stat').textContent), $('#tune_stat').textContent);
+  ok('提示里带上被应用的组合名', $('#tune_stat').textContent.includes(topRowLabel.slice(0, 6)),
+     topRowLabel.slice(0, 30));
+
+  // 参数真的写回了吗？用「该行 params 的字段值」与控件逐项比对
+  const rows = w.TUNE ? null : null;   // TUNE 是 let，取不到；改从 fixture 里按同一排序取
+  const sorted = FX.tune_rhythm.rows.slice().sort((a, b) => b.cap_cagr - a.cap_cagr);
+  const want = sorted[0].params;
+  let matched = 0, checked = 0;
+  if (want.hold !== undefined) {
+    checked++; if (+$('#hold').value === +want.hold) matched++;
+  }
+  if (want.size_min !== undefined && want.size_min !== null) {
+    checked++; if (+$('#size_min').value === +want.size_min) matched++;
+  }
+  if (want.size_max !== undefined && want.size_max !== null) {
+    checked++; if (+$('#size_max').value === +want.size_max) matched++;
+  }
+  ok('参数写回左侧控件（hold / size 至少有一项吻合）',
+     checked > 0 && matched > 0, `吻合 ${matched}/${checked}；应用前 size=${sizeBefore} hold=${holdBefore}`);
+
+  // 行内「应用」按钮：点第 3 行
+  const row3 = bodyRows()[2];
+  const label3 = row3.querySelectorAll('td')[1].textContent.trim();
+  click(row3.querySelector('.tune-apply'));
+  await sleep(80);
+  ok('点行内「应用」→ 提示指向第 3 行',
+     /已应用第\s*3\s*行/.test($('#tune_stat').textContent), $('#tune_stat').textContent);
+  ok('行内应用的提示指向正确的组合',
+     $('#tune_stat').textContent.includes(label3.slice(0, 6)), label3.slice(0, 30));
+
+  // 提示不能残留上一条（否则用户以为点错了）
+  ok('提示是单条、不叠加', ($('#tune_stat').textContent.match(/已应用/g) || []).length === 1,
+     $('#tune_stat').textContent);
+
+  // ---- 10. 无错误
   ok('无运行时错误', errors.length === 0, errors.slice(0, 3).join(' | ') || '干净');
 
   console.log('\n══════ 前端「参数寻优 · 建仓节奏」UI 验证 ══════\n');

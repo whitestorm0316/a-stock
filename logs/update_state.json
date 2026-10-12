@@ -1,7 +1,7 @@
 {
- "state": "done",
+ "state": "failed",
  "port": 8770,
- "started_at": 1791533208.8743382,
- "msg": "更新完成",
- "finished_at": 1791533851.4245949
+ "started_at": 1791784521.612309,
+ "msg": "更新失败（exit=1），详见 logs/update_run.log",
+ "finished_at": 1791784538.113348
 }
