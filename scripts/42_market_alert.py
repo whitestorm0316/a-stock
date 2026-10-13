@@ -130,6 +130,13 @@ def log(msg: str) -> None:
         pass
 
 
+# 播报扫描用的股票池 —— **只主板**，与 `app/index.html` 的 `defaultPool()` 一致。
+# ⚠️ 脚本不经过前端，所以必须在这里显式写一份；**改前端默认池时记得同步这里**。
+#    为什么不用「全部池」：北交所（920xxx）流动性/制度差异大，实测会挤掉
+#    真正该提示的主板标的（2026-10-13 的 8 只候选里 6 只是北交所）。
+ALERT_POOL = {"mode": "all", "boards": ["MAIN"], "exchanges": ["SH", "SZ"]}
+
+
 def api(port: int, path: str, payload=None, timeout=20):
     """调本地服务。payload 为 None 走 GET，否则 POST JSON。"""
     url = f"http://127.0.0.1:{port}{path}"
@@ -590,8 +597,15 @@ def main() -> int:
             return 1
 
     # ---- 取数
+    # ⚠️ **必须显式传 pool（只主板）**，与界面默认保持一致。
+    #    不传的话引擎会用「全部池」（含北交所 920xxx / 科创 / 创业）——
+    #    实测 2026-10-13 的 8 只候选里有 6 只是北交所，与用户在界面看到的对不上，
+    #    也会让人误以为「播报的股票池和回测的不是一个」。
+    #    改这里时务必同步 `app/index.html` 的 `defaultPool()`（单一真相源在前端，
+    #    但脚本侧必须显式给，因为它不经过前端）。
     try:
-        scan = api(a.port, "/api/scan", {"params": params, "limit": 10})
+        scan = api(a.port, "/api/scan",
+                   {"params": params, "limit": 10, "pool": ALERT_POOL})
     except urllib.error.URLError as e:
         log(f"!! 连接本地服务失败（{a.port}）：{e}。服务起了吗？"
             f"（python scripts/ctl.py start）")

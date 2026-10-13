@@ -196,6 +196,72 @@ mk5["indices"] = [dict(name=f"指数{i}", dist=-1.0, bull=False) for i in range(
 md9 = M.build_message(scan_of(mkt_bull_now=True, latest_n=0), mk5, [])
 ok("无全A 时指数对照仍正常", "真实指数对照" in md9)
 
+# ================================================================ 调度纯逻辑
+# 覆盖 scripts/alert_sched.py —— 「工作日 15:30 该不该触发」的判断。
+# ⚠️ 为什么测这个模块而不是 app/server.py：server 在**模块级**就 Engine()
+#    （~7GB / 60s），import 一下就付不起；所以判断逻辑抽到了无副作用的独立模块。
+SCHED_PATH = ROOT / "scripts" / "alert_sched.py"
+_spec = importlib.util.spec_from_file_location("alert_sched_t", SCHED_PATH)
+S = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(S)
+
+from datetime import datetime, timedelta  # noqa: E402
+
+WK = datetime(2026, 10, 14, 15, 30, tzinfo=S.TZ)    # 周三 15:30（正点）
+ok("15:30 工作日 + 今天没触发过 → 该触发",
+   S.due(WK, True, 15, 30, None) is True)
+ok("同一天已触发过 → 不重复触发（服务重启也不重发）",
+   S.due(WK, True, 15, 30, "2026-10-14") is False)
+ok("未到点（15:29）→ 不触发",
+   S.due(WK - timedelta(minutes=1), True, 15, 30, None) is False)
+ok("已过点但前一天的记录 → 今天仍该触发",
+   S.due(WK, True, 15, 30, "2026-10-13") is True)
+ok("调度关闭 → 永不触发",
+   S.due(WK, False, 15, 30, None) is False)
+ok("周六不触发",
+   S.due(datetime(2026, 10, 17, 16, 0, tzinfo=S.TZ), True, 15, 30, None) is False)
+ok("周日不触发",
+   S.due(datetime(2026, 10, 18, 16, 0, tzinfo=S.TZ), True, 15, 30, None) is False)
+ok("周五仍触发（1-5 是工作日）",
+   S.due(datetime(2026, 10, 16, 15, 31, tzinfo=S.TZ), True, 15, 30, None) is True)
+
+# ---- parse_time：非法配置必须回落默认，而不是让服务起不来
+ok("parse_time('16:05') → (16, 5)", S.parse_time("16:05") == (16, 5))
+ok("parse_time 非法（'abc'/空/None）→ 默认 15:30",
+   S.parse_time("abc") == (15, 30) and S.parse_time("") == (15, 30)
+   and S.parse_time(None) == (15, 30))
+ok("parse_time 越界（'25:99'）→ 取模不崩", S.parse_time("25:99") == (1, 39))
+
+# ---- enabled_from_env：各种「关」的写法都要认
+ok("开关：默认（空/未设）为开", S.enabled_from_env(None) and S.enabled_from_env(""))
+ok("开关：'0'/'false'/'no'/'off' 都关闭",
+   not any(S.enabled_from_env(x) for x in ("0", "false", "no", "off", "OFF", " 0 ")))
+ok("开关：'1' → 开", S.enabled_from_env("1") is True)
+
+# ---- next_due：给人看的「下次何时跑」
+ok("next_due：周三 15:31 → 次日（周四）15:30",
+   S.next_due(datetime(2026, 10, 14, 15, 31, tzinfo=S.TZ), True, 15, 30)
+   == "2026-10-15 15:30")
+ok("next_due：周五 16:00 → 跳过周末，下周一",
+   S.next_due(datetime(2026, 10, 16, 16, 0, tzinfo=S.TZ), True, 15, 30)
+   == "2026-10-19 15:30")
+ok("next_due：周三 09:00（未到点）→ 当天 15:30",
+   S.next_due(datetime(2026, 10, 14, 9, 0, tzinfo=S.TZ), True, 15, 30)
+   == "2026-10-14 15:30")
+ok("next_due：关闭 → None",
+   S.next_due(WK, False, 15, 30) is None)
+
+# ---- 启动宽限期：**重启服务不该触发一次重更新**（踩过）
+#   没有它时：18:06 启动服务 + 当天 15:30 已过 + last_date 为空 → 立刻触发
+#   18 分钟更新，还会把服务停掉再起。用户只是想重启界面而已。
+_boot = WK - timedelta(minutes=3)          # 服务刚起 3 分钟
+ok("宽限期内（启动 3 分钟）→ 不触发（避免「重启即重更新」）",
+   S.due(WK, True, 15, 30, None, boot_at=_boot) is False)
+ok("过了宽限期（启动 11 分钟）→ 照常触发",
+   S.due(WK, True, 15, 30, None, boot_at=WK - timedelta(minutes=11)) is True)
+ok("不传 boot_at（旧调用形态）→ 仍按原三条件判断（向后兼容）",
+   S.due(WK, True, 15, 30, None) is True)
+
 # ---------------------------------------------------------------- 输出
 print("\n".join(out))
 print("-" * 62)

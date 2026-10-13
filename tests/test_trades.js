@@ -386,9 +386,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const TC = FX.trades_cap;
   ok('fixture 有 n_open / open_rows', typeof TC.n_open === 'number' && Array.isArray(TC.open_rows),
      `n_open=${TC.n_open}, open_rows=${(TC.open_rows || []).length}`);
-  ok('n_open = holding + nobuy',
-     TC.n_open === (TC.n_open_holding || 0) + (TC.n_open_nobuy || 0),
-     `${TC.n_open} vs ${TC.n_open_holding}+${TC.n_open_nobuy}`);
+  // ⚠️ 三类：holding（真持有中）+ nobuy（T+1 买不进）+ stuck（卖出日无价，算不出收益）
+  //    stuck 是 2026-10-13 补的第四支 —— 此前三分类漏了它，导致
+  //    plan.n_open（减法）比 open_rows（枚举）多 3 笔。
+  ok('n_open = holding + nobuy + stuck',
+     TC.n_open === (TC.n_open_holding || 0) + (TC.n_open_nobuy || 0)
+       + (TC.n_open_stuck || 0),
+     `${TC.n_open} vs ${TC.n_open_holding}+${TC.n_open_nobuy}+${TC.n_open_stuck || 0}`);
   if (TC.n_open > 0) {
     ok('页面含「未结束交易」区块', /未结束交易/.test(txt2));
     ok('未结束区块标明「不计入统计」', /不计入统计/.test(flat2));
@@ -458,8 +462,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     ok(`[${label}] open_rows 长度 == n_open`,
        op.length === F.n_open, `${op.length} vs ${F.n_open}`);
     const kinds = op.reduce((a, x) => (a[x.kind] = (a[x.kind] || 0) + 1, a), {});
-    ok(`[${label}] kind 只有 holding/nobuy`,
-       Object.keys(kinds).every(k => k === 'holding' || k === 'nobuy'), JSON.stringify(kinds));
+    ok(`[${label}] kind 只有 holding/nobuy/stuck`,
+       Object.keys(kinds).every(k => ['holding', 'nobuy', 'stuck'].includes(k)),
+       JSON.stringify(kinds));
   }
 
   // (f) 🔴 容量口径的闭环等式：计划建仓 = 已结算 + 未结束
@@ -468,17 +473,21 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   ok('容量口径：n_plan == n_trade + n_open（闭环）',
      CPl.n_plan === FX.trades_cap.n_trade + FX.trades_cap.n_open,
      `${CPl.n_plan} vs ${FX.trades_cap.n_trade} + ${FX.trades_cap.n_open}`);
-  ok('容量口径：plan.n_open == n_open == holding + nobuy',
+  ok('容量口径：plan.n_open == n_open == holding + nobuy + stuck',
      CPl.n_open === FX.trades_cap.n_open
-       && FX.trades_cap.n_open === FX.trades_cap.n_open_holding + FX.trades_cap.n_open_nobuy,
-     `plan=${CPl.n_open} / n_open=${FX.trades_cap.n_open} / ${FX.trades_cap.n_open_holding}+${FX.trades_cap.n_open_nobuy}`);
+       && FX.trades_cap.n_open === FX.trades_cap.n_open_holding
+            + FX.trades_cap.n_open_nobuy + (FX.trades_cap.n_open_stuck || 0),
+     `plan=${CPl.n_open} / n_open=${FX.trades_cap.n_open} / `
+     + `${FX.trades_cap.n_open_holding}+${FX.trades_cap.n_open_nobuy}+${FX.trades_cap.n_open_stuck || 0}`);
 
   // (g) 两条口径下 statistics 都与历史基线一致（防止改动悄悄动了统计）
   ok('不限仓位胜率仍为基线 58.27%',
      Math.abs(FX.trades.summary.win - 0.5827) < 0.0005,
      (FX.trades.summary.win * 100).toFixed(2) + '%');
-  ok('容量口径胜率仍为基线 58.57%',
-     Math.abs(FX.trades_cap.summary.win - 0.5857) < 0.0005,
+  // ⚠️ 基线随**市场口径**变：2026-10-13 把牛熊判定从「开盘→开盘」改成
+  //    「收盘→收盘」后，熊市日的分布变了 → 容量口径胜率 58.57% → 59.13%。
+  ok('容量口径胜率仍为基线 59.13%',
+     Math.abs(FX.trades_cap.summary.win - 0.5913) < 0.0005,
      (FX.trades_cap.summary.win * 100).toFixed(2) + '%');
 
   // (h) 🔴🔴 页面级铁证：容量口径下「完成交易」卡显示 n_trade，

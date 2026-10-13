@@ -228,7 +228,17 @@ class Engine:
         df, C = self.df, self.C
         n = C["n"]
         # ---- 收益口径
+        # ⚠️ 这里有**两套**日收益，用途完全不同，别混（改前先读 v3b_lib.cret_from 的注释）：
+        #   `oret`/`oret_sig` = 开盘→开盘 → **回测专用**（策略是 T 收盘出信号、
+        #                       T+1 开盘买，真实成交价就是开盘价）。
+        #   `cret`            = 收盘→收盘 → **市场环境展示专用**（净值 / 牛熊 /
+        #                       「今日大盘涨跌幅」）。因为用户看的行情软件是指数
+        #                       收盘涨跌，且 oret 有一天位移、最后一天必为 NaN
+        #                       （详见 cret_from 文档字符串）。
         self.oret, self.oret_sig = L.oret_from(df, C)
+        self.cret = L.cret_from(df, C)
+        # `mk_d`/`CHAIN` 继续用 oret —— 它们是 **研究报告口径**（相对市场的超额基准），
+        # 跟着换会让历史所有 exw20/t20 失去可比性。界面会标注这个差异。
         self.mk_d = L.market_oret(self.oret, C)
         self.CHAIN = {H: L.chain_fwd(self.mk_d, C, H) for H in [1, 5, 10, 20, 40, 60]}
         self.FWD = {H: df[f"fwd{H}"].values.astype(np.float64)
@@ -360,10 +370,24 @@ class Engine:
         ⚠️ `self.mk_d` / `self.CHAIN` **固定用全A等权**，不随口径变：
            CHAIN 是 `stats()` 里「相对市场的超额」的基准，属于**研究报告口径**。
            跟着换会让历史所有超额数字失去可比性 —— 界面会明确标注这一点。
+
+        ⚠️⚠️ **本函数的净值/牛熊用 `cret`（收盘→收盘），不是 `oret`（开盘→开盘）。**
+           这是 2026-10-13 的口径修正。原因（用户报障直接触发）：
+             · `oret` 的**最后一天必然是 NaN**（= open[下一天]/open[今天]-1，
+               「下一天」还不存在）→ 净值曲线永远停在前一天，但日期标签是最新日，
+               看起来像「今天没更新」「今天跌了但均线没动」；
+             · `oret[t]` 实际是「t 开盘 → t+1 开盘」，有**一天位移**；
+             · 用户对照的行情软件/指数是**收盘涨跌**，口径天然不同。
+           改用 `cret` 后：最新交易日有值、不位移、与行情软件一致。
+           ⚠️ 这**不影响回测** —— 回测走 `oret_sig`，与本函数无关。
         """
         sg, ok_sg = self.size_grp, np.isfinite(self.size_grp)
         dd, nd = self.D, self.nd
-        up, fin = self.oret > 0, np.isfinite(self.oret)
+        # 「上涨家数」的 up 是**条件判断**（breadth 用），用哪个口径影响极小，
+        # 但为一致起见跟着 cret 走（cret 无位移，更贴近「今天涨跌」的语义）。
+        # ⚠️ 注意 `build_confirm` 里的「连涨2日」仍用 self.oret —— 那是**信号条件**，
+        #    改它会改变选股结果，属于另一件事（不在本次口径修正范围）。
+        up, fin = self.cret > 0, np.isfinite(self.cret)
 
         self.MKT, self.MKT_BREADTH = {}, {}
         for cfg in MKT_INDEXES:
@@ -372,7 +396,7 @@ class Engine:
             # 那样会把 size_grp 缺失的行也排除掉，与文档里的 29.81% 基线对不上。
             sub = (None if cfg["smin"] is None
                    else (ok_sg & (sg >= cfg["smin"]) & (sg <= cfg["smax"])))
-            mkd = L.market_oret(self.oret, C, sub)
+            mkd = L.market_oret(self.cret, C, sub)
             nav = np.cumprod(1.0 + np.nan_to_num(mkd))
             hv20 = pd.Series(np.nan_to_num(mkd)).rolling(
                 20, min_periods=20).std().values * np.sqrt(252)
@@ -1185,8 +1209,15 @@ class Engine:
         · `kind="nobuy"` —— **T+1 买不进**
               `can_buy_open=False`（一字涨停封板 / 停牌），买价是 nan，
               这笔**从未建仓**。它不是「未结束的持仓」，而是「信号作废」。
+        · `kind="stuck"` —— **买得进、持有期已走完，但卖出日无有效开盘价**
+              （卖出日停牌 / 退市整理 / 数据缺口）→ `r = nan`，无法结算。
+              它**既不是持有中**（到期日没越界）**也不是买不进**（买价有效）。
+              ⚠️ 这一支是 2026-10-13 补的：此前三分类里没有它，于是
+              `plan.n_open`（= 计划 − 已结算，减法推出来的）会比
+              `open_rows`（逐个筛出来的）**多出若干条** —— 表现为闭环自检
+              `plan.n_open == n_open` 失败。实测 3 笔（全池 0.93% 的行属此类）。
 
-        ⚠️ **两类数量相差一个量级**（实测 2026-09-29 面板）：
+        ⚠️ **三类数量相差一个量级**（实测 2026-09-29 面板）：
         不限仓位口径 699 笔里 **只有 84 笔是 holding**，另外 **615 笔是 nobuy**；
         容量 10/3 口径 7 笔里 **3 holding + 4 nobuy**。
         只报一个 `n_open` 会让用户把「从未买入」读成「还拿着 N 只」。
@@ -1222,15 +1253,29 @@ class Engine:
         ent = sd + 1                       # T+1 开盘买入
         ext = ent + int(hold)              # T+1+H 开盘卖出
         buy_ok = np.isfinite(bi_all[cand])
-        # holding：买得进、到期日越过边界；nobuy：T+1 一字板/停牌，买不进
-        m_hold = buy_ok & (ent < nd) & (ext >= nd)
-        m_nobuy = (~buy_ok) & (ent < nd)
+        # ⚠️ stuck 的判据要**与 simulate_hold 完全同源**：它筛的是 `r = si/bi - 1`，
+        #    不是单独看 bi 或 si。所以这里直接算 r 是否有限 —— 用 sell_ok 会漏
+        #    （bi 有限但 si 无效时也算不出 r；反过来 si 有限而 bi 无效时是 nobuy）。
+        si_all = L.shift_block(self.sell_open, self.C, 1 + int(hold))
+        r_ok = np.isfinite(si_all[cand]) & buy_ok
+        # ⚠️⚠️ `ent <= nd`（不是 `< nd`）—— 这是 2026-10-13 修的第二个坑。
+        #     信号日是**最后一个交易日**时（如 10-13 出信号），入场日 ent = nd 恰好
+        #     等于交易日数，`ent < nd` 不成立 → 三分类全都收不到它，而
+        #     `plan.n_open` 的减法会算进去 → 闭环差 3 笔。
+        #     语义上它就是「刚出信号、还没到买入日」，属于未结束头寸，该收。
+        #     （`entry_date` 那行仍是 `ent < nd` —— 因为它真的没有入场日。）
+        m_hold = buy_ok & (ent <= nd) & (ext >= nd)
+        m_nobuy = (~buy_ok) & (ent <= nd)
+        # stuck：买得进、**到期日没越界**（本该已结算）、但 **r 算不出来**
+        #   → simulate_hold 会把它剔掉，于是它既不在 settled 也不在上面两类里。
+        m_stuck = buy_ok & (ent <= nd) & (ext < nd) & (~r_ok)
         rows = []
-        for i in np.flatnonzero(m_hold | m_nobuy):
+        for i in np.flatnonzero(m_hold | m_nobuy | m_stuck):
             p_i = int(cand[i])
             if p_i in settled:
                 continue
             is_hold = bool(m_hold[i])
+            is_stuck = bool(m_stuck[i])
             buy = float(bi_all[p_i]) if buy_ok[i] else None
             # 已持有交易日数 = 入场日 → 最新交易日（含两端）= nd − ent（上限 hold）。
             # ⚠️ 别写成 min(nd-1, ent) − ent + 1 —— 实测会恒等于 1。
@@ -1245,9 +1290,11 @@ class Engine:
                 buy=(round(buy, 3) if buy is not None else None),
                 sell=None, hold=int(hold),
                 ret=None, net=None, bench=None, excess=None, win=None,
-                open=True, kind=("holding" if is_hold else "nobuy"),
-                hold_days=held,                       # 已持有交易日数（nobuy 恒 0）
-                left_days=(max(0, int(hold) - held) if is_hold else int(hold)),
+                open=True,
+                kind=("holding" if is_hold else "nobuy" if not buy_ok[i] else "stuck"),
+                hold_days=held,                       # 已持有交易日数（nobuy/stuck 恒 0）
+                left_days=(max(0, int(hold) - held) if is_hold
+                           else 0 if is_stuck else int(hold)),
                 size_grp=self._i(self.size_grp[p_i]),
                 d_px60=self._i(self.B["px_ma60"][p_i]),
                 d_ret60=self._i(self.B["ret60"][p_i]),
@@ -1302,7 +1349,7 @@ class Engine:
           hist     : dict        收益分布直方图（分箱）
           n_trade  : int
           plan     : dict|None   容量约束信息（含 n_open 无结局数）
-          open_rows: list[dict]  无结局头寸（holding 持有中 / nobuy 买不进），
+          open_rows: list[dict]  无结局头寸（holding 持有中 / nobuy 买不进 / stuck 卖出日无价），
                                  ⚠️ **仅供展示**，字段与 rows 对齐但收益列恒为 None；
                                  永远独立于 rows，也**不参与任何筛选/统计**
           n_open / n_open_holding / n_open_nobuy : int
@@ -1340,6 +1387,13 @@ class Engine:
         if plan is not None:
             held_rows = np.asarray([h[2] for h in plan["holds"]], np.int64)
             keep = np.isin(pos, held_rows) if len(held_rows) else np.zeros(len(pos), bool)
+            # ⚠️ n_open 的口径：**减法式** `计划建仓 − 已结算`。
+            #    它与 `open_rows`（枚举式）在做对时**必须相等** —— 两者的候选集
+            #    都是 held_rows、排除条件都是 settled。于是这条等式本身就是
+            #    **一个免费的自检**：一旦某个「无结局」分支没被分类，减法值会
+            #    大于枚举值，立刻可见（2026-10-13 正是靠它发现「卖出日无价」这一支）。
+            #    所以这里**刻意保留减法**，而不是直接写 len(open_rows) ——
+            #    后者会让自检变成恒真、失去意义。
             n_open = int(len(held_rows) - keep.sum())
             if plan.get("ladder") and len(held_rows):
                 wmap = {int(hr): float(x) * 100.0
@@ -1358,7 +1412,7 @@ class Engine:
                 n_drop_dup=int(plan.get("n_drop_dup") or 0),  # 重复持仓被跳过
                 n_plan=int(len(held_rows)),      # 计划建仓数
                 # ⚠️ 语义：计划建仓 − 已结算 = 无结局总数，**混合了两种**：
-                #    「真·持有中」(kind=holding) + 「T+1 买不进」(kind=nobuy)。
+                #    「真·持有中」(holding) + 「T+1 买不进」(nobuy) + 「卖出日无价」(stuck)。
                 #    细分见 trades() 返回的 n_open_holding / n_open_nobuy。
                 n_open=n_open,
             )
@@ -1409,6 +1463,7 @@ class Engine:
                 open_rows=open_rows, n_open=len(open_rows),
                 n_open_holding=sum(1 for x in open_rows if x["kind"] == "holding"),
                 n_open_nobuy=sum(1 for x in open_rows if x["kind"] == "nobuy"),
+                n_open_stuck=sum(1 for x in open_rows if x["kind"] == "stuck"),
             )
 
         # ---- 逐笔明细
@@ -1538,7 +1593,8 @@ class Engine:
                     best=best20, worst=worst20, hold=int(hold), plan=plan_info,
                     open_rows=open_rows, n_open=len(open_rows),
                     n_open_holding=sum(1 for x in open_rows if x["kind"] == "holding"),
-                    n_open_nobuy=sum(1 for x in open_rows if x["kind"] == "nobuy"))
+                    n_open_nobuy=sum(1 for x in open_rows if x["kind"] == "nobuy"),
+                    n_open_stuck=sum(1 for x in open_rows if x["kind"] == "stuck"))
 
     # ================================================================ 扫描
     def scan(self, pool_mask=None, limit=200, p=None, lookback=180):

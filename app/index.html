@@ -336,7 +336,7 @@ tbody tr.openrow{background:#fffdf8}
 tbody tr.openrow:hover{background:#fdf8ee}
 tbody tr.openrow.nb{background:#fbfbfc}
 tbody tr.openrow.nb:hover{background:#f5f6f8}
-/* 状态徽标：持有中（琥珀）/ T+1 买不进（灰） */
+/* 状态徽标：持有中（琥珀）/ T+1 买不进（灰）/ 卖出日无价（灰，同 nb 样式） */
 .pill.om{background:#fdf6e3;border-color:#e8d9a8;color:#8a6d1f}
 .pill.nb{background:#f0f2f5;border-color:#e0e3e8;color:#6b7280}
 tr.lossc{background:#fef7f7}
@@ -2576,7 +2576,7 @@ function renderTrades(r) {
     ${r.n_open > 0 ? `<div class="mc" style="background:#fffbf0;border:1px solid #f0e2c0">
       <div class="l">未结束（不计入统计）</div>
       <div class="v sm" style="color:#a8622c">${NUM(r.n_open)} 笔</div>
-      <div class="n">${r.n_open_holding} 持有中 · ${r.n_open_nobuy} 买不进</div></div>` : ''}
+      <div class="n">${r.n_open_holding} 持有中 · ${r.n_open_nobuy} 买不进${r.n_open_stuck ? ' · ' + r.n_open_stuck + ' 卖出日无价' : ''}</div></div>` : ''}
   </div>`;
 
   // ---- 口径说明
@@ -2720,13 +2720,17 @@ function renderTrades(r) {
         跟随筛选就会凭空消失，而「明明有 57 笔没结算」正是要展示的东西。
      2. 必须**显式说明不计入统计**，否则用户会拿它去和「完成交易」相加，
         或以为胜率漏算了 —— 收益池里没有它们。
-   两类 kind：
+   三类 kind：
      · holding = 真·持有中（买了、还拿着，到期日越过数据边界）
-     · nobuy   = T+1 买不进（一字涨停/停牌，信号作废，从未建仓） */
+     · nobuy   = T+1 买不进（一字涨停/停牌，信号作废，从未建仓）
+     · stuck   = 买得进、持有期也走完了，但**卖出日无有效开盘价**（停牌/退市/数据缺口）
+                 → 算不出收益，无法结算。既不是持有中，也不是买不进。 */
 function tradeOpenBlock(r) {
   const rows = r.open_rows || [];
   if (!rows.length) return '';
   const nh = r.n_open_holding || 0, nb = r.n_open_nobuy || 0;
+  const nk = r.n_open_stuck != null ? r.n_open_stuck
+    : Math.max(0, rows.length - nh - nb);        // 向后兼容：旧响应没这个字段时反推
   const tbl = rows.map(it => `<tr class="openrow ${it.kind === 'nobuy' ? 'nb' : ''}">
     <td class="l">${it.code}</td>
     <td class="nm">${it.name}</td>
@@ -2738,6 +2742,9 @@ function tradeOpenBlock(r) {
     <td class="l">${it.kind === 'holding'
       ? `<span class="pill om">持有中 ${it.hold_days}/${it.hold} 日</span>
          <span class="dimnote">还需 ${it.left_days} 日</span>`
+      : it.kind === 'stuck'
+      ? `<span class="pill nb">卖出日无价</span>
+         <span class="dimnote">停牌 / 退市 / 数据缺口，算不出收益</span>`
       : `<span class="pill nb">T+1 买不进</span>
          <span class="dimnote">一字板 / 停牌，信号作废</span>`}</td>
     <td style="color:#5c6270">${it.size_grp == null ? '—' : 'M' + (it.size_grp + 1)}</td>
@@ -2748,15 +2755,18 @@ function tradeOpenBlock(r) {
   return `<div class="card" style="margin-top:14px;background:#fffdf8;border-color:#f0e2c0">
     <h3>未结束交易 <span class="tag">${NUM(rows.length)} 笔 · 不计入统计</span></h3>
     <div class="desc">这些头寸<b>没有结局</b>，因此<b>不进入</b>上面的完成交易数、胜率、
-      盈亏比、逐年统计与收益分布 —— 纳入会让结果偏乐观。分两类：</div>
+      盈亏比、逐年统计与收益分布 —— 纳入会让结果偏乐观。分三类：</div>
     <div class="cap" style="margin:0 0 10px">
       <span class="pill om">持有中 ${nh} 笔</span>
       信号已出、<b>T+1 已经买入</b>，但到期日落在数据末尾之外 ——
-      实盘里就是<b>还拿在手上</b>${nh ? `（当前这批建仓于 2026-09-16，已持有 9 个交易日，还剩 11 个交易日）` : ''}。<br>
+      实盘里就是<b>还拿在手上</b>。<br>
       <span class="pill nb">T+1 买不进 ${nb} 笔</span>
       信号日次日<b>一字涨停或停牌</b>（<code>can_buy_open=False</code>），
       开盘价买不到 —— 这笔<b>从未建仓</b>，信号作废。这是空仓等待的天然成本，
-      回测里不算收益，也不该算作亏损。
+      回测里不算收益，也不该算作亏损。<br>
+      <span class="pill nb">卖出日无价 ${nk} 笔</span>
+      买进了、持有期也走完了，但<b>卖出日没有有效开盘价</b>（停牌 / 退市整理 /
+      数据缺口）→ <b>算不出收益</b>，无法结算。既不是「还拿着」，也不是「没买进」。
     </div>
     <div class="tw" style="max-height:320px;overflow-y:auto"><table><thead><tr>
       <th style="text-align:left">代码</th><th style="text-align:left">名称</th>
@@ -2765,7 +2775,7 @@ function tradeOpenBlock(r) {
       <th>市值组</th><th>距MA60</th><th>净收益</th><th>盈亏</th>
     </tr></thead><tbody>${tbl}</tbody></table></div>
     <div class="cap" style="margin-top:9px">
-      按信号日倒序。导出 CSV 时这些行也会带上（状态列标「持有中」/「买不进」），
+      按信号日倒序。导出 CSV 时这些行也会带上（状态列标「持有中」/「买不进」/「卖出日无价」），
       避免「导出后怎么少了几笔」。
     </div></div>`;
 }

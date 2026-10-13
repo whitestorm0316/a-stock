@@ -190,6 +190,35 @@ def oret_from(df, C):
     return oret, shift_block(oret, C, 1)
 
 
+def cret_from(df, C):
+    """【展示口径】收盘→收盘日收益
+
+    cret[t] = close[t] / close[t-1] - 1     （跨股票处为 NaN）
+
+    ⚠️ 与 `oret`（开盘→开盘）的关系与用途，务必分清：
+       · 回测**必须**用 `oret`/`oret_sig` —— 因为策略是「T 日收盘出信号、
+         T+1 开盘买」，真实成交价是开盘价。用收盘口径会高估可执行性。
+       · 但**市场环境展示**（牛熊判定 / 净值曲线 / 「今日大盘涨跌幅」）
+         应该用收盘口径 —— 理由有三：
+         ① 用户看的行情软件、指数涨跌幅都是**收盘口径**，用开盘口径会
+            在体感上系统错位（实测：10-13 收盘 +0.371%，开盘口径那天是 NaN）；
+         ② `oret` 有**一天位移**：oret[t] 实际是「t 开盘→t+1 开盘」，
+            所以 t 日显示的涨跌其实是 t+1 早上的行情，用户会觉得「对不上」；
+         ③ `oret` 的**最后一天必然是 NaN**（需要「下一天」的开盘价，
+            而那天还没发生）→ 净值曲线永远停在倒数第二天，但日期标签却是最新日，
+            看起来像「今天没更新」。（这是用户报障的直接原因。）
+
+       所以：**净值/牛熊用 `cret`，回测收益用 `oret_sig`**，两者互不影响，
+       但必须在界面上标注口径差异（README「口径纪律」一节）。
+    """
+    cl = df["close_price"].values.astype(np.float64)
+    prev = shift_block(cl, C, -1)      # 上一交易日的收盘（同股票）
+    out = np.full_like(cl, np.nan)
+    ok = np.isfinite(prev) & (prev != 0) & np.isfinite(cl)
+    out[ok] = cl[ok] / prev[ok] - 1.0
+    return out
+
+
 def chain_fwd(mk_daily, C, H):
     """mkt_fwd_H[t] = expm1(cs[t+1+H]-cs[t+1])，与 fwd{H}[t] 口径对齐"""
     lg = np.log1p(np.nan_to_num(mk_daily, nan=0.0))

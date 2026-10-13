@@ -127,12 +127,16 @@ setTimeout(async () => {
      mk.last_date === FX.meta.last_date, `${mk.last_date} vs ${FX.meta.last_date}`);
   ok('自建净值序列最后一项 nav 与「最新值」同源',
      mk.series[mk.series.length - 1].nav !== undefined);
-  // 这是本次问题的**事实前提**：引擎说牛市，而真实指数里有熊市。
-  // 若哪天数据变了、两边一致了，这条会失败 —— 那是提醒去复核，不是 bug。
+  // ⚠️ 这里**不硬断言**「引擎牛 + 指数熊」这个具体分歧状态 ——
+  //    它是**当天数据的产物**，会随行情变（2026-10-13 口径改成收盘后，
+  //    最新状态转为「两边都熊」，旧断言直接失效）。
+  //    告警的**逻辑**由下面第 4/5 组用构造数据测（一边牛一边熊 → 必告警；
+  //    两边同向 → 不告警），那才是该守的不变量。这里只记录现状。
+  const bulls = (mk.indices || []).filter(x => x.bull === true);
   const bears = (mk.indices || []).filter(x => x.bull === false);
-  ok('fixture 里存在「引擎牛市 + 真实指数有熊市」的分歧',
-     mk.bull_now === true && bears.length > 0,
-     `引擎 bull_now=${mk.bull_now}，熊市指数 ${bears.map(x => x.name).join(',') || '无'}`);
+  ok('fixture 的市场状态可读（自建 bull_now + 各指数 bull 都有值）',
+     typeof mk.bull_now === 'boolean' && (mk.indices || []).every(x => typeof x.bull === 'boolean'),
+     `引擎 bull_now=${mk.bull_now}，指数 牛${bulls.length}/熊${bears.length}`);
 
   // ---- 1. 市场环境序列的请求行为
   //   ⚠️ 不能用「点一次 #run 就应看到一次 /api/market」来断言：页面加载时会自动
@@ -223,10 +227,19 @@ setTimeout(async () => {
     ok('上证指数行状态 = 熊市', sh[4] === '熊市', sh[4]);
   }
 
-  // ---- 4. 分歧告警必须出现
-  ok('出现「口径分歧」告警', /口径分歧/.test(scanTxt()),
-     (scanTxt().match(/口径分歧[^。]{0,60}/) || ['（未找到）'])[0]);
-  ok('告警说明了「策略实际用自建净值」', /策略实际用的是自建净值/.test(scanTxt()));
+  // ---- 4. 分歧告警的逻辑（**用构造数据**，不依赖当天行情）
+  //   ⚠️ 原先直接断言页面里出现「口径分歧」—— 那是当天数据的产物：
+  //      2026-10-13 引擎转熊、指数也是熊 → 分歧不存在 → 断言失效。
+  //      改成构造「引擎牛 + 指数熊」，直接调 mktBlock 验证逻辑。
+  const mkBullBear = {
+    last_date: mk.last_date, bull_now: true, dist_now: 1.2,
+    series: mk.series.slice(-3),
+    indices: mk.indices.map(x => Object.assign({}, x, { bull: false })),
+  };
+  const htmlBullBear = w.mktBlock(mkBullBear);
+  ok('引擎牛 + 指数熊 → 出现「口径分歧」告警', /口径分歧/.test(htmlBullBear),
+     (htmlBullBear.match(/口径分歧[^。]{0,60}/) || ['（未找到）'])[0]);
+  ok('告警说明了「策略实际用自建净值」', /策略实际用的是自建净值/.test(htmlBullBear));
 
   // ---- 5. 一致时不得误报（直接调 mktBlock，绕开 fixture 固定值）
   const mkSame = {

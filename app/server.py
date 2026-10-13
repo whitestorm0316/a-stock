@@ -31,6 +31,7 @@ import time
 import gzip
 import threading
 import subprocess
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, quote
 
@@ -274,6 +275,17 @@ class Handler(BaseHTTPRequestHandler):
                 st = _read_update_state() or {"state": "idle", "msg": ""}
                 st["server_last_date"] = ENGINE.meta().get("last_date")
                 return self._json(st)
+            if p == "/api/alert/status":
+                # 每日播报调度器的状态（诊断用：确认它有没有在跑、上次何时触发）
+                en, hh, mm = _alert_sched_cfg()
+                st = _read_alert_state()
+                now = SCHED.now_cst()
+                st.update(
+                    enabled=en, at=f"{hh:02d}:{mm:02d}",
+                    running=bool(_alert_thread and _alert_thread.is_alive()),
+                    now=now.strftime("%Y-%m-%d %H:%M:%S"),
+                    next_due=SCHED.next_due(now, en, hh, mm))
+                return self._json(st)
             if p == "/api/defaults":
                 return self._json(dict(
                     defaults=DEFAULT_PARAMS,
@@ -494,6 +506,7 @@ class Handler(BaseHTTPRequestHandler):
                     n_open=tr.get("n_open", 0),
                     n_open_holding=tr.get("n_open_holding", 0),
                     n_open_nobuy=tr.get("n_open_nobuy", 0),
+                    n_open_stuck=tr.get("n_open_stuck", 0),
                 )
         except Exception:
             out["trade_brief"] = None
@@ -652,12 +665,14 @@ class Handler(BaseHTTPRequestHandler):
             rows=(page_rows if b.get("with_rows", True) else []),
             plan=tr.get("plan"),          # 容量约束信息（不限仓位时为 null）
             # ---- 未结束交易（不计入任何统计，见 engine._open_positions）
-            #   n_open = 无结局总数 = holding（真·持有中）+ nobuy（T+1 买不进）。
-            #   两者都在本区块展示，但 kind 不同、说明不同。
+            #   ⚠️ n_open = 无结局总数 = holding（真·持有中）+ nobuy（T+1 买不进）
+            #      + stuck（买进了但卖出日无价，算不出收益）。三者都要透传，
+            #      漏一个会让前端「细分之和 ≠ 总数」，看起来像数据错乱。
             open_rows=(open_sorted if b.get("with_rows", True) else []),
             n_open=len(open_rows),
             n_open_holding=tr.get("n_open_holding", 0),
             n_open_nobuy=tr.get("n_open_nobuy", 0),
+            n_open_stuck=tr.get("n_open_stuck", 0),
         )
         return self._json(out)
 
@@ -1064,12 +1079,15 @@ class Handler(BaseHTTPRequestHandler):
         # ---- 未结束交易（⚠️ 必须与屏幕一致：屏幕有这一段，CSV 却漏掉的话，
         #      「导出后怎么少了几笔」又是一个对不上的数字）
         #      用「未结束」标记 + 已持有/剩余天数；收益列一律留空（没有结局）。
+        #       ⚠️ 三种 kind 都要有明确文案：holding / nobuy / stuck
+        #          （stuck = 买进了但卖出日无价，算不出收益）
+        _KIND_CN = {"holding": "持有中", "nobuy": "T+1 买不进", "stuck": "卖出日无价"}
         for r in (tr.get("open_rows") or []):
             w.writerow(["未结束", r["code"], r["name"], r["ind"], r["ex"],
                         r["signal_date"], r["entry_date"], "",
                         f'{r["hold_days"]}/{r["hold"]}', r["buy"], "",
                         "", "", "", "",
-                        "持有中" if r["kind"] == "holding" else "买不进",
+                        _KIND_CN.get(r["kind"], r["kind"]),
                         r["size_grp"], r["d_px60"], r["d_ret60"],
                         "", "", "", "", "", ""])
         data = "\ufeff" + buf.getvalue()
@@ -1451,11 +1469,125 @@ def start_update(port):
         return True, "更新已开始"
 
 
+# ================================================================ 每日定时播报
+# 「工作日 15:30 自动更新数据 + 发飞书播报」——由**服务进程自己调度**。
+#
+# ⚠️⚠️ 为什么是线程 + detach 子进程，而不是直接在这里跑
+# ----------------------------------------------------
+# 播报链路（daily_alert.py）第一步就是 `ctl.py update`，它会**先停服**再重建面板
+# （重建要独占 ~7GB）。而「停服」要停的正是**本进程** —— 天真地在本进程里跑，
+# 会把自己杀掉，更新流程随进程组一起死掉。
+# 所以：**调度线程只负责「到点了 → 拉起一个脱离进程组的子进程」**，
+# 与界面「更新数据」按钮走**完全同一条**成熟路径（见 update_runner.py 的注释）。
+#
+# ⚠️ 子进程里**绝不能 import server**（会再吃 7GB → OOM）。
+#    daily_alert.py 只依赖标准库 + 自己的解释器探测，天然满足。
+#
+# 为什么不用 macOS launchd / crontab
+# ---------------------------------
+# 用户明确要求「用后端定时任务」：服务本来就在跑，没必要再依赖系统级配置
+# （launchd 还要手动加载、失效了没提示）。代价是**服务必须开着**才触发 ——
+# 对「本地常驻选股器」来说这是合理前提。
+#
+# 开关与状态
+# ----------
+#   ASTOCK_ALERT_SCHEDULE=0   关掉（默认开）
+#   ASTOCK_ALERT_TIME=15:30   改触发时刻（东八区）
+#   状态文件 `logs/alert_schedule.json` —— 界面/命令行可查（含上次触发结果）
+#
+# ⚠️ 判断逻辑（何时该触发 / 下次何时）放在 `scripts/alert_sched.py` ——
+#    **纯函数、零副作用**，可被 `tests/test_alert.py` 直接导入测试。
+#    不能写在这里：本文件模块级就 `Engine()`（~7GB / 60s），
+#    任何 import 都会付出那个代价，测试没法跑。
+import alert_sched as SCHED  # noqa: E402
+
+ALERT_STATE = os.path.join(ROOT, "logs", "alert_schedule.json")
+_alert_thread = None
+
+
+def _alert_sched_cfg() -> tuple[bool, int, int]:
+    """(启用, hour, minute)。默认工作日 15:30；ASTOCK_ALERT_SCHEDULE=0 关闭。
+
+    ⚠️ 默认 15:30 —— A股 15:00 收盘，15:30 时当日行情已定，
+       更新约 18 分钟 → 约 15:48 发出播报。
+    """
+    en = SCHED.enabled_from_env(os.environ.get("ASTOCK_ALERT_SCHEDULE"))
+    hh, mm = SCHED.parse_time(os.environ.get("ASTOCK_ALERT_TIME", "15:30"))
+    return en, hh, mm
+
+
+def _read_alert_state() -> dict:
+    try:
+        with open(ALERT_STATE, encoding="utf-8") as f:
+            return json.load(f) or {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _write_alert_state(d: dict) -> None:
+    os.makedirs(os.path.dirname(ALERT_STATE), exist_ok=True)
+    tmp = ALERT_STATE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False)
+    os.replace(tmp, ALERT_STATE)
+
+
+def _alert_loop(port: int) -> None:
+    """后台调度循环：每 60 秒看一次。daemon 线程，随服务退出。"""
+    enabled, hh, mm = _alert_sched_cfg()
+    boot_at = SCHED.now_cst()          # 启动时刻 —— 用于宽限期判断（见 SCHED.due）
+    print(f"[alert-sched] 每日播报调度"
+          f"{'已启用' if enabled else '已关闭'}：工作日 {hh:02d}:{mm:02d}"
+          f"（启动宽限 10 分钟内不触发）", flush=True)
+    while True:
+        try:
+            time.sleep(60)
+            st = _read_alert_state()
+            now = SCHED.now_cst()
+            if not SCHED.due(now, enabled, hh, mm, st.get("last_date"),
+                             boot_at=boot_at):
+                continue
+            # ---- 触发：脱离进程组起 daily_alert.py（与「更新按钮」同一套路）
+            script = os.path.join(ROOT, "scripts", "daily_alert.py")
+            kw = dict(cwd=ROOT, stdin=subprocess.DEVNULL,
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if os.name == "nt":
+                kw["creationflags"] = (subprocess.DETACHED_PROCESS
+                                       | subprocess.CREATE_NEW_PROCESS_GROUP)
+            else:
+                kw["start_new_session"] = True      # ★ 不被「停服」一起带走
+            subprocess.Popen([sys.executable, script], **kw)
+            _write_alert_state(dict(
+                last_date=now.strftime("%Y-%m-%d"),
+                started_at=now.strftime("%Y-%m-%d %H:%M:%S"),
+                port=int(port), msg="已拉起 daily_alert.py（更新+播报）"))
+        except Exception as e:  # noqa: BLE001 —— 调度线程绝不能因异常退出
+            try:
+                _write_alert_state(dict(last_date=(_read_alert_state() or {}).get("last_date", ""),
+                                        msg=f"调度异常：{e}"))
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def start_alert_scheduler(port: int) -> None:
+    """启动后台调度线程（幂等：重复调用只起一个）。"""
+    global _alert_thread
+    if _alert_thread is not None and _alert_thread.is_alive():
+        return
+    _alert_thread = threading.Thread(target=_alert_loop, args=(port,),
+                                     daemon=True, name="alert-sched")
+    _alert_thread.start()
+
+
 def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8770
     host = "127.0.0.1"
     srv = ThreadingHTTPServer((host, port), Handler)
     srv.daemon_threads = True
+    # ---- 每日定时播报：后台 daemon 线程（工作日 15:30 拉起 daily_alert.py）
+    #   ⚠️ 必须在 serve_forever() **之前**启动，否则不会跑。
+    #   ⚠️ 它是 daemon 线程 + 只读配置，起失败也不该拦住服务（函数内已兜异常）。
+    start_alert_scheduler(port)
     print("=" * 72)
     print(f"  {mark('🚀', '[>>]')} 界面已启动： http://{host}:{port}/")
     print(f"     默认参数 = K3 最优 3 条件（已在报告第12节验证）")
