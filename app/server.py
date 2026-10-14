@@ -149,14 +149,45 @@ _INDEX_FILES = [
 _index_cache = {}
 
 
+def _indices_sig():
+    """所有指数文件的 (mtime, size) 指纹 —— 缓存有效性判据。
+
+    ⚠️ 为什么要指纹而不是「永久缓存」
+    --------------------------------
+    原先 `_index_cache` 一旦填了就**永不过期** → 即使指数文件被更新
+    （`01c_fetch_index.py` 重跑、或每日更新补上这一步），界面**仍然显示旧数据**，
+    非重启不可。而用户看到的症状是「自建净值更新了、真实指数没更新」——
+    会以为是取数失败，实则是**进程内的缓存没失效**。
+
+    指纹选 mtime+size 而不是内容哈希：指数文件 ~150KB，每次请求都算哈希太浪费；
+    而 mtime+size 对「文件被重写」这个场景足够可靠（重写必然改 mtime）。
+    """
+    parts = []
+    for _n, fn in _INDEX_FILES:
+        try:
+            st = os.stat(os.path.join(ROOT, "data", "raw", fn))
+            parts.append(f"{fn}:{int(st.st_mtime)}:{st.st_size}")
+        except OSError:
+            parts.append(f"{fn}:-")
+    return "|".join(parts) + f"#days={int(days_sig_holder[0])}"
+
+
+# 小技巧：把 days 放进签名（`_indices_sig` 需要它，但又不想多加参数）
+days_sig_holder = [310]
+
+
 def _load_indices(days=310):
     """真实指数 → [{name, last_date, close, ma60, dist, bull, series:[{date,close,ma60,dist}]}]。
 
-    结果按 `days` 缓存：文件只在取数时才变，没必要每个请求都读盘+算 MA60。
+    结果按 `days` 缓存，但**带文件指纹校验**：指数文件一变就重算（见 `_indices_sig`）。
+    这样「更新数据 → 指数刷新」不需要重启服务。
     """
     key = int(days)
-    if key in _index_cache:
-        return _index_cache[key]
+    days_sig_holder[0] = key
+    sig = _indices_sig()
+    hit = _index_cache.get(key)
+    if hit and hit[0] == sig:
+        return hit[1]
     out = []
     for name, fn in _INDEX_FILES:
         fp = os.path.join(ROOT, "data", "raw", fn)
@@ -200,7 +231,8 @@ def _load_indices(days=310):
             bull=(None if last["ma60"] is None else bool(last["close"] > last["ma60"])),
             series=series,
         ))
-    _index_cache[key] = out
+    # 缓存「(指纹, 结果)」二元组 —— 指纹对不上就重算（见 _indices_sig）
+    _index_cache[key] = (sig, out)
     return out
 
 

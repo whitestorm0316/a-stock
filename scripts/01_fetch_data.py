@@ -152,17 +152,24 @@ def main():
         meta["n_trading_days"] = len(dates)
 
     # ---- 6. 指数K线(用于市场环境分层) ----
-    for name, code in indices.items():
-        p = os.path.join(RAW, f"index_{name}.json")
-        if os.path.exists(p):
-            print(f"[skip] index_{name}")
-            continue
-        r = api_get("/api/a-share-index/prices/historical",
-                    {"thscode": code, "interval": "1d",
-                     "start": 1420070400000, "end": int(time.time() * 1000)})
-        if r.get("code") == 0:
-            json.dump(r["data"]["item"], open(p, "w"))
-            print(f"[ok] index_{name} {len(r['data']['item'])} bars")
+    # ⚠️⚠️ 这里**不再自己拉**，改为委托 `01c_fetch_index.py`（唯一实现）。
+    #
+    #    原因（2026-10-14 踩的坑）：原先这段是「文件已存在就 skip」——
+    #    那是**首次构建**的思路，但指数和日K不同，它**每天都有新数据**。
+    #    结果：指数只在首次全量构建时拉过一次，此后**任何更新都不管它**，
+    #    实测数据停在 10-09 而自建净值已到 10-14，页面显示
+    #    「自建净值更新了、真实指数没更新」。
+    #
+    #    现在：① 日常更新走 `99_daily_update.py` 里的 `01c_fetch_index.py`；
+    #          ② 全量构建也走同一个脚本 → **一份实现、不可能漂移**。
+    #    本函数保留「指数文件不存在」时的兜底提示，但不重复实现取数逻辑。
+    idx_missing = [f"index_{n}.json" for n in indices
+                   if not os.path.exists(os.path.join(RAW, f"index_{n}.json"))]
+    if idx_missing:
+        print(f"[warn] 缺指数文件 {idx_missing} → 请跑："
+              f"python scripts/01c_fetch_index.py")
+    else:
+        print("[skip] 指数K线交由 01c_fetch_index.py 负责（见 99_daily_update.py）")
 
     meta["elapsed_sec"] = round(time.time() - t0, 1)
     json.dump(meta, open(os.path.join(ROOT, "data", "meta.json"), "w"),

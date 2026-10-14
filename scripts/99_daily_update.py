@@ -312,6 +312,8 @@ def main():
                     help="刷新行业映射（新股归属；建议每周一次）")
     ap.add_argument("--since", default=None,
                     help="手动指定起点日期 YYYY-MM-DD，用于回补某段区间")
+    ap.add_argument("--no-index", action="store_true",
+                    help="跳过真实指数刷新（默认会刷）")
     a = ap.parse_args()
 
     t0 = time.time()
@@ -329,6 +331,18 @@ def main():
     if inc is not None:
         merge_into_incr(inc)
     print(f"[3/3] 完成，耗时 {time.time()-t0:.0f}s")
+
+    # ---- 指数（界面「真实指数对照」用）必须**每次都刷**
+    # ⚠️ 这是 2026-10-14 补的一步。此前指数只在**首次全量构建**时由
+    #    01_fetch_data.py 拉一次（它的逻辑是「文件已存在就 skip」），
+    #    于是日更永远不管指数 → 实测指数数据停在 10-09，
+    #    而自建净值已到 10-14，页面上「自建更新了、指数没更新」。
+    #    根因是「日更只覆盖了 K 线，漏了指数」这条链路缺口。
+    if a.no_index:
+        print("[idx] 已跳过真实指数刷新（--no-index）")
+    else:
+        print("[idx] 刷新真实指数（上证/沪深300/中证500/中证1000/同花顺全A）...")
+        run_py("01c_fetch_index.py")
 
     if a.industry:
         run_py("20_fetch_industry.py")

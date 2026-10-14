@@ -262,6 +262,41 @@ ok("过了宽限期（启动 11 分钟）→ 照常触发",
 ok("不传 boot_at（旧调用形态）→ 仍按原三条件判断（向后兼容）",
    S.due(WK, True, 15, 30, None) is True)
 
+# ================================================================ 指数刷新守门
+# 覆盖一个**真实链路缺口**（2026-10-14 发现）：日更只更新了日K，
+# **完全没管真实指数** → 指数数据停在 10-09，而自建净值已到 10-14，
+# 页面上表现为「自建净值更新了、真实指数没更新」，还引出假的「口径分歧」。
+#
+# 这几条是**静态检查**（读源码，不执行）：确认「日更链路会刷新指数」这件事
+# 不会在后续重构中被悄悄删掉。它们很便宜，但拦住的是「几天后才发现数据不更新」
+# 这种最难排查的问题。
+_DAILY = (ROOT / "scripts" / "99_daily_update.py").read_text(encoding="utf-8")
+_FETCH1 = (ROOT / "scripts" / "01_fetch_data.py").read_text(encoding="utf-8")
+
+ok("日更链路包含指数刷新（01c_fetch_index.py）",
+   "01c_fetch_index.py" in _DAILY,
+   "缺了它 → 指数数据会静默停更（实测停在 10-09）")
+ok("日更的指数刷新可被 --no-index 跳过",
+   "--no-index" in _DAILY and "no_index" in _DAILY)
+ok("01_fetch_data.py 不再自己拉指数（唯一实现在 01c）",
+   "index_{name}.json" not in _FETCH1.replace("idx_missing", "")
+   and "01c_fetch_index.py" in _FETCH1,
+   "两份实现会漂移，且旧那份是「文件存在就 skip」")
+
+# 指数取数脚本的两个「写死时间」坑（都踩过），确认没回退
+_IDXC = (ROOT / "scripts" / "01c_fetch_index.py").read_text(encoding="utf-8")
+ok("01c 的结束时间是动态的（不是写死常量）",
+   "end_ms = int(time.time() * 1000)" in _IDXC,
+   "写死过一次 → 指数从那一天起永远停更且无告警")
+ok("01c 覆盖 5 个指数（含同花顺全A）",
+   all(k in _IDXC for k in ("sh000001", "hs300", "zz500", "zz1000", "ths_allA")))
+
+# 服务端缓存必须「文件变了就失效」，否则更新完指数界面仍是旧值
+_SRV = (ROOT / "app" / "server.py").read_text(encoding="utf-8")
+ok("server 的指数缓存带文件指纹（不是永久缓存）",
+   "_indices_sig" in _SRV and "hit[0] == sig" in _SRV,
+   "永久缓存 → 更新指数后界面不变，非重启不可")
+
 # ---------------------------------------------------------------- 输出
 print("\n".join(out))
 print("-" * 62)
