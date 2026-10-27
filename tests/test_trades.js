@@ -105,7 +105,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const tabs = $$('#tabs button').map(b => b.dataset.t);
   ok('Tab 含 trades', tabs.includes('trades'), tabs.join(','));
   ok('Pane 存在', !!$('#p-trades'));
-  ok('Tab 总数 = 6', tabs.length === 6, '实际 ' + tabs.length);
+  // 6 = 今日选股/策略回测/交易明细/参数寻优/单股透视/研究结论
+  // 7 = 上面 6 个 + 持仓盈亏（2026-10-27 新增，见 tests/test_hold.js）
+  ok('Tab 总数 = 7', tabs.length === 7, '实际 ' + tabs.length);
 
   // ---- 2. 点击切换
   const tbtn = $$('#tabs button').find(b => b.dataset.t === 'trades');

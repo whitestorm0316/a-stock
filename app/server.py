@@ -19,8 +19,14 @@ server.py —— 「A股超跌反转」交互式选股器 本地服务
   POST /api/export          导出候选股 CSV
   POST /api/presets/save    保存当前参数为自定义方案（同名覆盖）
   POST /api/presets/delete  删除自定义方案
+  GET  /api/holdings        实盘持仓账本 + 按最新收盘价现算的浮动盈亏
+  POST /api/positions       当前持仓（回测口径）：当前参数下「持有期未走完」的头寸
+                            + 最新价 / 浮动收益率 / 还需交易日 / **预计卖出日**
+  POST /api/holdings/save   新增/修改一笔持仓批次（代码/成本/股数/买入日）
+  POST /api/holdings/delete 删除一笔持仓批次
 
 「我的方案」落在 data/user_presets.json（跟着数据目录走，不丢在浏览器缓存里）。
+「实盘持仓」落在 data/holdings.json；**盈亏不落盘**，每次请求按最新行情现算。
 """
 import os
 import sys
@@ -31,7 +37,7 @@ import time
 import gzip
 import threading
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, quote
 
@@ -349,6 +355,8 @@ class Handler(BaseHTTPRequestHandler):
                                        ladder=(list(x["ladder"]) if x.get("ladder") else None))
                                   for x in RHYTHM_CANDS],
                     optbest=ENGINE.meta()["last_date"]))
+            if p == "/api/holdings":
+                return self._holdings_get()
             if p.startswith("/static/"):
                 return self._serve_file(p[len("/static/"):], None)
             return self._json({"error": "not found"}, 404)
@@ -380,6 +388,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._preset_delete(b)
             if p == "/api/presets/set_default":
                 return self._preset_set_default(b)
+            if p == "/api/holdings/save":
+                return self._holding_save(b)
+            if p == "/api/positions":
+                return self._positions(b)
+            if p == "/api/holdings/delete":
+                return self._holding_delete(b)
             if p == "/api/update/start":
                 port = int(b.get("port") or self.server.server_address[1])
                 ok, msg = start_update(port)
@@ -1011,6 +1025,212 @@ class Handler(BaseHTTPRequestHandler):
                else "已取消默认设置（将使用内置第一套）")
         return self._json({"ok": True, "msg": msg, "default_preset": cur})
 
+    # ------------------------------------------------------------ 实盘持仓
+    def _positions(self, b):
+        """当前持仓：当前参数下「已买入、持有期还没走完」的头寸（**自动**，无需录入）。
+
+        与 /api/holdings 的分工（⚠️ 别混）
+        --------------------------------
+        · 本接口 = **策略让你现在拿着什么** —— 随参数变化，只有**收益率没有金额**
+          （回测里没有「你投了多少钱」，硬编一个股数出来就是编数据）
+        · /api/holdings = **你真的买了什么** —— 手动账本，有成本/股数，算金额盈亏
+        · 价格口径也不同：本接口用**复权**价（与回测 buy 同尺度），账本用**未复权**价
+          （与券商成交价同尺度）。两张表的合计**绝不能相加**。
+
+        请求体：`{params, pool}`（同 /api/backtest）。
+        """
+        t0 = time.time()
+        pool, err = self._pool(b)
+        if err:
+            return self._json({"error": err}, 200)
+        p = dict(DEFAULT_PARAMS)
+        p.update(b.get("params") or {})
+        hold = int(p.get("hold") or 20)
+        mask, _conds = ENGINE.build_mask(p, pool)
+        at = str(ENGINE.day_str[ENGINE.nd - 1])
+        if int(mask.sum()) == 0:
+            return self._json(dict(ok=True, at=at, hold=hold, rows=[], totals=None,
+                                   msg="当前条件下没有任何信号"), 200)
+        # ---- 容量约束（与 /api/trades 同口径）：只有开了仓位上限才过滤
+        mp = int(p.get("max_pos") or 0)
+        lad = parse_ladder(p.get("cap_ladder"))
+        plan = None
+        if mp > 0 or lad:
+            try:
+                plan = ENGINE.capacity_plan(
+                    mask, hold=hold, max_pos=mp,
+                    max_new=int(p.get("max_new") or 3),
+                    pick=str(p.get("pick") or "deep"), ladder=lad)
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                plan = None
+        rows = ENGINE.positions(mask, hold=hold, plan=plan)
+        # ---- 汇总：`pending`（还没到买入日）**不算持仓**，单列。
+        #   实测恒为 0：T+1 开盘价取不到时该行会被归进 nobuy，进不了 holding（见 engine.positions）。
+        held = [x for x in rows if not x["pending"]]
+        vals = [x["pnl_pct"] for x in held if x["pnl_pct"] is not None]
+        tot = dict(
+            n=len(rows), n_hold=len(held), n_pending=len(rows) - len(held),
+            n_stock=len({x["code"] for x in held}),
+            n_win=sum(1 for v in vals if v > 0),
+            n_loss=sum(1 for v in vals if v < 0),
+            avg_pct=(round(float(np.mean(vals)), 6) if vals else None),
+            med_pct=(round(float(np.median(vals)), 6) if vals else None),
+            best=(round(float(max(vals)), 6) if vals else None),
+            worst=(round(float(min(vals)), 6) if vals else None),
+            next_exit=(held[0]["exit_est"] if held else None),
+            hold=hold, capped=bool(plan),
+        )
+        return self._json(dict(ok=True, at=at, hold=hold, rows=rows, totals=tot,
+                               ms=int((time.time() - t0) * 1000)))
+
+    def _holdings_get(self):
+        """列出持仓账本 + 按最新行情现算的浮动盈亏。
+
+        ⚠️ 盈亏**不落盘**：每次请求都重算，行情更新后不会残留旧数字。
+        ⚠️ 无行情的条目（退市 / ST 被面板剔除 / 代码打错）**不计入合计**，
+           但必须单独报出来（`n_noquote` + `noquote`）—— 不能悄悄消失，
+           否则用户会以为「我明明录了 10 只，怎么只显示 8 只」。
+        """
+        lots = load_holdings()
+        q = ENGINE.quotes([x["code"] for x in lots]) if lots else {}
+        # ⚠️ 直接从引擎取面板末日，**不要**用 ENGINE.meta()[last_date]：
+        #    meta() 每次都会重建成千上万只票的清单 + 行业树，持仓页刷新一次就白烧一遍。
+        asof = str(ENGINE.day_str[ENGINE.nd - 1])
+        rows = []
+        agg = dict(cost=0.0, mv=0.0, pnl=0.0, day=0.0, n_px=0, n_win=0, n_loss=0)
+        noquote = []
+        for x in lots:
+            key = ENGINE._norm_code(x["code"])
+            qi = q.get(key)
+            shares, cost = float(x["shares"]), float(x["cost"])
+            cost_amt = cost * shares
+            row = dict(id=x["id"], code=x["code"], name=x["name"],
+                       cost=round(cost, 4), shares=shares, cost_amt=round(cost_amt, 2),
+                       buy_date=x["buy_date"] or None, note=x["note"],
+                       ind="", board="", price=None, price_date=None, chg=None,
+                       stale_days=None, price_kind=None, mv=None, pnl=None,
+                       pnl_pct=None, day_pnl=None, hold_days=None, noquote=True)
+            if qi is not None:
+                price, prev = qi["price"], qi["prev"]
+                mv = price * shares
+                pnl = mv - cost_amt
+                day_pnl = (price - prev) * shares if prev else None
+                row.update(
+                    code=qi["code"], name=(x["name"] or qi["name"]),
+                    ind=qi["ind"], board=qi["board"],
+                    price=price, price_date=qi["date"], chg=qi["chg"],
+                    stale_days=qi["stale_days"], price_kind=qi["px_kind"],
+                    mv=round(mv, 2), pnl=round(pnl, 2),
+                    pnl_pct=(round(pnl / cost_amt, 6) if cost_amt > 0 else None),
+                    day_pnl=(round(day_pnl, 2) if day_pnl is not None else None),
+                    hold_days=_hold_days(x["buy_date"], qi["date"]),
+                    noquote=False)
+                agg["cost"] += cost_amt
+                agg["mv"] += mv
+                agg["pnl"] += pnl
+                if day_pnl is not None:
+                    agg["day"] += day_pnl
+                agg["n_px"] += 1
+                if pnl > 0:
+                    agg["n_win"] += 1
+                elif pnl < 0:
+                    agg["n_loss"] += 1
+            else:
+                noquote.append(x["code"])
+            rows.append(row)
+        # 排序：有行情的按浮动盈亏率降序在前，无行情的沉底（一眼看到赚最多/亏最多）
+        rows.sort(key=lambda r: (r["noquote"],
+                                 -(r["pnl_pct"] if r["pnl_pct"] is not None else 0.0)))
+        base = agg["mv"] - agg["day"]
+        tot = dict(
+            n_lot=len(rows),
+            n_stock=len({ENGINE._norm_code(r["code"]) for r in rows}),
+            n_priced=agg["n_px"], n_win=agg["n_win"], n_loss=agg["n_loss"],
+            cost=round(agg["cost"], 2), mv=round(agg["mv"], 2),
+            pnl=round(agg["pnl"], 2),
+            pnl_pct=(round(agg["pnl"] / agg["cost"], 6) if agg["cost"] > 0 else None),
+            day_pnl=round(agg["day"], 2),
+            day_base=round(base, 2),
+            day_pct=(round(agg["day"] / base, 6) if base > 0 else None),
+        )
+        return self._json(dict(ok=True, at=asof, rows=rows, totals=tot,
+                               n_noquote=len(noquote), noquote=noquote))
+
+    def _holding_save(self, b):
+        """新增 / 修改一个持仓批次。
+
+        请求体： id（有 = 修改，无 = 新增）、code、cost、shares、
+                 buy_date（YYYY-MM-DD，可空）、note（可空）
+        返回：   ok / msg / id
+
+        ⚠️ 校验失败一律 `ok:false + msg`，**不用** `error` 键：前端 api() 见到
+           `error` 会直接 throw，那样「成本价填成 0」这种表单错误就变成异常，
+           提示框里只剩一句没头没尾的报错。
+        """
+        key = ENGINE._norm_code(b.get("code"))
+        if not key:
+            return self._json({"ok": False, "msg": "请填写 6 位股票代码，如 600000"}, 200)
+        try:
+            cost = float(b.get("cost"))
+        except (TypeError, ValueError):
+            return self._json({"ok": False, "msg": "成本价必须是数字"}, 200)
+        if not (cost > 0):
+            return self._json({"ok": False, "msg": "成本价必须大于 0"}, 200)
+        try:
+            shares = float(b.get("shares"))
+        except (TypeError, ValueError):
+            return self._json({"ok": False, "msg": "股数必须是数字"}, 200)
+        if not (shares > 0):
+            return self._json({"ok": False, "msg": "股数必须大于 0"}, 200)
+        buy_date = str(b.get("buy_date") or "").strip()[:10]
+        if buy_date:
+            try:
+                date.fromisoformat(buy_date)
+            except ValueError:
+                return self._json({"ok": False, "msg": "买入日格式应为 YYYY-MM-DD"}, 200)
+        # 名称优先取面板里的官方简称（防用户手打错别字），面板没有就留空
+        q = ENGINE.quotes([key]).get(key) or {}
+        name = str(b.get("name") or "").strip() or str(q.get("name") or "")
+        note = str(b.get("note") or "").strip()[:HOLD_NOTE_MAX]
+
+        lst = load_holdings()
+        pid = str(b.get("id") or "").strip()
+        rec = dict(id=pid or _new_hold_id(lst), code=(q.get("code") or key),
+                   name=name, cost=round(cost, 4), shares=shares,
+                   buy_date=buy_date, note=note,
+                   saved_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        if pid:
+            for i, x in enumerate(lst):
+                if x["id"] == pid:
+                    lst[i] = rec
+                    break
+            else:
+                return self._json({"ok": False, "msg": "该持仓记录已不存在，请刷新"}, 200)
+            msg = "已更新这笔持仓"
+        else:
+            if len(lst) >= HOLD_LOTS_MAX:
+                return self._json(
+                    {"ok": False, "msg": f"最多 {HOLD_LOTS_MAX} 笔，请先删掉不用的"}, 200)
+            lst.append(rec)
+            msg = f"已添加 {name or rec['code']}"
+        save_holdings(lst)
+        if not q:
+            msg += "（该代码不在面板内，暂无行情，暂不计入合计）"
+        return self._json({"ok": True, "msg": msg, "id": rec["id"]})
+
+    def _holding_delete(self, b):
+        pid = str(b.get("id") or "").strip()
+        if not pid:
+            return self._json({"ok": False, "msg": "缺少 id"}, 200)
+        lst = load_holdings()
+        keep = [x for x in lst if x["id"] != pid]
+        if len(keep) == len(lst):
+            return self._json({"ok": False, "msg": "该持仓记录已不存在，请刷新"}, 200)
+        save_holdings(keep)
+        return self._json({"ok": True, "msg": "已删除"})
+
     def _export(self, b):
         # 两种导出：candidates（今日候选股） / trades（回测逐笔明细）
         kind = (b.get("kind") or "candidates").lower()
@@ -1212,6 +1432,88 @@ PRESETS = [
          desc="基本面双确认：有规模 + 利润改善。信号 7,406；CAGR 21.2% / MDD −46.4% / Sharpe 0.75",
          params=dict(DEFAULT_PARAMS, rev_min=1e9, np_yoy_min=0.0)),
 ]
+
+
+# ================================================================ 实盘持仓账本
+# 手动录入的持仓，落到 data/holdings.json。**一条记录 = 一个买入批次（lot）**，
+# 同一只票可以有多条 —— 分批建仓各有自己的成本价与买入日，分别算盈亏再汇总。
+#
+# ⚠️ 为什么不做「一个代码一条记录」：那样得分批合并成本（加权/先进先出），
+#    口径一旦写死就没法解释；按批次存、逐行列出，信息量更大也不用猜。
+# ⚠️ 盈亏一律在**读的时候**用最新行情现算，**绝不落盘**。落盘的只有用户输入
+#    （代码/成本/股数/买入日/备注）—— 否则行情一更新，文件里的旧盈亏就在说谎。
+HOLDING_FILE = os.path.join(ROOT, "data", "holdings.json")
+HOLD_LOTS_MAX = 500          # 单账户最多 500 个批次：够用，也能挡住手滑批量导入
+HOLD_NOTE_MAX = 60
+
+
+def _hold_days(buy, ref):
+    """买入日 → 参考日（该票最新行情日）的自然日数；日期缺失/非法返回 None。
+
+    ⚠️ 用**自然日**而非交易日：账本只关心「买了多久」，为此去查交易日历不值得；
+       界面标注写成「持有(天)」并在列头 tooltip 里说明是自然日，避免误读。
+    """
+    try:
+        a = date.fromisoformat(str(buy)[:10])
+        b = date.fromisoformat(str(ref)[:10])
+    except (TypeError, ValueError):
+        return None
+    return max(0, (b - a).days)
+
+
+def load_holdings():
+    """读持仓账本；文件缺失/损坏一律当空账本（绝不阻塞应用启动）。"""
+    try:
+        with open(HOLDING_FILE, "r", encoding="utf-8") as f:
+            d = json.load(f)
+    except FileNotFoundError:
+        return []
+    except Exception as e:
+        print(f"  {mark('⚠️', '[!]')} holdings.json 读取失败（忽略）：{e}", flush=True)
+        return []
+    if not isinstance(d, list):
+        return []
+    out = []
+    for x in d:                       # 手改坏的条目直接跳过，别让它污染整个账本
+        if not isinstance(x, dict):
+            continue
+        try:
+            cost = float(x.get("cost"))
+            shares = float(x.get("shares"))
+        except (TypeError, ValueError):
+            continue
+        code = str(x.get("code") or "").strip().upper()
+        if not code or not (cost > 0) or not (shares > 0):
+            continue
+        out.append(dict(
+            id=str(x.get("id") or f"H{len(out) + 1}"),
+            code=code,
+            name=str(x.get("name") or ""),
+            cost=round(cost, 4),
+            shares=shares,
+            buy_date=str(x.get("buy_date") or "")[:10],
+            note=str(x.get("note") or "")[:HOLD_NOTE_MAX],
+            saved_at=str(x.get("saved_at") or ""),
+        ))
+    return out[:HOLD_LOTS_MAX]
+
+
+def save_holdings(lst):
+    """原子写（同 user_presets.json）：先写 .tmp 再 os.replace，避免半截文件。"""
+    os.makedirs(os.path.dirname(HOLDING_FILE), exist_ok=True)
+    tmp = HOLDING_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(lst[:HOLD_LOTS_MAX], f, ensure_ascii=False, indent=2)
+    os.replace(tmp, HOLDING_FILE)
+
+
+def _new_hold_id(lst):
+    """分配下一个 H 编号（删掉的编号不回收，避免历史引用串号）。"""
+    used = {x["id"] for x in lst}
+    i = 1
+    while f"H{i}" in used:
+        i += 1
+    return f"H{i}"
 
 
 # ================================================================ 我的方案

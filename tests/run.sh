@@ -11,6 +11,8 @@
 #   bash tests/run.sh market       # 只跑市场环境（牛熊判定依据 / 真实指数对照）
 #   bash tests/run.sh delist       # 只跑退市风险过滤
 #   bash tests/run.sh presets      # 只跑市值区间 + 我的方案
+#   bash tests/run.sh hold         # 只跑实盘持仓盈亏（手动账本）
+#   bash tests/run.sh pos          # 只跑策略持仓（回测自动，含预计卖出日）
 #   bash tests/run.sh stock        # 只跑单股透视（跟随左侧参数 / 全历史信号）
 #   bash tests/run.sh cdp          # 跑真实 Chrome 端到端（需先启动 app/server.py）
 #
@@ -41,12 +43,14 @@ case "${1:-all}" in
   tune)   SETS="test_tune" ;;
   market) SETS="test_market" ;;
   trades) SETS="test_trades" ;;
+  hold)   SETS="test_hold" ;;
+  pos)    SETS="test_pos" ;;
   presets) SETS="test_presets" ;;
   stock)  SETS="test_stock" ;;
   alert)  SETS="__PY_alert__" ;;
   cdp)    SETS="__CDP__" ;;
-  all)    SETS="test_cap test_board test_indtree test_icon test_ladder test_fin test_delist test_trades test_presets test_tune test_market test_stock __PY_alert__" ;;
-  *) echo "未知参数：$1（可选 cap|board|ind|icon|ladder|tune|market|fin|delist|trades|presets|stock|alert|cdp|all）"; exit 2 ;;
+  all)    SETS="test_cap test_board test_indtree test_icon test_ladder test_fin test_delist test_trades test_hold test_pos test_presets test_tune test_market test_stock __PY_alert__" ;;
+  *) echo "未知参数：$1（可选 cap|board|ind|icon|ladder|tune|market|fin|delist|trades|hold|pos|presets|stock|alert|cdp|all）"; exit 2 ;;
 esac
 
 # 飞书播报的单元测试是 **Python** 套件（测 42_market_alert.py 的纯函数），

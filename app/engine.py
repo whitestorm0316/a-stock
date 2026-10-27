@@ -17,9 +17,11 @@ engine.py —— 「A股超跌反转」交互式选股/回测引擎
 - 市场基准必须自建（指数数据仅 2023 起）。
 """
 import os
+import re
 import sys
 import json
 import time
+from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
@@ -1909,6 +1911,178 @@ class Engine:
                     dist_now=self._f(dist[self.nd - 1] * 100, 2),
                     windows=wins,
                     days=n, series=out)
+
+    # ================================================================ 实盘持仓报价
+    @staticmethod
+    def _norm_code(raw):
+        """把用户输入的代码归一化成 **6 位数字**（查表键）。
+
+        接受：`600000` / `600000.SH` / `sh600000` / ` SH600000 `
+        ⚠️ 别写成 `s.strip("sh")`：`"600000.SH".strip("sh")` 会把结尾的 `H`
+           也一起吃掉（strip 按字符集剥），变成 `600000.S` → 永远查不到。
+        """
+        m = re.search(r"\d{6}", str(raw or "").strip().upper())
+        return m.group(0) if m else ""
+
+    def _code_index(self):
+        """6 位代码 → 股票序号（惰性构建，进程内只建一次）。
+
+        面板按 (thscode, date) 排序，同一只票的行是连续区间 [starts[s], ends[s])。
+        """
+        ix = getattr(self, "_code6", None)
+        if ix is not None:
+            return ix
+        starts = np.asarray(self.C["starts"], np.int64)
+        ends = np.asarray(self.C["ends"], np.int64)
+        ix = {}
+        for s in range(int(starts.size)):
+            key = self._norm_code(self.code[int(starts[s])])
+            if not key:
+                continue
+            old = ix.get(key)
+            # 同一 6 位代码理论上只对应一只票；万一撞车，保留行数多的那只
+            if old is None or (ends[s] - starts[s]) > (ends[old] - starts[old]):
+                ix[key] = s
+        self._code6 = ix
+        return ix
+
+    def quotes(self, codes):
+        """取「最新收盘价」快照 —— **实盘持仓盈亏**专用。
+
+        价格口径（重要，别改错）
+        ------------------------
+        用**未复权**收盘价 `px_raw`（= `close_price_raw`），不是回测用的复权价。
+        用户填的成本价是**券商里的实际成交价**，只有未复权价和它在同一尺度上；
+        拿复权价去比，遇到分红送转就会凭空多出/少掉一截盈亏。
+        `px_raw` 缺失时退回复权价，并在 `px_kind` 标注，便于排查。
+
+        「今日涨跌」= 最新收盘 / **上一有效**收盘 − 1（收盘→收盘，与行情软件一致）。
+        ⚠️ 不能用 `oret`：那是开盘→开盘，且最后一天必为 NaN。
+
+        停牌票：`date` 是**该票自己**的最后行情日，未必等于面板末日；
+        `stale_days` = 面板末日与它的行情日之间隔了几个交易日（0 = 就是最新交易日）。
+
+        返回：`{6 位代码: dict(...)}`。查不到的代码**不会出现在结果里**
+              （由调用方报「不在面板内」），绝不编造价格。
+        """
+        ix = self._code_index()
+        starts = np.asarray(self.C["starts"], np.int64)
+        ends = np.asarray(self.C["ends"], np.int64)
+        raw, cl = self.px_raw, self.cl
+        px = np.where(np.isfinite(raw) & (raw > 0), raw, cl)
+        out = {}
+        for c in dict.fromkeys(codes):            # 去重且保序
+            key = self._norm_code(c)
+            s = ix.get(key)
+            if s is None or key in out:
+                continue
+            a, b = int(starts[s]), int(ends[s])
+            fin = np.flatnonzero(np.isfinite(px[a:b]) & (px[a:b] > 0))
+            if fin.size == 0:
+                continue
+            li = a + int(fin[-1])
+            price = float(px[li])
+            prev = float(px[a + int(fin[-2])]) if fin.size >= 2 else None
+            out[key] = dict(
+                code=str(self.code[li]), name=str(self.stk_name[li]),
+                ind=str(self.ind_name[li]), ex=str(self.exchange[li]),
+                board=str(self.board[li]),
+                price=round(price, 4),
+                prev=(round(prev, 4) if prev and prev > 0 else None),
+                date=str(self.day_str[int(self.D[li])]),
+                chg=(round(price / prev - 1.0, 6) if prev and prev > 0 else None),
+                stale_days=int(self.nd - 1 - int(self.D[li])),
+                px_kind=("raw" if np.isfinite(raw[li]) and raw[li] > 0 else "adj"),
+            )
+        return out
+
+    # ================================================================ 当前持仓（回测口径）
+    @staticmethod
+    def _next_trade_day(day, n):
+        """从 `day` 起往后数 `n` 个交易日（n≥1），返回 ISO 日期串。
+
+        ⚠️ 只能按**工作日**推：本地 `calendar.json` 的末日就是面板末日（最新交易日），
+           没有未来日历可用，法定节假日（春节/国庆）扣不掉 —— 可能偏早几天。
+           所以对外一律叫「预计」，并同时给出「还需 N 个交易日」这个**精确**值。
+           默认 hold=20 → 最远约 4 周，只有在节前建仓时才会撞上节假日。
+           （调休补班的周六/周日 A 股**不开市**，所以 `weekday()<5` 是对的。）
+        """
+        d = date.fromisoformat(str(day)[:10])
+        k = 0
+        while k < int(n):
+            d += timedelta(days=1)
+            if d.weekday() < 5:
+                k += 1
+        return d.isoformat()
+
+    def positions(self, mask, hold=20, plan=None):
+        """**当前持仓** = 回测里「已经买入、持有期还没走完」的头寸（`kind="holding"`）。
+
+        为什么不直接调 trades()
+        ----------------------
+        `trades()` 要把 10 万笔逐笔明细全部物化再排序（实测 6.3s），而持仓页只要最后
+        那一小撮未平仓的行。这里复用**同一套** `simulate_hold` + `_open_positions`
+        （`n_open_holding` 与 `trades()` 逐位一致），跳过 rows/summary/yearly/hist，
+        实测 ~1.2s。
+
+        收益口径（⚠️ 与实盘账本 `quotes()` **不同**，别混）
+        -----------------------------------------------
+        · `buy`    = T+1 开盘价（**复权**，与回测同源）
+        · `price`  = 最新**复权**收盘价 —— 必须和 `buy` 同尺度；用未复权价会在分红送转
+          日凭空跳出一大截浮盈。（实盘账本那边反过来必须用未复权价，因为成本是券商成交价。）
+        · `pnl_pct`= `price/buy − 1`，**纯价格、不含交易成本**
+        · `exit_est` = 最新交易日 + (`left_days`+1) 个工作日（见 `_next_trade_day`）
+
+        `pending` 是**防御性**字段（`entry_date is None`，即 `ent >= nd`、还没到买入日）：
+        实测**恒为 False** —— `ent == nd` 时 T+1 开盘价必然取不到（`shift_block` 越界为
+        nan），`buy_ok=False` 会把它归进 `nobuy`（T+1 买不进），根本进不了 holding。
+        保留这个判断只是防将来放开 T+0 / 补齐未来价时**静默算错**，不是真有这种行。
+        """
+        mask = np.asarray(mask, bool)
+        if mask.sum() == 0:
+            return []
+        r, ed, pos = L.simulate_hold(mask, self.buy_open, self.sell_open, self.C, hold)
+        rows = [x for x in self._open_positions(mask, pos, hold, plan)
+                if x["kind"] == "holding"]
+        if not rows:
+            return []
+        ix = self._code_index()
+        starts = np.asarray(self.C["starts"], np.int64)
+        ends = np.asarray(self.C["ends"], np.int64)
+        cl = self.cl
+        last = str(self.day_str[self.nd - 1])
+        out = []
+        for x in rows:
+            s = ix.get(self._norm_code(x["code"]))
+            px = px_date = prev = stale = None
+            if s is not None:
+                a, b = int(starts[s]), int(ends[s])
+                fin = np.flatnonzero(np.isfinite(cl[a:b]))
+                if fin.size:
+                    li = a + int(fin[-1])
+                    px = float(cl[li])
+                    px_date = str(self.day_str[int(self.D[li])])
+                    stale = int(self.nd - 1 - int(self.D[li]))
+                    if fin.size >= 2:
+                        prev = float(cl[a + int(fin[-2])])
+            buy = x["buy"]
+            pct = (px / buy - 1.0) if (px and buy and buy > 0) else None
+            out.append(dict(
+                code=x["code"], name=x["name"], ind=x["ind"], board=x["board"],
+                signal_date=x["signal_date"], entry_date=x["entry_date"],
+                buy=buy, price=(round(px, 3) if px is not None else None),
+                price_date=px_date, stale_days=stale,
+                pnl_pct=(round(pct, 6) if pct is not None else None),
+                day_chg=(round(px / prev - 1.0, 6)
+                         if (px and prev and prev > 0) else None),
+                hold=int(hold),
+                hold_days=int(x["hold_days"]), left_days=int(x["left_days"]),
+                exit_est=self._next_trade_day(last, int(x["left_days"]) + 1),
+                pending=(x["entry_date"] is None),
+            ))
+        # 最快到期的排前面（同日再按浮盈降序）—— 用户最关心「哪几只要卖了」
+        out.sort(key=lambda z: (z["exit_est"], -(z["pnl_pct"] or 0.0)))
+        return out
 
     # ================================================================ 元信息
     def meta(self):
